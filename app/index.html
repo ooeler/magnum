@@ -106,6 +106,17 @@ nav button.on{color:var(--ac)}nav button.on i{background:var(--ac)}
 @keyframes mgY{0%{transform:translateY(0) rotate(-8deg);animation-timing-function:cubic-bezier(.2,.7,.4,1)}50%{transform:translateY(-180px) rotate(10deg);animation-timing-function:cubic-bezier(.6,0,.8,.3)}100%{transform:translateY(0) rotate(-8deg)}}
 @keyframes mgP{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
 @media (prefers-reduced-motion:reduce){#party .gx,#party .gy,#party .prost{animation:none}}
+.gl{position:relative;display:inline-block}
+.gl .hat{position:absolute;top:-11px;left:4px;transform:rotate(-8deg)}
+.fx,#snow{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:30}
+.fx span{position:absolute;left:0;font-size:38px;line-height:1;animation:mgFly 7s linear both}
+.fx.rv span{animation-name:mgFlyR}
+.fx svg{display:block}
+#snow i{position:absolute;top:-10px;border-radius:50%;background:#fff;opacity:.7;animation:mgSnow linear both}
+@keyframes mgFly{0%{transform:translateX(-70px) rotate(-12deg)}50%{transform:translate(50vw,-30px) rotate(10deg)}100%{transform:translateX(calc(100vw + 70px)) rotate(-12deg)}}
+@keyframes mgFlyR{0%{transform:translateX(calc(100vw + 70px)) rotate(12deg)}50%{transform:translate(50vw,-30px) rotate(-10deg)}100%{transform:translateX(-70px) rotate(12deg)}}
+@keyframes mgSnow{to{transform:translateY(105vh)}}
+@media (prefers-reduced-motion:reduce){.fx,#snow{display:none}}
 .star{width:44px;height:44px;border:0;background:transparent;padding:0;display:inline-flex;align-items:center;justify-content:center}
 .stars{display:flex;gap:2px}
 .bars{display:flex;align-items:flex-end;gap:8px;height:130px}.bars>div{flex:1 1 0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;height:100%}
@@ -185,12 +196,13 @@ function stats(id) {
   CACHE = CACHE || {};
   if (CACHE[id]) return CACHE[id];
   var pts = 0, parts = {}, add = function (k, n) { pts += n; parts[k] = (parts[k] || 0) + n };
-  var past = pastEvents(), streak = 0, broken = false, attended = 0, virt = 0;
+  var past = pastEvents(), streak = 0, broken = false, attended = 0, virt = 0, run = 0, rekord = 0;
   past.forEach(function (e) {
     var s = rsvp(e.id, id);
     if (s == "in") { add("Anlässe", 50); attended++ } else if (s == "virtual") { add("Virtuell dabei", 20); virt++ }
     if (e.organizer_id == id) add("Organisiert", 40);
     if (!broken) { if (s == "in" || s == "virtual") streak++; else broken = true }
+    run = s == "in" || s == "virtual" ? run + 1 : 0; rekord = Math.max(rekord, run);
   });
   D.magnum_guests.forEach(function (g) { if (g.added_by == id) add("Gasttrinker", 15) });
   var trips = D.trip_participants.filter(function (tp) {
@@ -207,7 +219,7 @@ function stats(id) {
   D.feedback.forEach(function (f) { if (f.user_id == id && f.status != "fehler") add("Vorschläge", 10) });
   var virtAll = D.rsvps.filter(function (r) { return r.member_id == id && r.status == "virtual" }).length;
   var rank = rankOf(pts), next = RANKS.filter(function (r) { return r.min > pts })[0];
-  var res = { points: pts, parts: parts, streak: streak, attended: attended, virt: virtAll, trips: trips, rank: rank, next: next,
+  var res = { points: pts, parts: parts, streak: streak, rekord: rekord, attended: attended, virt: virtAll, trips: trips, rank: rank, next: next,
     pct: next ? Math.round(100 * (pts - rank.min) / (next.min - rank.min)) : 100, drink: drinkLevel(id),
     magnums: D.magnums.filter(function (m) { return m.brought_by == id }).length,
     cards: D.cards.filter(function (c) { return c.created_by == id }).length };
@@ -316,6 +328,11 @@ function fnErr(r) {
 
 // ═════════════ Begrüssung ═════════════
 function pick(a, k) { var x = 0; for (var i = 0; i < k.length; i++) x = (x * 31 + k.charCodeAt(i)) % 9973; return a[x % a.length] }
+// Komm mal wieder: bei den letzten drei Anlässen weder dabei noch virtuell
+function fehlt(id) {
+  var L = pastEvents().slice(0, 3);
+  return L.length == 3 && L.every(function (e) { var s = rsvp(e.id, id); return s != "in" && s != "virtual" });
+}
 function hello() {
   var n = PRF ? first(PRF.id) : "", sp = n ? " " + n : "", h = new Date().getHours(), k = today() + n;
   var ev = upcoming().filter(function (e) { return localDay(e.starts_at) == today() })[0];
@@ -326,15 +343,52 @@ function hello() {
   // Am Tag nach dem Anlass: nur wer wirklich dabei war, nicht wer virtuell mitgetrunken hat
   var gestern = localDay(new Date(now() - 864e5).toISOString());
   if (PRF && pastEvents().some(function (e) { return localDay(e.starts_at) == gestern && rsvp(e.id, PRF.id) == "in" })) return pick(["Hast du Kopfweh" + (n ? ", " + n : "") + "?", "Hallo Brummschädel" + sp + "!"], k);
+  if (PRF && fehlt(PRF.id)) return pick(["Hallo" + sp + ", komm mal wieder an den Stamm!", "Hoi" + sp + ", wir vermissen dich im Club!", "Salü" + sp + ", dein Glas bleibt leer ohne dich!"], k);
   if (new Date().getDay() == 5 && h >= 12) return "Happy Friday" + sp + "! Zeit für ein Glas.";
   var s = PRF && stats(PRF.id);
   if (s && s.streak >= 3) return "Hallo" + sp + "! " + s.streak + " Anlässe in Folge, stark!";
   return pick(h < 11 ? ["Guten Morgen", "Hoi", "Salü"] : h < 18 ? ["Hallo", "Hoi", "Salü"] : ["Guten Abend", "Hoi", "Salü"], k) + sp + "!";
 }
 
+// ═════════════ Saison-Effekte ═════════════
+// An besonderen Tagen fliegt ab und zu ein Emoji durchs Bild, an Anlasstagen fliegen gefüllte Weingläser.
+// Mütze im Advent, Schnee an manchen Wintertagen. Bei "Bewegung reduzieren" bewegt sich nichts, die Mütze bleibt.
+var FX = { "01-01": ["🎆", "🥂"], "01-06": ["👑", "🐫"], "02-14": ["❤️", "💘"], "08-01": ["🇨🇭", "🎆"], "10-31": ["👻", "🎃"], "12-06": ["🎅", "🎁"], "12-24": ["🎄", "🎁"], "12-25": ["🎄", "🎁"], "12-26": ["🎄", "⭐"], "12-31": ["🎆", "🥂"] }, FXON = false;
+function easter(y) { var a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451), n = h + l - 7 * m + 114; return new Date(y, Math.floor(n / 31) - 1, n % 31 + 1) }
+function fxDay(d) { var x = new Date(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8)), t = Math.round((x - easter(x.getFullYear())) / 864e5); return t >= -2 && t <= 1 ? ["🐰", "🥚"] : FX[d.slice(5)] }
+function isAdvent(d) { var y = +d.slice(0, 4), a = new Date(y, 11, 24 - new Date(y, 11, 24).getDay() - 21); return new Date(y, +d.slice(5, 7) - 1, +d.slice(8)) >= a && d.slice(5) <= "12-24" }
+function isSnow(d) { return /^(12|01|02)/.test(d.slice(5)) && pick([1, 0, 0], d + "schnee") == 1 }
+function anlassHeute() { return upcoming().some(function (e) { return localDay(e.starts_at) == today() }) }
+function fly(inhalt, art) {
+  if (document.hidden) return;
+  var b = document.createElement("div"), e = document.createElement("span");
+  b.className = "fx" + (Math.random() < .5 ? " rv" : ""); b.setAttribute("aria-hidden", "true"); b.setAttribute("data-fx", art);
+  e.style.top = 12 + Math.random() * 60 + "%"; if (art == "glas") e.innerHTML = FULL; else e.textContent = inhalt;
+  b.append(e); document.body.append(b); e.addEventListener("animationend", function () { b.remove() });
+}
+function snow() {
+  var b = document.createElement("div"); b.id = "snow"; b.setAttribute("aria-hidden", "true");
+  for (var i = 0; i < 40; i++) { var f = document.createElement("i"), z = 3 + Math.random() * 5; f.style.cssText = "left:" + Math.random() * 100 + "%;width:" + z + "px;height:" + z + "px;animation-duration:" + (6 + Math.random() * 5) + "s;animation-delay:" + Math.random() * 9 + "s"; b.append(f) }
+  document.body.append(b); setTimeout(function () { b.remove() }, 21e3);
+}
+function fxStart() {
+  if (FXON) return; FXON = true;
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  var F = fxDay(today());
+  var go = function () {
+    if (F) fly(F[Math.random() < .5 ? 0 : 1], "tag");
+    if (anlassHeute()) [0, 700, 1500].forEach(function (t) { setTimeout(function () { fly("", "glas") }, t) });
+    setTimeout(go, 4e4 + Math.random() * 5e4);
+  };
+  setTimeout(go, 2500);
+  if (isSnow(today())) setTimeout(snow, 1500);
+}
+
 // ═════════════ Darstellung ═════════════
 var TABS = [["termine", "Termine", "Anlässe & Abend"], ["reisen", "Reisen", "Unterwegs"], ["club", "Club", "Rangliste & Mitglieder"], ["karten", "Karten", "Sammlung"], ["stats", "Statistik", "Zahlen & Beizen"]];
 var GLASS = '<svg width="30" height="40" viewBox="0 0 34 44" aria-hidden="true" fill="none" stroke="#E8B95A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2h8v8c0 3 7 6 7 13v17a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V23c0-7 7-10 7-13z"/><path d="M6 26h22M6 34h22"/></svg>';
+var HAT = '<svg class="hat" width="26" height="24" viewBox="0 0 26 24" aria-hidden="true"><path d="M3 19C5 8 12 2 19 5c2 1 3 4 3 7-2-2-4-3-5-2 1 3 2 6 2 9z" fill="#B3263A"/><rect x="1" y="18" width="20" height="5" rx="2.5" fill="#F4ECE0"/><circle cx="22.5" cy="13" r="2.5" fill="#F4ECE0"/></svg>';
+var FULL = '<svg width="40" height="62" viewBox="0 0 40 62" aria-hidden="true" fill="none" stroke="#F4ECE0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 18c0 11 5 17 12 17s12-6 12-17z" fill="#8E1F36" stroke="none"/><path d="M7 3c-2 16 3 32 13 32S35 19 33 3z"/><path d="M20 35v20M11 58h18"/></svg>';
 var BACK = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2L4 8l6 6"/></svg>';
 var CAM = '<svg width="20" height="18" viewBox="0 0 20 18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M2 5h4l2-3h4l2 3h4v11H2z"/><circle cx="10" cy="10" r="3.5"/></svg>';
 function star(on) { return '<svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3 6.5 7 .8-5.2 4.8 1.5 7L12 17.6 5.7 21.1l1.5-7L2 9.3l7-.8z" fill="' + (on ? "#E8B95A" : "transparent") + '" stroke="' + (on ? "#E8B95A" : "#6A585C") + '" stroke-width="1.5" stroke-linejoin="round"/></svg>' }
@@ -370,13 +424,14 @@ function render() {
   if (!o2 && !s2) window.scrollTo(0, keep.main);
   if (fk) { var n = document.querySelector('[data-k="' + fk + '"]'); if (n && n.tagName != "BUTTON") { n.focus(); try { if (fs != null) n.setSelectionRange(fs, fs) } catch (e) {} } }
   fetchUrls();
+  if (READY && PRF) fxStart();
 }
 function authShell(inner) { return '<div class="auth"><div class="row">' + GLASS + '<div><div class="lbl">Magnum Club</div><h1 style="margin:0;font:900 34px/1 var(--hf)">Magnum</h1></div></div>' + inner + "</div>" }
 
 function shell() {
   var t = TABS.filter(function (x) { return x[0] == TAB })[0] || TABS[0];
   var body = { termine: termine, reisen: reisen, club: club, karten: karten, stats: statistik }[t[0]]();
-  return '<header><div><div class="sub">' + esc(t[2]) + '</div><h1>Magnum</h1><div class="hello">' + esc(hello()) + "</div></div>" + GLASS + "</header>" +
+  return '<header><div><div class="sub">' + esc(t[2]) + '</div><h1>Magnum</h1><div class="hello">' + esc(hello()) + '</div></div><span class="gl">' + GLASS + (isAdvent(today()) ? HAT : "") + "</span></header>" +
     "<main>" + body + "</main>" +
     '<nav aria-label="Bereiche">' + TABS.map(function (x) { return '<button type="button" data-a="tab" data-v="' + x[0] + '" class="' + (x[0] == TAB ? "on" : "") + '"' + (x[0] == TAB ? ' aria-current="page"' : "") + "><i></i><span>" + x[1] + "</span></button>" }).join("") + "</nav>" +
     (OV ? overlay() : "") + (SH ? sheet() : "");
@@ -412,16 +467,37 @@ function recoveryView() {
 }
 
 // ═════════════ Tab: Termine ═════════════
+// Duell des Monats: Anwesenheit in Prozent, weil die beiden Lager nicht gleich gross sind. Zählt nur, wer wirklich dabei war.
+function duellMonat(m) {
+  var E = pastEvents().filter(function (e) { return localDay(e.starts_at).slice(0, 7) == m });
+  if (!E.length) return null;
+  var quote = function (g) {
+    var L = D.profiles.filter(function (p) { return p.device == g }), n = 0;
+    L.forEach(function (p) { E.forEach(function (e) { if (rsvp(e.id, p.id) == "in") n++ }) });
+    return Math.round(100 * n / (L.length * E.length));
+  };
+  return { android: quote("android"), iphone: quote("iphone") };
+}
+function duell() {
+  if (!D.profiles.some(function (p) { return p.device == "android" }) || !D.profiles.some(function (p) { return p.device == "iphone" })) return "";
+  var d = new Date(), jetzt = duellMonat(today().slice(0, 7)), vor = duellMonat(localDay(new Date(d.getFullYear(), d.getMonth() - 1, 15).toISOString()).slice(0, 7));
+  var zeile = function (n, q) { return '<div class="col" style="gap:4px"><div class="row sb sm"><span class="b">' + n + '</span><span data-test="duell-' + n.toLowerCase() + '">' + q + ' %</span></div><div class="bar"><i style="width:' + q + '%"></i></div></div>' };
+  var h = '<section class="card" aria-label="Duell des Monats"><span class="lbl">Duell des Monats · Android gegen iPhone</span>';
+  h += jetzt ? zeile("Android", jetzt.android) + zeile("iPhone", jetzt.iphone) + '<span class="sm mu">' + (jetzt.android == jetzt.iphone ? "Unentschieden." : (jetzt.android > jetzt.iphone ? "Android" : "iPhone") + " führt.") + "</span>"
+    : '<span class="sm mu">Diesen Monat gab es noch keinen Anlass. Das nächste Treffen eröffnet das Duell.</span>';
+  if (vor) h += '<span class="sm b" data-test="duell-vormonat">Letzten Monat: ' + (vor.android == vor.iphone ? "unentschieden." : (vor.android > vor.iphone ? "Android gewinnt, iPhone" : "iPhone gewinnt, Android") + " bringt die nächste Magnum.") + "</span>";
+  return h + "</section>";
+}
 function termine() {
   var me = uid(), s = stats(me), b = board(), place = (b.find(function (x) { return x.id == me }) || {}).place;
   var h = spruch();
   h += '<section class="card gold" aria-label="Dein Rang"><div class="row sb"><div class="col" style="gap:2px"><span class="lbl">Dein Rang</span><span class="big" style="font-size:22px;color:var(--ac)">' + esc(s.rank.name) + '</span></div>' +
     '<div class="col" style="gap:0;align-items:flex-end"><span class="big" data-test="punkte">' + s.points + '</span><span class="xs mu">Punkte</span></div></div>' +
     '<div class="col"><div class="bar"><i style="width:' + s.pct + '%"></i></div><span class="sm mu">' + (s.next ? "Noch " + (s.next.min - s.points) + " Punkte bis «" + esc(s.next.name) + "»" : "Höchster Rang erreicht") + "</span></div>" +
-    '<div class="g3"><div class="tile"><b data-test="streak">' + s.streak + '</b><span>Streak</span></div><div class="tile"><b>' + place + '.</b><span>Rangliste</span></div><div class="tile"><b>' + s.virt + "</b><span>Magnums spendiert</span></div></div>" +
+    '<div class="g3"><div class="tile"><b data-test="streak">' + s.streak + '</b><span>Streak · Rekord <span data-test="rekord">' + s.rekord + '</span></span></div><div class="tile"><b>' + place + '.</b><span>Rangliste</span></div><div class="tile"><b>' + s.virt + "</b><span>Magnums spendiert</span></div></div>" +
     '<div class="col"><div class="row sb xs mu b" style="letter-spacing:1px;text-transform:uppercase"><span>Trinkfestigkeit · errechnet</span><span style="color:var(--ac)">' + esc(s.drink.label) + "</span></div>" + segs(s.drink.level, 8) + '<span class="sm mu">' + esc(s.drink.basis) + "</span></div>" +
     '<span class="sm mu">Dabei +50 · Virtuell mit Magnum +20 (Streak bleibt) · Organisieren +40 · Abmelden: Streak weg. Punkte für Anlässe gibt es nach dem Anlass.</span></section>';
-  h += goal();
+  h += goal() + duell();
   h += '<h2>Nächste Anlässe</h2>';
   var up = upcoming();
   h += up.length ? up.map(eventCard).join("") : '<div class="card empty">Noch kein Anlass geplant. Organisiere den nächsten!</div>';
@@ -656,7 +732,7 @@ function memberView(p) {
   var h = '<div class="top"><button class="back" data-a="close" aria-label="Zurück">' + BACK + '</button><div class="row"><span class="av l">' + esc(ini(p.id)) + '</span><div class="col" style="gap:2px"><span style="font:900 26px/1.1 var(--hf)">' + esc(nm(p.id)) + "</span>" +
     (p.nickname ? '<span class="nick" style="font-size:16px" data-test="nickname">«' + esc(p.nickname) + "»</span>" : "") + '<span class="sm mu">' + esc(p.role_title) + (p.since_year ? " · seit " + p.since_year : "") + "</span></div></div></div><main>";
   h += '<section class="card"><div class="row sb xs mu b" style="letter-spacing:1px;text-transform:uppercase"><span>Trinkfestigkeit · errechnet</span><span style="color:var(--ac)">' + esc(s.drink.label) + "</span></div>" + segs(s.drink.level, 12) + '<span class="sm mu">' + esc(s.drink.basis) + "</span>" +
-    '<div class="g3"><div class="tile"><b>' + s.points + '</b><span>Punkte</span></div><div class="tile"><b>' + s.streak + '</b><span>Streak</span></div><div class="tile"><b>' + s.trips + '</b><span>Reisen</span></div>' +
+    '<div class="g3"><div class="tile"><b>' + s.points + '</b><span>Punkte</span></div><div class="tile"><b>' + s.streak + '</b><span>Streak · Rekord ' + s.rekord + '</span></div><div class="tile"><b>' + s.trips + '</b><span>Reisen</span></div>' +
     '<div class="tile"><b>' + s.magnums + '</b><span>Magnums mitgebracht</span></div><div class="tile"><b>' + s.virt + '</b><span>Magnums spendiert</span></div><div class="tile"><b>' + s.cards + "</b><span>Karten</span></div></div>" +
     '<div class="col sm">' + (p.fav_wine ? '<span><span class="mu">Lieblingswein: </span>' + esc(p.fav_wine) + "</span>" : "") + (p.specialty ? '<span><span class="mu">Spezialität: </span>' + esc(p.specialty) + "</span>" : "") +
     '<span><span class="mu">Gerät: </span><span data-test="geraet">' + deviceText(p) + "</span>" + (p.device_set_by_admin ? " · vom Admin bestätigt" : "") + "</span>" +
@@ -898,7 +974,8 @@ var ACT = {
   rsvp: function (d) {
     var was = rsvp(d.id, uid()); SH = null;
     after(sb.from("rsvps").upsert({ event_id: d.id, member_id: uid(), status: d.v, updated_at: new Date().toISOString() }),
-      d.v == "in" ? (was == "in" ? null : "Angemeldet · +50 Punkte nach dem Anlass") : "Abgemeldet · Streak zurück auf 0");
+      d.v == "in" ? (was == "in" ? null : "Angemeldet · +50 Punkte nach dem Anlass")
+        : stats(uid()).streak ? "Abgemeldet · Streak zurück auf 0" : pick(["Abgemeldet · Schade, das Glas bleibt leer", "Abgemeldet · Beim nächsten Mal wieder!", "Abgemeldet · Wir trinken einen auf dich"], today() + d.id));
   },
   abmelden: function (d) { SH = { t: "abmelden", id: d.id }; render() },
   virtual: function (d) {

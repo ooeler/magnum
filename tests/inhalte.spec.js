@@ -113,7 +113,7 @@ test.describe("Löschen", () => {
     await tab(page, "Karten");
     await page.getByRole("button", { name: /Sammelkarte erstellen/ }).click();
     await page.fill("[data-k=cdTitle]", "Kurz und schmerzlos");
-    await page.setInputFiles("input[data-c=cardphoto]", BILD);
+    await page.locator("input[data-c=cardphoto]").setInputFiles({ name: "a.png", mimeType: "image/png", buffer: PNG });
     await expect(page.locator("form[data-s=card]")).toContainText("Foto gewählt ✓");
     await page.getByRole("button", { name: "Karte erstellen" }).click();
     const k = page.locator(".kc", { hasText: "Kurz und schmerzlos" });
@@ -158,6 +158,7 @@ test.describe("Termine", () => {
     await b.click();
     await expect(b).toHaveText("Prost 2");
     await expect(b).toHaveAttribute("aria-pressed", "true");
+    await page.waitForTimeout(300); // der Live-Sync zeichnet neu: sonst trifft der Klick einen ersetzten Knopf
     await b.click();
     await expect(b).toHaveText("Prost 1");
     await expect(b).toHaveAttribute("aria-pressed", "false");
@@ -209,7 +210,7 @@ test.describe("Beiz erfassen", () => {
 
   test("Quittung auswählen", async ({ page }) => {
     await offen(page);
-    await page.setInputFiles("input[data-c=receipt]", BILD);
+    await page.locator("input[data-c=receipt]").setInputFiles({ name: "a.png", mimeType: "image/png", buffer: PNG });
     await expect(page.locator("form[data-s=visit]")).toContainText("Quittung gewählt ✓");
   });
 
