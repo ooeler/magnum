@@ -6,3 +6,6 @@ test-results/
 supabase/.temp/
 dist/
 playwright-report-e2e/
+.env
+.env.*
+.neon
