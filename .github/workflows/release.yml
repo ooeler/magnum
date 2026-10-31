@@ -1,0 +1,157 @@
+# Deployment. Läuft automatisch nach jedem gemergten Pull Request (siehe auto-merge.yml)
+# oder manuell über ein veröffentlichtes Release / "Run workflow".
+# Reihenfolge: Tests → Wartungsseite an → Datenbank (setup.sql + Migrationen) → Sicherheitsprüfung → Edge Functions → App (GitHub Pages) → Wartungsseite aus.
+# Bricht ein Schritt ab, geht nichts Neues live.
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      grund:
+        description: Grund für das Deployment
+        required: false
+        default: manuell
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  backend:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      CRON_SECRET: ${{ secrets.SUPABASE_CRON_SECRET }}
+      REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      URL: ${{ vars.SUPABASE_URL }}
+    steps:
+      - name: Secrets vorhanden?
+        run: |
+          miss=""
+          [ -n "$SUPABASE_ACCESS_TOKEN" ] || miss="$miss SUPABASE_ACCESS_TOKEN"
+          [ -n "$CRON_SECRET" ] || miss="$miss SUPABASE_CRON_SECRET"
+          [ -n "$REF" ] || miss="$miss SUPABASE_PROJECT_REF(Variable)"
+          if [ -n "$miss" ]; then echo "::error::Fehlt in GitHub → Settings → Secrets and variables → Actions:$miss"; exit 1; fi
+          code=$(curl -s -o /dev/null -w "%{http_code}" -m 30 -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" https://api.supabase.com/v1/projects)
+          if [ "$code" != "200" ]; then echo "::error::SUPABASE_ACCESS_TOKEN wird abgelehnt (HTTP $code) – vermutlich abgelaufen. Neues Token erstellen und in GitHub ersetzen (siehe README)."; exit 1; fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3
+        with:
+          version: 2.122.0  # gleiche Version wie lokal getestet
+
+      - name: Wartungsseite einschalten
+        # offene Apps zeigen sofort "Update wird eingespielt" und speichern nichts, bis das Update live ist
+        run: |
+          supabase db query --agent no --linked --project-ref "$REF"             "do \$\$ begin if to_regclass('public.app_status') is not null then
+               update public.app_status set maintenance = true, since = now() where id = 'main';
+             end if; end \$\$" > /dev/null
+          echo "Wartungsseite an"
+
+      - name: Datenbank einrichten (setup.sql ist mehrfach ausführbar) und Migrationen
+        run: |
+          supabase db query --linked --project-ref "$REF" -f supabase/setup.sql > /dev/null
+          echo "✓ setup.sql"
+          q() { supabase db query --agent no --linked --project-ref "$REF" "$@" 2>/dev/null; }
+          q "create table if not exists public.schema_migrations (name text primary key, applied_at timestamptz not null default now()); alter table public.schema_migrations enable row level security;" > /dev/null
+          for f in $(ls supabase/migrations/*.sql 2>/dev/null | sort); do
+            n=$(basename "$f")
+            c=$(q -o json "select count(*)::int as c from public.schema_migrations where name = '$n'" | jq -r 'if type == "array" then .[0].c else .rows[0].c end')
+            if [ "$c" = "1" ]; then echo "✓ $n (bereits angewendet)"; continue; fi
+            echo "→ $n"
+            supabase db query --linked --project-ref "$REF" -f "$f" > /dev/null
+            q "insert into public.schema_migrations (name) values ('$n')" > /dev/null
+          done
+
+      - name: Sicherheitsprüfung Datenbank
+        run: |
+          # Ohne Login (anon) darf keine Funktion ausführbar sein, und jede Tabelle braucht Row Level Security
+          q() { supabase db query --agent no --linked --project-ref "$REF" -o json "$1" | jq -r 'if type == "array" then .[0].c else .rows[0].c end'; }
+          f=$(q "select coalesce(string_agg(p.proname, ', '), '') as c from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                 where n.nspname = 'public' and p.prorettype <> 'trigger'::regtype and has_function_privilege('anon', p.oid, 'EXECUTE')")
+          t=$(q "select coalesce(string_agg(c.relname, ', '), '') as c from pg_class c join pg_namespace n on n.oid = c.relnamespace
+                 where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity")
+          [ -z "$f" ] || { echo "::error::Ohne Login ausführbare Funktionen: $f"; exit 1; }
+          [ -z "$t" ] || { echo "::error::Tabellen ohne Row Level Security: $t"; exit 1; }
+          echo "Funktionsrechte und Row Level Security in Ordnung"
+
+      - name: Secret für die Vorschläge-Schnittstelle (feedback-export)
+        run: supabase secrets set CRON_SECRET="$CRON_SECRET" --project-ref "$REF" > /dev/null
+
+      - name: Edge Functions
+        run: |
+          for d in supabase/functions/[!_]*/; do  # _shared = gemeinsamer Code, keine eigene Function
+            fn=$(basename "$d")
+            case "$fn" in feedback) flags="" ;; *) flags="--no-verify-jwt" ;; esac  # invite (Einladung ohne Login) und feedback-export prüfen selbst
+            supabase functions deploy "$fn" $flags --use-api --project-ref "$REF"
+          done
+
+  pages:
+    needs: backend
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22
+      - run: if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev --no-audit --no-fund; fi
+      - name: config.js aus den Repository-Variablen schreiben
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+        run: |
+          node -e '
+            const e = process.env;
+            if (!e.SUPABASE_URL || !e.SUPABASE_ANON_KEY) { console.error("Variablen SUPABASE_URL / SUPABASE_ANON_KEY fehlen"); process.exit(1); }
+            const c = { url: e.SUPABASE_URL, key: e.SUPABASE_ANON_KEY };
+            require("fs").writeFileSync("app/config.js", "window.MG_CONFIG = " + JSON.stringify(c, null, 2) + ";\n");'
+      - name: Neue Cache-Version, damit Handys das Update laden
+        run: sed -i "s/var V = \"mg-v1\"/var V = \"mg-${GITHUB_SHA::8}\"/" app/sw.js
+      - name: App bauen (Content-Security-Policy)
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+        run: node scripts/build.mjs
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
+        with:
+          path: dist
+      - id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5
+
+  # Läuft immer (auch wenn ein Schritt fehlschlägt), damit die App nie in der Wartung hängen bleibt.
+  # Die Apps laden danach automatisch neu und holen die neue Version.
+  wartung-aus:
+    needs: [backend, pages]
+    if: always() && needs.backend.result != 'skipped'
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      REF: ${{ vars.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3
+        with:
+          version: 2.122.0
+      - name: Wartungsseite ausschalten
+        run: |
+          # GitHub Pages braucht nach dem Deployment einen Moment, bis die neue Version überall ausgeliefert wird
+          [ "${{ needs.pages.result }}" = "success" ] && sleep 30
+          supabase db query --agent no --linked --project-ref "$REF"             "do \$\$ begin if to_regclass('public.app_status') is not null then
+               update public.app_status set maintenance = false, since = null where id = 'main';
+             end if; end \$\$" > /dev/null
+          echo "Wartungsseite aus"

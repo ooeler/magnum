@@ -1,0 +1,72 @@
+name: Tests
+
+# Tests und Sicherheitsprüfung für main. Pull Requests werden über auto-merge.yml getestet, Releases über release.yml.
+on:
+  push:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22
+      - name: Pakete installieren
+        # package-lock.json fehlt nur beim allerersten Lauf; danach wie bei Herren Inter mit npm ci
+        run: if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npm test
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 14
+
+  datenbank:
+    # setup.sql + Migrationen gegen ein echtes Postgres, danach die Regeltests (tests-db/regeln.sql):
+    # Rechte, Row Level Security, Einladungen, Abstimmungen mit ⅔-Mehrheit und doppelten Android-Stimmen.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Datenbank-Tests
+        env:
+          DB_URL: postgres://postgres:postgres@localhost:5432/postgres
+        run: |
+          bash scripts/db-test.sh | tee /tmp/db.log
+          grep -q "ALLE DB-TESTS GRÜN" /tmp/db.log
+
+  security:
+    # Sicherheitsprüfung vor jedem Merge (zusätzlich: CodeQL und die statischen Tests in tests/sicherheit-statisch.spec.js)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Semgrep (Schwachstellen-Muster, Secrets, Workflows)
+        run: >
+          semgrep scan --error --metrics=off
+          --config p/javascript --config p/typescript --config p/secrets --config p/github-actions
+          --exclude tests --exclude node_modules --exclude "app/vendor"
+      - name: Abhängigkeiten mit bekannten Schwachstellen
+        run: |
+          apk add --no-cache nodejs npm > /dev/null 2>&1 || true
+          [ -f package-lock.json ] || npm install --package-lock-only --no-audit --no-fund
+          npm audit --audit-level=high

@@ -1,0 +1,670 @@
+-- Magnum – Datenbank einrichten.
+-- Im Supabase-Dashboard → SQL Editor einfügen und ausführen. Mehrfaches Ausführen ist unproblematisch.
+-- Grundsatz: Mitglieder sehen alles im Club und ändern nur ihre eigenen Einträge.
+-- Ohne Login sieht man nichts. Abstimmungen, Einladungen und Admin-Rechte laufen nur über Funktionen.
+
+-- ───────────── Einstellungen & Wartung ─────────────
+create table if not exists public.settings (
+  id           int primary key default 1 check (id = 1),
+  max_members  int  not null default 12,
+  goal_title   text not null default '30 Zusagen bis zum Chlaus-Magnum = Apéro für alle',
+  goal_target  int  not null default 30,
+  phrase_fee   numeric(6,2) not null default 2,
+  magnum_price numeric(6,2) not null default 45
+);
+alter table public.settings enable row level security;
+insert into public.settings (id) values (1) on conflict do nothing;
+
+-- Wartungsseite während eines Updates (schaltet der Release-Workflow)
+create table if not exists public.app_status (
+  id          text primary key default 'main',
+  maintenance boolean not null default false,
+  since       timestamptz
+);
+alter table public.app_status enable row level security;
+insert into public.app_status (id) values ('main') on conflict do nothing;
+drop policy if exists "Status lesen" on public.app_status;
+create policy "Status lesen" on public.app_status for select to anon, authenticated using (true);
+
+-- ───────────── Mitglieder ─────────────
+create table if not exists public.profiles (
+  id                  uuid primary key references auth.users(id) on delete cascade,
+  display_name        text not null default '' check (length(display_name) <= 40),
+  nickname            text check (length(nickname) <= 40),
+  role_title          text not null default 'Mitglied' check (length(role_title) <= 40),
+  since_year          int,
+  fav_wine            text check (length(fav_wine) <= 60),
+  specialty           text check (length(specialty) <= 80),
+  device              text not null default 'iphone' check (device in ('iphone', 'android')),
+  device_set_by_admin boolean not null default false,
+  is_admin            boolean not null default false,
+  invited_by          uuid references public.profiles(id) on delete set null,
+  last_seen           timestamptz,
+  created_at          timestamptz not null default now()
+);
+alter table public.profiles enable row level security;
+
+create or replace function public.is_member() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.profiles where id = auth.uid())
+$$;
+
+create or replace function public.is_admin() returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select is_admin from public.profiles where id = auth.uid()), false)
+$$;
+
+-- Bei Abstimmungen zählen Android-Stimmen doppelt
+create or replace function public.vote_weight(p_member uuid) returns int
+language sql stable security definer set search_path = public as $$
+  select case when device = 'android' then 2 else 1 end from public.profiles where id = p_member
+$$;
+
+-- Neue Konten entstehen nur über die Edge Function "invite" (freie Registrierung ist aus).
+-- Name und Gerät kommen aus den Metadaten, die die Function beim Anlegen mitgibt.
+create or replace function public.handle_new_user() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.profiles (id, display_name, device, since_year)
+  values (new.id,
+          left(coalesce(nullif(trim(new.raw_user_meta_data->>'display_name'), ''), split_part(new.email, '@', 1)), 40),
+          case when new.raw_user_meta_data->>'device' = 'android' then 'android' else 'iphone' end,
+          extract(year from now())::int)
+  on conflict do nothing;
+  return new;
+end $$;
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- Beim App-Start: eigenes Profil + letzter Besuch (für "willkommen zurück"), Besuch speichern
+create or replace function public.me() returns json
+language plpgsql security definer set search_path = public as $$
+declare r public.profiles;
+begin
+  select * into r from public.profiles where id = auth.uid();
+  if not found then return null; end if;
+  update public.profiles set last_seen = now() where id = auth.uid();
+  return json_build_object('id', r.id, 'is_admin', r.is_admin, 'prev_seen', r.last_seen);
+end $$;
+
+-- ───────────── Einladungen (Link statt Mail, siehe functions/invite) ─────────────
+create table if not exists public.invites (
+  id          bigint generated always as identity primary key,
+  token_hash  text not null unique,
+  created_by  uuid references auth.users(id) on delete set null,
+  created_at  timestamptz not null default now(),
+  expires_at  timestamptz not null,
+  used_at     timestamptz,
+  used_by     uuid references auth.users(id) on delete set null
+);
+alter table public.invites enable row level security;
+revoke all on table public.invites from anon, authenticated;
+
+-- ───────────── Admin: Gerätetyp und Funktion anpassen (mit Protokoll) ─────────────
+create table if not exists public.admin_log (
+  id         bigint generated always as identity primary key,
+  admin_id   uuid references public.profiles(id) on delete set null,
+  member_id  uuid references public.profiles(id) on delete cascade,
+  action     text not null,
+  created_at timestamptz not null default now()
+);
+alter table public.admin_log enable row level security;
+
+create or replace function public.admin_set_device(p_member uuid, p_device text) returns void
+language plpgsql security definer set search_path = public as $$
+declare v_old text;
+begin
+  if not public.is_admin() then raise exception 'Nur der Administrator darf den Gerätetyp ändern'; end if;
+  if p_device not in ('iphone', 'android') then raise exception 'Unbekannter Gerätetyp'; end if;
+  select device into v_old from public.profiles where id = p_member;
+  if v_old is null then raise exception 'Mitglied nicht gefunden'; end if;
+  if v_old = p_device then return; end if;
+  update public.profiles set device = p_device, device_set_by_admin = true where id = p_member;
+  insert into public.admin_log (admin_id, member_id, action)
+  values (auth.uid(), p_member, 'Gerätetyp ' || v_old || ' → ' || p_device);
+end $$;
+
+create or replace function public.admin_set_role(p_member uuid, p_role text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_admin() then raise exception 'Nur der Administrator darf Funktionen vergeben'; end if;
+  update public.profiles set role_title = left(trim(p_role), 40) where id = p_member;
+  insert into public.admin_log (admin_id, member_id, action) values (auth.uid(), p_member, 'Funktion → ' || left(trim(p_role), 40));
+end $$;
+
+-- ───────────── Restaurants ─────────────
+create table if not exists public.restaurants (
+  id         uuid primary key default gen_random_uuid(),
+  name       text not null check (length(name) between 1 and 80),
+  place      text check (length(place) <= 80),
+  lat        double precision,
+  lng        double precision,
+  created_by uuid default auth.uid() references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+alter table public.restaurants enable row level security;
+
+create table if not exists public.restaurant_visits (
+  id            uuid primary key default gen_random_uuid(),
+  restaurant_id uuid not null references public.restaurants(id) on delete cascade,
+  visited_on    date not null default current_date,
+  people        int  not null default 1 check (people between 1 and 100),
+  total_chf     numeric(10,2) not null default 0 check (total_chf >= 0),
+  receipt_path  text,
+  created_by    uuid default auth.uid() references public.profiles(id) on delete set null,
+  created_at    timestamptz not null default now()
+);
+alter table public.restaurant_visits enable row level security;
+
+create table if not exists public.restaurant_ratings (
+  restaurant_id uuid not null references public.restaurants(id) on delete cascade,
+  member_id     uuid not null default auth.uid() references public.profiles(id) on delete cascade,
+  preis         int not null check (preis between 1 and 5),
+  gesellig      int not null check (gesellig between 1 and 5),
+  willkommen    int not null check (willkommen between 1 and 5),
+  updated_at    timestamptz not null default now(),
+  primary key (restaurant_id, member_id)
+);
+alter table public.restaurant_ratings enable row level security;
+
+-- ───────────── Anlässe, An-/Abmeldungen, Magnums, Gasttrinker ─────────────
+create table if not exists public.events (
+  id            uuid primary key default gen_random_uuid(),
+  title         text not null check (length(title) between 1 and 80),
+  starts_at     timestamptz not null,
+  location      text check (length(location) <= 120),
+  organizer_id  uuid references public.profiles(id) on delete set null,
+  created_by    uuid default auth.uid() references public.profiles(id) on delete set null,
+  created_at    timestamptz not null default now()
+);
+alter table public.events enable row level security;
+
+create table if not exists public.rsvps (
+  event_id   uuid not null references public.events(id) on delete cascade,
+  member_id  uuid not null default auth.uid() references public.profiles(id) on delete cascade,
+  status     text not null check (status in ('in', 'out', 'virtual')),
+  redeemed   boolean not null default false,   -- gespendete Magnum aus der Kasse geöffnet
+  updated_at timestamptz not null default now(),
+  primary key (event_id, member_id)
+);
+alter table public.rsvps enable row level security;
+
+-- "Ich organisiere den Abend": nur solange niemand organisiert
+create or replace function public.claim_organizer(p_event uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_member() then raise exception 'Nur Mitglieder'; end if;
+  update public.events set organizer_id = auth.uid() where id = p_event and organizer_id is null;
+  if not found then raise exception 'Der Anlass hat schon einen Organisator'; end if;
+  insert into public.rsvps (event_id, member_id, status) values (p_event, auth.uid(), 'in')
+  on conflict (event_id, member_id) do update set status = 'in', updated_at = now();
+end $$;
+
+create table if not exists public.magnums (
+  id         uuid primary key default gen_random_uuid(),
+  event_id   uuid not null references public.events(id) on delete cascade,
+  wine       text not null check (length(wine) between 1 and 80),
+  brought_by uuid default auth.uid() references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+alter table public.magnums enable row level security;
+
+create table if not exists public.magnum_guests (
+  id         uuid primary key default gen_random_uuid(),
+  magnum_id  uuid not null references public.magnums(id) on delete cascade,
+  name       text not null check (length(name) between 1 and 60),
+  added_by   uuid default auth.uid() references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+alter table public.magnum_guests enable row level security;
+
+-- Magnum-Kasse: Admin öffnet alle gespendeten Magnums
+create or replace function public.open_magnum_kasse() returns int
+language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  if not public.is_admin() then raise exception 'Nur der Administrator öffnet die Kasse'; end if;
+  update public.rsvps set redeemed = true where status = 'virtual' and not redeemed;
+  get diagnostics n = row_count;
+  return n;
+end $$;
+
+-- ───────────── Heimweg / Fahrservice ─────────────
+create table if not exists public.rides (
+  id         uuid primary key default gen_random_uuid(),
+  event_id   uuid not null references public.events(id) on delete cascade,
+  driver_id  uuid not null default auth.uid() references public.profiles(id) on delete cascade,
+  direction  text not null default '' check (length(direction) <= 60),
+  seats      int  not null default 3 check (seats between 1 and 8),
+  created_at timestamptz not null default now(),
+  unique (event_id, driver_id)
+);
+alter table public.rides enable row level security;
+
+create table if not exists public.ride_passengers (
+  ride_id        uuid not null references public.rides(id) on delete cascade,
+  passenger_id   uuid not null default auth.uid() references public.profiles(id) on delete cascade,
+  stars_safe     int check (stars_safe between 1 and 5),
+  stars_punctual int check (stars_punctual between 1 and 5),
+  stars_mood     int check (stars_mood between 1 and 5),
+  points_given   int check (points_given in (10, 20, 30, 50)),
+  rated_at       timestamptz,
+  primary key (ride_id, passenger_id)
+);
+alter table public.ride_passengers enable row level security;
+
+-- Niemand fährt bei sich selbst mit, volle Autos nehmen niemanden mehr
+create or replace function public.check_ride_passenger() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare v_driver uuid; v_seats int;
+begin
+  select driver_id, seats into v_driver, v_seats from public.rides where id = new.ride_id;
+  if v_driver = new.passenger_id then raise exception 'Du kannst nicht bei dir selbst mitfahren'; end if;
+  if tg_op = 'INSERT' and (select count(*) from public.ride_passengers where ride_id = new.ride_id) >= v_seats then
+    raise exception 'Das Auto ist voll';
+  end if;
+  return new;
+end $$;
+drop trigger if exists ride_passenger_check on public.ride_passengers;
+create trigger ride_passenger_check before insert or update on public.ride_passengers
+  for each row execute function public.check_ride_passenger();
+
+-- ───────────── Reisen ─────────────
+create table if not exists public.trips (
+  id         uuid primary key default gen_random_uuid(),
+  title      text not null check (length(title) between 1 and 60),
+  starts_on  date not null,
+  ends_on    date,
+  program    text check (length(program) <= 300),
+  seats      int  not null default 12 check (seats between 1 and 50),
+  color      text not null default '#6E2433' check (color ~ '^#[0-9A-Fa-f]{6}$'),
+  ok_id      uuid references public.profiles(id) on delete set null,
+  kassier_id uuid references public.profiles(id) on delete set null,
+  sacceri_id uuid references public.profiles(id) on delete set null,  -- nur per Abstimmung
+  created_by uuid default auth.uid() references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+alter table public.trips enable row level security;
+
+create table if not exists public.trip_participants (
+  trip_id   uuid not null references public.trips(id) on delete cascade,
+  member_id uuid not null default auth.uid() references public.profiles(id) on delete cascade,
+  primary key (trip_id, member_id)
+);
+alter table public.trip_participants enable row level security;
+
+create table if not exists public.trip_photos (
+  id          uuid primary key default gen_random_uuid(),
+  trip_id     uuid not null references public.trips(id) on delete cascade,
+  path        text not null,
+  uploaded_by uuid default auth.uid() references public.profiles(id) on delete set null,
+  created_at  timestamptz not null default now()
+);
+alter table public.trip_photos enable row level security;
+
+-- ───────────── Prost-Wand ─────────────
+create table if not exists public.posts (
+  id         uuid primary key default gen_random_uuid(),
+  author_id  uuid default auth.uid() references public.profiles(id) on delete set null,
+  text       text not null check (length(text) between 1 and 300),
+  created_at timestamptz not null default now()
+);
+alter table public.posts enable row level security;
+
+create table if not exists public.post_prosts (
+  post_id   uuid not null references public.posts(id) on delete cascade,
+  member_id uuid not null default auth.uid() references public.profiles(id) on delete cascade,
+  primary key (post_id, member_id)
+);
+alter table public.post_prosts enable row level security;
+
+-- ───────────── Abstimmungen: Sacceri-Auszeichnung und Spitznamen ─────────────
+-- Zweidrittelmehrheit der Stimmberechtigten, Android-Stimmen zählen doppelt.
+create table if not exists public.proposals (
+  id           uuid primary key default gen_random_uuid(),
+  kind         text not null check (kind in ('sacceri', 'nickname')),
+  target_id    uuid not null references public.profiles(id) on delete cascade,
+  trip_id      uuid references public.trips(id) on delete cascade,
+  value        text check (length(value) <= 40),
+  proposed_by  uuid not null references public.profiles(id) on delete cascade,
+  seconded_by  uuid references public.profiles(id) on delete set null,
+  status       text not null default 'open' check (status in ('open', 'passed', 'rejected')),
+  yes_weight   int,
+  total_weight int,
+  created_at   timestamptz not null default now(),
+  decided_at   timestamptz,
+  check (kind <> 'sacceri' or trip_id is not null),
+  check (kind <> 'nickname' or length(trim(coalesce(value, ''))) > 0)
+);
+alter table public.proposals enable row level security;
+create unique index if not exists one_open_sacceri  on public.proposals (trip_id)   where status = 'open' and kind = 'sacceri';
+create unique index if not exists one_open_nickname on public.proposals (target_id) where status = 'open' and kind = 'nickname';
+
+create table if not exists public.ballots (
+  proposal_id uuid not null references public.proposals(id) on delete cascade,
+  voter_id    uuid not null references public.profiles(id) on delete cascade,
+  vote        boolean not null,
+  created_at  timestamptz not null default now(),
+  primary key (proposal_id, voter_id)
+);
+alter table public.ballots enable row level security;
+
+-- Stimmberechtigt: Sacceri → die Mitreisenden; Spitzname → alle ausser der Person selbst
+create or replace function public.eligible_voters(p_proposal uuid) returns setof uuid
+language sql stable security definer set search_path = public as $$
+  select tp.member_id from public.proposals p join public.trip_participants tp on tp.trip_id = p.trip_id
+   where p.id = p_proposal and p.kind = 'sacceri'
+  union
+  select pr.id from public.proposals p join public.profiles pr on pr.id <> p.target_id
+   where p.id = p_proposal and p.kind = 'nickname'
+$$;
+
+create or replace function public.resolve_proposal(p_proposal uuid) returns text
+language plpgsql security definer set search_path = public as $$
+declare
+  p public.proposals;
+  v_total int; v_yes int; v_no int; v_need int; v_trip text;
+begin
+  select * into p from public.proposals where id = p_proposal for update;
+  if not found then raise exception 'Abstimmung nicht gefunden'; end if;
+  if p.status <> 'open' then return p.status; end if;
+  if p.kind = 'nickname' and p.seconded_by is null then return 'open'; end if;
+
+  select coalesce(sum(public.vote_weight(v)), 0) into v_total from public.eligible_voters(p.id) v;
+  select coalesce(sum(case when b.vote then public.vote_weight(b.voter_id) else 0 end), 0),
+         coalesce(sum(case when not b.vote then public.vote_weight(b.voter_id) else 0 end), 0)
+    into v_yes, v_no
+    from public.ballots b
+   where b.proposal_id = p.id and b.voter_id in (select public.eligible_voters(p.id));
+  v_need := ceil(v_total * 2.0 / 3.0);
+
+  if v_total > 0 and v_yes >= v_need then
+    update public.proposals set status = 'passed', yes_weight = v_yes, total_weight = v_total, decided_at = now() where id = p.id;
+    if p.kind = 'nickname' then
+      update public.profiles set nickname = p.value where id = p.target_id;
+      insert into public.posts (author_id, text) values (p.target_id, 'heisst ab jetzt «' || p.value || '».');
+    else
+      update public.trips set sacceri_id = p.target_id where id = p.trip_id;
+      select title into v_trip from public.trips where id = p.trip_id;
+      insert into public.posts (author_id, text) values (p.target_id, 'ist De Sacceri der Reise ' || v_trip || '!');
+    end if;
+    return 'passed';
+  elsif v_no > v_total - v_need then
+    update public.proposals set status = 'rejected', yes_weight = v_yes, total_weight = v_total, decided_at = now() where id = p.id;
+    return 'rejected';
+  end if;
+  return 'open';
+end $$;
+
+-- Sacceri beantragen (ein Mitglied stellt den Antrag und stimmt dabei mit Ja, falls mitgereist)
+create or replace function public.propose_sacceri(p_trip uuid, p_target uuid) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare v_id uuid;
+begin
+  if not public.is_member() then raise exception 'Nur Mitglieder'; end if;
+  if p_target = auth.uid() then raise exception 'Du kannst dich nicht selbst auszeichnen'; end if;
+  if not exists (select 1 from public.trip_participants where trip_id = p_trip and member_id = p_target) then
+    raise exception 'Nur Mitreisende können ausgezeichnet werden';
+  end if;
+  if (select sacceri_id from public.trips where id = p_trip) is not null then
+    raise exception 'Diese Reise hat schon einen Sacceri';
+  end if;
+  insert into public.proposals (kind, target_id, trip_id, proposed_by)
+  values ('sacceri', p_target, p_trip, auth.uid()) returning id into v_id;
+  if exists (select 1 from public.trip_participants where trip_id = p_trip and member_id = auth.uid()) then
+    insert into public.ballots (proposal_id, voter_id, vote) values (v_id, auth.uid(), true);
+  end if;
+  perform public.resolve_proposal(v_id);
+  return v_id;
+end $$;
+
+-- Spitzname vorschlagen; danach braucht es eine zweite Unterstützung, dann wird abgestimmt
+create or replace function public.propose_nickname(p_target uuid, p_nick text) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare v_id uuid;
+begin
+  if not public.is_member() then raise exception 'Nur Mitglieder'; end if;
+  if p_target = auth.uid() then raise exception 'Spitznamen werden von anderen vergeben'; end if;
+  insert into public.proposals (kind, target_id, value, proposed_by)
+  values ('nickname', p_target, left(trim(p_nick), 40), auth.uid()) returning id into v_id;
+  insert into public.ballots (proposal_id, voter_id, vote) values (v_id, auth.uid(), true);
+  return v_id;
+end $$;
+
+create or replace function public.second_proposal(p_proposal uuid) returns text
+language plpgsql security definer set search_path = public as $$
+declare p public.proposals;
+begin
+  if not public.is_member() then raise exception 'Nur Mitglieder'; end if;
+  select * into p from public.proposals where id = p_proposal for update;
+  if not found or p.kind <> 'nickname' or p.status <> 'open' then raise exception 'Nicht möglich'; end if;
+  if p.seconded_by is not null then raise exception 'Der Vorschlag ist schon unterstützt'; end if;
+  if p.proposed_by = auth.uid() or p.target_id = auth.uid() then
+    raise exception 'Die zweite Unterstützung muss von jemand anderem kommen';
+  end if;
+  update public.proposals set seconded_by = auth.uid() where id = p.id;
+  insert into public.ballots (proposal_id, voter_id, vote) values (p.id, auth.uid(), true)
+  on conflict (proposal_id, voter_id) do update set vote = true;
+  return public.resolve_proposal(p.id);
+end $$;
+
+create or replace function public.cast_ballot(p_proposal uuid, p_yes boolean) returns text
+language plpgsql security definer set search_path = public as $$
+declare p public.proposals;
+begin
+  select * into p from public.proposals where id = p_proposal;
+  if not found or p.status <> 'open' then raise exception 'Die Abstimmung ist abgeschlossen'; end if;
+  if p.kind = 'nickname' and p.seconded_by is null then raise exception 'Erst braucht es eine zweite Unterstützung'; end if;
+  if not exists (select 1 from public.eligible_voters(p.id) v where v = auth.uid()) then
+    raise exception 'Du bist für diese Abstimmung nicht stimmberechtigt';
+  end if;
+  insert into public.ballots (proposal_id, voter_id, vote) values (p.id, auth.uid(), p_yes)
+  on conflict (proposal_id, voter_id) do update set vote = excluded.vote, created_at = now();
+  return public.resolve_proposal(p.id);
+end $$;
+
+-- ───────────── Sammelkarten ─────────────
+create table if not exists public.cards (
+  id          uuid primary key default gen_random_uuid(),
+  title       text not null check (length(title) between 1 and 80),
+  rarity      text not null check (rarity in ('magic', 'legend', 'geil')),
+  story       text check (length(story) <= 1000),
+  happened_on date,
+  place       text check (length(place) <= 80),
+  who         text check (length(who) <= 120),
+  photo_path  text,
+  created_by  uuid default auth.uid() references public.profiles(id) on delete set null,
+  created_at  timestamptz not null default now()
+);
+alter table public.cards enable row level security;
+
+-- ───────────── Getränkefotos (Trinkfestigkeit) ─────────────
+create table if not exists public.drinks (
+  id         uuid primary key default gen_random_uuid(),
+  member_id  uuid not null default auth.uid() references public.profiles(id) on delete cascade,
+  drunk_on   date not null default current_date,
+  kind       text not null check (kind in ('wein', 'bier', 'schnaps', 'magnum', 'wasser')),
+  photo_path text,
+  created_at timestamptz not null default now()
+);
+alter table public.drinks enable row level security;
+
+-- ───────────── Phrasenschwein & Spruch des Tages ─────────────
+create table if not exists public.phrases (
+  id          uuid primary key default gen_random_uuid(),
+  speaker_id  uuid not null references public.profiles(id) on delete cascade,
+  phrase      text not null check (length(phrase) between 1 and 200),
+  fee_chf     numeric(6,2) not null default 2,
+  reported_by uuid default auth.uid() references public.profiles(id) on delete set null,
+  created_at  timestamptz not null default now()
+);
+alter table public.phrases enable row level security;
+
+create table if not exists public.sayings (
+  id         uuid primary key default gen_random_uuid(),
+  text       text not null check (length(text) between 1 and 280),
+  author_id  uuid default auth.uid() references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+alter table public.sayings enable row level security;
+
+create table if not exists public.saying_prosts (
+  saying_id uuid not null references public.sayings(id) on delete cascade,
+  member_id uuid not null default auth.uid() references public.profiles(id) on delete cascade,
+  primary key (saying_id, member_id)
+);
+alter table public.saying_prosts enable row level security;
+
+-- ───────────── Verbesserungsvorschläge → GitHub-Issues ─────────────
+-- Geschrieben nur von den Edge Functions "feedback" / "feedback-export" (Service Role).
+create table if not exists public.feedback (
+  id           bigint generated always as identity primary key,
+  user_id      uuid not null references auth.users(id) on delete cascade,
+  kind         text not null default 'idee' check (kind in ('idee', 'fehler', 'wunsch')),
+  title        text not null,
+  body         text not null,
+  labels       text[] not null default '{}',
+  status       text not null default 'neu' check (status in ('neu', 'erfasst', 'fehler', 'umgesetzt', 'geschlossen')),
+  issue_number int,
+  issue_url    text,
+  error        text,
+  created_at   timestamptz not null default now()
+);
+create index if not exists feedback_status on public.feedback (status, created_at);
+alter table public.feedback enable row level security;
+
+-- ═════════════ Zugriffsregeln (Row Level Security) ═════════════
+
+-- Lesen: alle Mitglieder (Einladungen nie direkt, nur über die Edge Function)
+do $$
+declare t text;
+begin
+  foreach t in array array['settings', 'profiles', 'admin_log', 'restaurants', 'restaurant_visits',
+    'restaurant_ratings', 'events', 'rsvps', 'magnums', 'magnum_guests', 'rides', 'ride_passengers', 'trips',
+    'trip_participants', 'trip_photos', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
+    'phrases', 'sayings', 'saying_prosts', 'feedback']
+  loop
+    execute format('drop policy if exists "Mitglieder lesen" on public.%I', t);
+    execute format('create policy "Mitglieder lesen" on public.%I for select to authenticated using (public.is_member())', t);
+  end loop;
+end $$;
+
+-- Persönliche Einträge: anlegen/ändern nur die Person selbst, löschen sie selbst oder der Admin
+do $$
+declare r record;
+begin
+  for r in select * from (values
+    ('restaurant_ratings', 'member_id'), ('rsvps', 'member_id'), ('trip_participants', 'member_id'),
+    ('drinks', 'member_id'), ('saying_prosts', 'member_id'), ('post_prosts', 'member_id'),
+    ('ride_passengers', 'passenger_id'), ('rides', 'driver_id')
+  ) as x(tbl, col)
+  loop
+    execute format('drop policy if exists "Eigene anlegen" on public.%I', r.tbl);
+    execute format('drop policy if exists "Eigene ändern" on public.%I', r.tbl);
+    execute format('drop policy if exists "Eigene löschen" on public.%I', r.tbl);
+    execute format('create policy "Eigene anlegen" on public.%I for insert to authenticated with check (public.is_member() and %I = auth.uid())', r.tbl, r.col);
+    execute format('create policy "Eigene ändern" on public.%I for update to authenticated using (%I = auth.uid()) with check (%I = auth.uid())', r.tbl, r.col, r.col);
+    execute format('create policy "Eigene löschen" on public.%I for delete to authenticated using (%I = auth.uid() or public.is_admin())', r.tbl, r.col);
+  end loop;
+end $$;
+
+-- Gemeinsame Inhalte: alle Mitglieder legen an, Ersteller oder Admin ändert/löscht
+do $$
+declare r record;
+begin
+  for r in select * from (values
+    ('restaurants', 'created_by'), ('restaurant_visits', 'created_by'), ('events', 'created_by'),
+    ('magnums', 'brought_by'), ('magnum_guests', 'added_by'), ('trip_photos', 'uploaded_by'),
+    ('cards', 'created_by'), ('phrases', 'reported_by'), ('sayings', 'author_id'), ('posts', 'author_id')
+  ) as x(tbl, col)
+  loop
+    execute format('drop policy if exists "Mitglieder anlegen" on public.%I', r.tbl);
+    execute format('drop policy if exists "Ersteller ändern" on public.%I', r.tbl);
+    execute format('drop policy if exists "Ersteller löschen" on public.%I', r.tbl);
+    execute format('create policy "Mitglieder anlegen" on public.%I for insert to authenticated with check (public.is_member() and %I = auth.uid())', r.tbl, r.col);
+    execute format('create policy "Ersteller ändern" on public.%I for update to authenticated using (%I = auth.uid() or public.is_admin())', r.tbl, r.col);
+    execute format('create policy "Ersteller löschen" on public.%I for delete to authenticated using (%I = auth.uid() or public.is_admin())', r.tbl, r.col);
+  end loop;
+end $$;
+
+-- Reisen: alle Mitglieder legen an und tragen OK/Kassier ein. Der Sacceri kommt nur per Abstimmung.
+drop policy if exists "Reisen anlegen" on public.trips;
+drop policy if exists "Reisen ändern" on public.trips;
+drop policy if exists "Reisen löschen" on public.trips;
+create policy "Reisen anlegen" on public.trips for insert to authenticated
+  with check (public.is_member() and created_by = auth.uid() and sacceri_id is null);
+create policy "Reisen ändern" on public.trips for update to authenticated
+  using (public.is_member()) with check (public.is_member());
+create policy "Reisen löschen" on public.trips for delete to authenticated using (created_by = auth.uid() or public.is_admin());
+revoke update on public.trips from authenticated;
+grant update (title, starts_on, ends_on, program, seats, color, ok_id, kassier_id) on public.trips to authenticated;
+
+-- Profil: nur eigene, harmlose Felder. Gerät, Spitzname, Funktion und Admin nur über Funktionen.
+drop policy if exists "Eigenes Profil ändern" on public.profiles;
+create policy "Eigenes Profil ändern" on public.profiles for update to authenticated
+  using (id = auth.uid()) with check (id = auth.uid());
+revoke update on public.profiles from authenticated;
+grant update (display_name, fav_wine, specialty) on public.profiles to authenticated;
+
+-- Anlässe: Organisator nur über claim_organizer
+revoke update on public.events from authenticated;
+grant update (title, starts_at, location) on public.events to authenticated;
+
+-- Fahrten bewerten: Passagiere ändern nur die Bewertung, nicht die Fahrt
+revoke update on public.ride_passengers from authenticated;
+grant update (stars_safe, stars_punctual, stars_mood, points_given, rated_at) on public.ride_passengers to authenticated;
+
+-- ═════════════ Funktionsrechte ═════════════
+-- In Postgres darf standardmässig jeder (PUBLIC) Funktionen ausführen – deshalb überall explizit entziehen.
+alter default privileges in schema public revoke execute on functions from public;
+revoke execute on function public.is_member() from public, anon;
+revoke execute on function public.is_admin() from public, anon;
+revoke execute on function public.vote_weight(uuid) from public, anon;
+revoke execute on function public.me() from public, anon;
+revoke execute on function public.admin_set_device(uuid, text) from public, anon;
+revoke execute on function public.admin_set_role(uuid, text) from public, anon;
+revoke execute on function public.claim_organizer(uuid) from public, anon;
+revoke execute on function public.open_magnum_kasse() from public, anon;
+revoke execute on function public.eligible_voters(uuid) from public, anon;
+revoke execute on function public.resolve_proposal(uuid) from public, anon, authenticated;
+revoke execute on function public.propose_sacceri(uuid, uuid) from public, anon;
+revoke execute on function public.propose_nickname(uuid, text) from public, anon;
+revoke execute on function public.second_proposal(uuid) from public, anon;
+revoke execute on function public.cast_ballot(uuid, boolean) from public, anon;
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
+revoke execute on function public.check_ride_passenger() from public, anon, authenticated;
+grant execute on function public.is_member(), public.is_admin(), public.vote_weight(uuid), public.me(),
+  public.admin_set_device(uuid, text), public.admin_set_role(uuid, text), public.claim_organizer(uuid),
+  public.open_magnum_kasse(), public.eligible_voters(uuid), public.propose_sacceri(uuid, uuid),
+  public.propose_nickname(uuid, text), public.second_proposal(uuid), public.cast_ballot(uuid, boolean)
+  to authenticated;
+
+-- ═════════════ Fotos: privat, nur für Mitglieder ═════════════
+-- Pfad: <bereich>/<user-id>/<datei>.jpg – hochladen nur in den eigenen Ordner
+insert into storage.buckets (id, name, public) values ('photos', 'photos', false) on conflict (id) do nothing;
+drop policy if exists "Fotos: Mitglieder lesen" on storage.objects;
+drop policy if exists "Fotos: in eigenen Ordner hochladen" on storage.objects;
+drop policy if exists "Fotos: eigene löschen" on storage.objects;
+create policy "Fotos: Mitglieder lesen" on storage.objects for select to authenticated
+  using (bucket_id = 'photos' and public.is_member());
+create policy "Fotos: in eigenen Ordner hochladen" on storage.objects for insert to authenticated
+  with check (bucket_id = 'photos' and public.is_member() and (storage.foldername(name))[2] = auth.uid()::text);
+create policy "Fotos: eigene löschen" on storage.objects for delete to authenticated
+  using (bucket_id = 'photos' and ((storage.foldername(name))[2] = auth.uid()::text or public.is_admin()));
+
+-- ═════════════ Live-Sync: Änderungen erscheinen sofort auf allen Handys ═════════════
+do $$
+declare t text;
+begin
+  if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then return; end if;
+  foreach t in array array['profiles', 'events', 'rsvps', 'magnums', 'magnum_guests', 'rides', 'ride_passengers',
+    'trips', 'trip_participants', 'trip_photos', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
+    'phrases', 'sayings', 'saying_prosts', 'restaurants', 'restaurant_visits', 'restaurant_ratings', 'feedback',
+    'admin_log', 'app_status']
+  loop
+    if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end $$;
