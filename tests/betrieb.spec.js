@@ -49,6 +49,13 @@ test.describe("Deployment", () => {
     expect(pos).toEqual([...pos].sort((a, b) => a - b));
   });
 
+  test("Release sperrt die Registrierung und prüft das Ergebnis", () => {
+    const t = release.slice(release.indexOf("Registrierung sperren und prüfen"), release.indexOf("Funktionstest Datenbank"));
+    expect(t).toContain('"disable_signup":true,"password_min_length":8');
+    expect(t).toContain('[ "$ist" = "$soll" ] ||');
+    expect(t).toMatch(/exit 1/);
+  });
+
   test("Wartungsseite geht auch nach einem Fehler wieder aus", () => {
     expect(release.slice(release.indexOf("wartung-aus:"))).toMatch(/if: always\(\)/);
   });

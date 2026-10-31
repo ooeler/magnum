@@ -12,6 +12,7 @@ Gebaut wie InterChampionship (Herren Inter). Sprache in App, Code-Kommentaren, C
 - `supabase/setup.sql` ist mehrfach ausführbar und wird bei jedem Release eingespielt. Änderungen, die nicht idempotent sind, als neue Datei in `supabase/migrations/` (Name `JJJJMMTT_NN_titel.sql`).
 - Neue Tabelle: `create table if not exists`, `enable row level security`, Policies, in die Realtime-Liste aufnehmen und in `tests/mock-supabase.js` nachbilden.
 - Neue Tabellen sind automatisch in der Datensicherung (`backup_tables()`). Rein technische Tabellen dort ausschliessen.
+- Regeln, die auch an der App vorbei gelten (Fristen, Plätze, fremde Inhalte), gehören in Trigger. `auth.uid() is null` lässt Server-Abläufe durch (Wiederherstellung, Release). Im Nachbau in `checkRow()` spiegeln.
 - Neue Funktion mit `security definer`: `revoke execute … from public, anon` und gezielt `grant … to authenticated` (der Test in `tests/sicherheit.spec.js` prüft das).
 
 ## Tests (vor jedem Commit)

@@ -1,6 +1,7 @@
 // Einladungslinks: reine Logik, damit sie getestet werden kann.
 // Jedes Mitglied darf einladen. Der Club hat höchstens settings.max_members Mitglieder (Standard 12).
 export const INVITE_DAYS = 7;
+export const MAX_OFFEN = 3; // offene Einladungen pro Mitglied, der Admin ist nicht begrenzt
 
 // Link-Token: 32 Zufallsbytes (base64url). In der Datenbank liegt nur der SHA-256-Hash.
 export function newToken() {
@@ -20,7 +21,7 @@ export function checkToken(token) {
 }
 
 // Registrierung über den Link: Name, Mail, Passwort und Gerät prüfen.
-// Das Gerät erkennt die App automatisch (Android zählt bei Abstimmungen doppelt); später ändert es nur der Admin.
+// Das Gerät erkennt die App automatisch. Doppelt zählt Android erst, wenn der Admin es bestätigt hat.
 export function checkJoin(input) {
   const name = String(input?.name ?? "").trim().replace(/\s+/g, " ");
   if (name.length < 2 || name.length > 40) throw new Error("Bitte deinen Namen eingeben (2–40 Zeichen).");

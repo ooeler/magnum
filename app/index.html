@@ -149,7 +149,8 @@ function pr(id) { return D.profiles.find(function (p) { return p.id == id }) || 
 function nm(id) { var p = pr(id); return p ? (p.display_name || "Mitglied") : "–" }
 function first(id) { return nm(id).split(" ")[0] }
 function ini(id) { return (nm(id).trim().charAt(0) || "?").toUpperCase() }
-function weight(id) { var p = pr(id); return p && p.device == "android" ? 2 : 1 }
+function weight(id) { var p = pr(id); return p && p.device == "android" && p.device_set_by_admin ? 2 : 1 }
+function deviceText(p) { return p.device != "android" ? "iPhone" : p.device_set_by_admin ? "Android (Stimme zählt doppelt)" : "Android (noch nicht bestätigt)" }
 function isAdmin() { return !!(PRF && PRF.is_admin) }
 function S() { return D.settings[0] || { max_members: 12, goal_title: "Club-Ziel", goal_target: 30, phrase_fee: 2, magnum_price: 45 } }
 function byDate(a, b) { return new Date(a.starts_at) - new Date(b.starts_at) }
@@ -233,7 +234,7 @@ function segs(n, h) { var s = ""; for (var i = 1; i <= 5; i++) s += '<i class="'
 
 // ═════════════ Abstimmungen (Spiegel der Datenbank-Regel, nur zur Anzeige) ═════════════
 function eligible(p) {
-  if (p.kind == "sacceri") return D.trip_participants.filter(function (t) { return t.trip_id == p.trip_id }).map(function (t) { return t.member_id });
+  if (p.kind == "sacceri") return p.voters || D.trip_participants.filter(function (t) { return t.trip_id == p.trip_id }).map(function (t) { return t.member_id });
   return D.profiles.filter(function (x) { return x.id != p.target_id }).map(function (x) { return x.id });
 }
 function tally(p) {
@@ -401,7 +402,7 @@ function joinView() {
     '<form class="card" data-s="join" id="join"><label class="f">Dein Name im Club<input class="t" name="name" autocomplete="name" maxlength="40" required></label>' +
     '<label class="f">Mail-Adresse<input class="t" type="email" name="email" autocomplete="email" required></label>' +
     '<label class="f">Passwort (mind. 8 Zeichen)<input class="t" type="password" name="pw" autocomplete="new-password" minlength="8" required></label>' +
-    '<div class="tile"><span>Dein Gerät (automatisch erkannt)</span><b data-device="' + dv + '">' + (dv == "android" ? "Android" : "iPhone") + '</b><span>' + (dv == "android" ? "Deine Stimme zählt bei Abstimmungen doppelt." : "Ändern kann den Gerätetyp nur der Administrator.") + "</span></div>" +
+    '<div class="tile"><span>Dein Gerät (automatisch erkannt)</span><b data-device="' + dv + '">' + (dv == "android" ? "Android" : "iPhone") + '</b><span>' + (dv == "android" ? "Deine Stimme zählt doppelt, sobald der Administrator das Gerät bestätigt hat." : "Ändern kann den Gerätetyp nur der Administrator.") + "</span></div>" +
     (INVITE.err ? '<span class="err" role="alert">' + esc(INVITE.err) + "</span>" : "") +
     '<button class="btn"' + (BUSY ? " disabled" : "") + ">Konto anlegen</button></form>");
 }
@@ -553,7 +554,7 @@ function tripView(tr) {
   var photos = D.trip_photos.filter(function (p) { return p.trip_id == tr.id }).sort(function (a, b) { return a.created_at < b.created_at ? -1 : 1 });
   var h = '<div class="top" style="background:' + esc(tr.color) + '"><button class="back" data-a="close" aria-label="Zurück">' + BACK + '</button><span style="font:900 32px/1 var(--hf);color:#FFF8EE">' + esc(tr.title) + '</span><span class="sm" style="color:#FFF8EE">' + esc(fDay(tr.starts_on)) + (tr.ends_on ? " – " + esc(fDay(tr.ends_on)) : "") + (tr.program ? " · " + esc(tr.program) : "") + "</span></div><main>";
   h += '<div class="row sb"><span class="sm b">' + part.length + " / " + tr.seats + " Plätze" + (past ? " · abgeschlossen" : "") + "</span>" +
-    (past ? (joined ? '<span class="chip v">Warst dabei</span>' : "") : '<button class="pill ' + (joined ? "on" : "") + '" data-a="tripjoin" data-id="' + tr.id + '" aria-pressed="' + joined + '"' + (!joined && part.length >= tr.seats ? " disabled" : "") + ">" + (joined ? "Angemeldet" : "Mitreisen · +30") + "</button>") + "</div>";
+    (past ? (joined ? '<span class="chip v">Warst dabei</span>' : "") : '<button class="pill ' + (joined ? "on" : "") + '" data-a="tripjoin" data-id="' + tr.id + '" aria-pressed="' + joined + '"' + (!joined && (part.length >= tr.seats || tr.starts_on < today()) ? " disabled" : "") + ">" + (joined ? "Angemeldet" : "Mitreisen · +30") + "</button>") + "</div>";
   if (part.length) h += '<div class="chips">' + part.map(function (p) { return '<span class="chip">' + esc(nm(p)) + "</span>" }).join("") + "</div>";
   h += '<section class="card"><span class="b" style="font-size:15px">Ämtli</span><label class="f">OK (Organisation)<select class="t" data-c="tripset" data-id="' + tr.id + '" data-f="ok_id">' + memberOptions(tr.ok_id) + "</select></label>" +
     '<label class="f">Kassier<select class="t" data-c="tripset" data-id="' + tr.id + '" data-f="kassier_id">' + memberOptions(tr.kassier_id) + "</select></label></section>";
@@ -619,7 +620,7 @@ function club() {
   h += '<section class="card"><span class="b" style="font-size:15px">Mein Profil</span><form class="col" data-s="profile" style="gap:10px"><label class="f">Name<input class="t" data-k="pfName" value="' + esc(v("pfName", PRF.display_name)) + '" maxlength="40" required></label>' +
     '<label class="f">Lieblingswein<input class="t" data-k="pfWine" value="' + esc(v("pfWine", PRF.fav_wine || "")) + '" maxlength="60"></label>' +
     '<label class="f">Spezialität<input class="t" data-k="pfSpec" value="' + esc(v("pfSpec", PRF.specialty || "")) + '" maxlength="80"></label><button class="btn">Speichern</button></form>' +
-    '<span class="sm mu">Gerät: ' + (PRF.device == "android" ? "Android (Stimme zählt doppelt)" : "iPhone") + " · ändern kann es nur der Administrator.</span>" +
+    '<span class="sm mu">Gerät: ' + deviceText(PRF) + " · ändern kann es nur der Administrator.</span>" +
     '<button class="btn ghost" data-a="logout">Abmelden</button></section>';
   h += installCard();
   return h;
@@ -639,7 +640,7 @@ function invites() {
 var FKINDS = [["idee", "Idee"], ["fehler", "Fehler"], ["wunsch", "Wunsch"]], FSTATE = { neu: "wird erfasst", erfasst: "offen", fehler: "Fehler", umgesetzt: "umgesetzt", geschlossen: "geschlossen" };
 function feedback() {
   var L = D.feedback.slice().sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1 }).slice(0, 8);
-  var h = '<section class="card" aria-label="Verbesserungsvorschläge"><div class="col" style="gap:1px"><span class="b" style="font-size:15px">Verbesserungsvorschläge</span><span class="sm mu">Jeder Vorschlag wird als GitHub-Issue erfasst · +10 Punkte</span></div>';
+  var h = '<section class="card" aria-label="Verbesserungsvorschläge"><div class="col" style="gap:1px"><span class="b" style="font-size:15px">Verbesserungsvorschläge</span><span class="sm mu">Jeder Vorschlag wird als öffentliches GitHub-Issue erfasst, ohne deinen Namen · +10 Punkte</span></div>';
   if (L.length) h += '<div class="lst">' + L.map(function (f) {
     return '<div class="row"><span class="mono xs mu" style="min-width:34px">' + (f.issue_number ? "#" + f.issue_number : "…") + '</span><span class="grow col" style="gap:2px"><b class="sm">' + esc(f.title) + '</b><span class="xs mu">von ' + esc(nm(f.user_id)) + "</span></span>" +
       (f.issue_url && /^https:\/\/github\.com\//.test(f.issue_url) ? '<a class="chip" href="' + esc(f.issue_url) + '" target="_blank" rel="noopener">' + esc(FSTATE[f.status] || f.status) + "</a>" : '<span class="chip">' + esc(FSTATE[f.status] || f.status) + "</span>") + "</div>";
@@ -658,11 +659,11 @@ function memberView(p) {
     '<div class="g3"><div class="tile"><b>' + s.points + '</b><span>Punkte</span></div><div class="tile"><b>' + s.streak + '</b><span>Streak</span></div><div class="tile"><b>' + s.trips + '</b><span>Reisen</span></div>' +
     '<div class="tile"><b>' + s.magnums + '</b><span>Magnums mitgebracht</span></div><div class="tile"><b>' + s.virt + '</b><span>Magnums spendiert</span></div><div class="tile"><b>' + s.cards + "</b><span>Karten</span></div></div>" +
     '<div class="col sm">' + (p.fav_wine ? '<span><span class="mu">Lieblingswein: </span>' + esc(p.fav_wine) + "</span>" : "") + (p.specialty ? '<span><span class="mu">Spezialität: </span>' + esc(p.specialty) + "</span>" : "") +
-    '<span><span class="mu">Gerät: </span><span data-test="geraet">' + (p.device == "android" ? "Android (Stimme zählt doppelt)" : "iPhone") + "</span>" + (p.device_set_by_admin ? " · vom Admin gesetzt" : "") + "</span>" +
+    '<span><span class="mu">Gerät: </span><span data-test="geraet">' + deviceText(p) + "</span>" + (p.device_set_by_admin ? " · vom Admin bestätigt" : "") + "</span>" +
     (p.invited_by ? '<span><span class="mu">Eingeladen von: </span>' + esc(nm(p.invited_by)) + "</span>" : "") + "</div></section>";
   if (isAdmin()) h += '<section class="card" style="border-color:var(--lila)" aria-label="Admin"><span class="lbl" style="color:var(--lila)">Admin · Gerätetyp anpassen</span><div class="g2">' +
-    [["iphone", "iPhone"], ["android", "Android ×2"]].map(function (d) { return '<button class="pill' + (p.device == d[0] ? " on" : "") + '" style="' + (p.device == d[0] ? "background:var(--lila);border-color:var(--lila)" : "") + '" data-a="setdevice" data-id="' + p.id + '" data-v="' + d[0] + '" aria-pressed="' + (p.device == d[0]) + '">' + d[1] + "</button>" }).join("") +
-    '</div><span class="xs mu">Ändert das Stimmgewicht sofort und wird protokolliert.</span><form class="row" data-s="role" data-id="' + p.id + '"><input class="t" data-k="role' + p.id + '" value="' + esc(v("role" + p.id, p.role_title)) + '" maxlength="40" aria-label="Funktion"><button class="btn lila">Funktion</button></form></section>';
+    [["iphone", "iPhone"], ["android", "Android ×2"]].map(function (d) { var on = p.device == d[0] && (d[0] != "android" || p.device_set_by_admin); return '<button class="pill' + (on ? " on" : "") + '" style="' + (on ? "background:var(--lila);border-color:var(--lila)" : "") + '" data-a="setdevice" data-id="' + p.id + '" data-v="' + d[0] + '" aria-pressed="' + on + '">' + d[1] + "</button>" }).join("") +
+    '</div><span class="xs mu">Android zählt doppelt, sobald du es hier bestätigst. Wirkt sofort und wird protokolliert.</span><form class="row" data-s="role" data-id="' + p.id + '"><input class="t" data-k="role' + p.id + '" value="' + esc(v("role" + p.id, p.role_title)) + '" maxlength="40" aria-label="Funktion"><button class="btn lila">Funktion</button></form></section>';
   h += nickname(p);
   return h + "</main>";
 }
@@ -836,13 +837,14 @@ function rides(e) {
       (r.driver_id != me && !myRide && P.length < r.seats ? '<button class="pill sm" style="border-color:var(--teal);color:var(--teal)" data-a="ridejoin" data-id="' + r.id + '">Mitfahren</button>' : "") +
       (r.driver_id == me ? '<button class="pill sm" data-a="ridedel" data-id="' + r.id + '">Zurückziehen</button>' : "") + "</div>" +
       (P.length ? '<div class="chips">' + P.map(function (p) { return '<span class="chip' + (p.rated_at ? " ja" : "") + '">' + esc(first(p.passenger_id)) + (p.rated_at ? " · +" + p.points_given : "") + "</span>" }).join("") + "</div>" : "") +
-      (mine ? rideRate(myRide, r) : "") + "</div>";
+      (mine ? rideRate(myRide, r, e) : "") + "</div>";
   }).join("") + "</div>" : '<span class="empty">Noch niemand fährt. Biete Plätze an!</span>';
   if (!mineDrive && !myRide) h += UI.rideForm ? '<form class="col tile" data-s="ride" data-id="' + e.id + '" style="gap:8px;padding:12px"><div class="g2"><label class="f">Richtung<input class="t" data-k="rdDir" value="' + esc(v("rdDir")) + '" maxlength="60" placeholder="z.B. Wil"></label><label class="f">Plätze<input class="t" type="number" min="1" max="8" data-k="rdSeats" value="' + esc(v("rdSeats", "3")) + '"></label></div><div class="row"><button class="btn grow">Plätze anbieten</button><button type="button" class="btn ghost" data-a="ui" data-k="rideForm" data-v="">Abbrechen</button></div></form>'
     : '<button class="btn dash" data-a="ui" data-k="rideForm" data-v="1">Ich fahre · Plätze anbieten</button>';
   return h + "</section>";
 }
-function rideRate(p, r) {
+function rideRate(p, r, e) {
+  if (new Date(e.starts_at).getTime() > now()) return '<div class="tile" style="padding:12px;gap:8px"><span class="sm mu">Bewerten kannst du nach dem Anlass.</span><button class="btn link" data-a="rideleave" data-id="' + r.id + '">Mitfahrt absagen</button></div>';
   if (p.rated_at) return '<span class="sm ok">Du hast ' + esc(first(r.driver_id)) + " +" + p.points_given + " Punkte gegeben. Danke!</span>";
   var k = "rr" + r.id, cur = UI[k] || {};
   return '<div class="tile" style="padding:12px;gap:8px"><span class="b">Gut angekommen? Wie war die Fahrt mit ' + esc(first(r.driver_id)) + "?</span>" +

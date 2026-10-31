@@ -122,3 +122,14 @@ test.describe("Wartung und Fehler", () => {
     expect(t).toEqual(["Dafür fehlen dir die Rechte.", "Dafür fehlen dir die Rechte.", "Das gibt es schon.", "Bitte neu anmelden.", "Die Abstimmung ist abgeschlossen"]);
   });
 });
+
+test.describe("Einladungen begrenzen", () => {
+  const neu = (page, id) => page.evaluate((id) => window.__mg.asId(id, (sb) => sb.functions.invoke("invite", { body: { action: "create" } })).then((r) => !r.error), id);
+
+  test("Mitglieder höchstens 3 offene, der Admin ohne Grenze", async ({ page }) => {
+    await page.goto("/");
+    for (let i = 0; i < 3; i++) expect(await neu(page, "u-beat")).toBe(true);
+    expect(await neu(page, "u-beat")).toBe(false);
+    for (let i = 0; i < 4; i++) expect(await neu(page, "u-ot")).toBe(true);
+  });
+});

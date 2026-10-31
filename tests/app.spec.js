@@ -92,6 +92,9 @@ test.describe("Termine", () => {
     await event(page, "Herbst-Stamm").getByRole("button", { name: "Details" }).click();
     const r = card(page, "Heimweg · Fahrservice");
     await r.getByRole("button", { name: "Mitfahren" }).click();
+    await expect(r).toContainText("Bewerten kannst du nach dem Anlass.");
+    await page.clock.setFixedTime(new Date("2026-11-08T10:00:00+01:00"));
+    await as(page, "beat@magnum.test", "sb.from('posts').insert({ text: 'Gut heimgekommen' })");
     await expect(r).toContainText("Wie war die Fahrt mit Jürg?");
     const send = r.getByRole("button", { name: /Bewertung senden/ });
     await expect(send).toBeDisabled();
@@ -211,7 +214,7 @@ test.describe("Club", () => {
     await expect(page.locator("[data-test=geraet]")).toHaveText("iPhone");
     await card(page, "Admin").getByRole("button", { name: "Android ×2" }).click();
     await expect(page.locator("[data-test=geraet]")).toHaveText("Android (Stimme zählt doppelt)");
-    await expect(page.locator("#ov")).toContainText("vom Admin gesetzt");
+    await expect(page.locator("#ov")).toContainText("vom Admin bestätigt");
     await page.locator("#ov [data-a=close]").click();
     await expect(page.locator("section", { hasText: "Administration" })).toContainText("Hans: Gerätetyp iphone → android · durch Ot");
   });
@@ -277,7 +280,7 @@ test.describe("Einladung", () => {
     await tab(page, "Club");
     await expect(card(page, "Einladungen")).toContainText("Der Club ist voll (12 Mitglieder)");
     await page.locator(".mem", { hasText: "Luca" }).click();
-    await expect(page.locator("[data-test=geraet]")).toHaveText(android ? "Android (Stimme zählt doppelt)" : "iPhone");
+    await expect(page.locator("[data-test=geraet]")).toHaveText(android ? "Android (noch nicht bestätigt)" : "iPhone");
     await expect(page.locator("#ov")).toContainText("Eingeladen von: Ot");
   });
 

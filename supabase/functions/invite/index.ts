@@ -7,7 +7,7 @@
 //     { action: "check", token }                                → { ok, from }
 //     { action: "join", token, name, email, password, device }  → legt das Konto an (Gerät iPhone/Android)
 import { createClient } from "npm:@supabase/supabase-js@2.118.0";
-import { checkJoin, checkToken, clubFull, hashToken, INVITE_DAYS, joinError, newToken } from "./logic.mjs";
+import { checkJoin, checkToken, clubFull, hashToken, INVITE_DAYS, joinError, MAX_OFFEN, newToken } from "./logic.mjs";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -61,9 +61,12 @@ Deno.serve(async (req) => {
     const { data, error } = await db.auth.admin.createUser({
       email: j.email, password: j.password, email_confirm: true,
       user_metadata: { display_name: j.name, device: j.device },
+      app_metadata: { eingeladen: true }, // nur damit entsteht ein Profil (handle_new_user)
     });
     if (error) {
       await db.from("invites").update({ used_at: null }).eq("id", inv.id); // Link bleibt gültig
+      // Hat jemand gleichzeitig den letzten Platz genommen, liefert Supabase nur einen Datenbankfehler
+      if (await full()) return json({ error: "Der Club ist voll. Bitte beim Admin melden." }, 409);
       return json({ error: joinError(error.message) }, 400);
     }
     // Profil wurde per Trigger angelegt (Name, Gerät) – Einladende Person vermerken
@@ -80,6 +83,11 @@ Deno.serve(async (req) => {
 
   if (body.action === "create") {
     if (await full()) return json({ error: "Der Club ist voll (12 Mitglieder)." }, 409);
+    if (!caller.is_admin) {
+      const { count } = await db.from("invites").select("id", { count: "exact", head: true })
+        .eq("created_by", user.id).is("used_at", null).gt("expires_at", now);
+      if ((count ?? 0) >= MAX_OFFEN) return json({ error: `Du hast schon ${MAX_OFFEN} offene Einladungen. Ziehe zuerst eine zurück.` }, 409);
+    }
     const t = newToken();
     const expires_at = new Date(Date.now() + INVITE_DAYS * 864e5).toISOString();
     const { error } = await db.from("invites").insert({ token_hash: await hashToken(t), created_by: user.id, expires_at });

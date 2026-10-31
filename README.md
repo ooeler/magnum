@@ -17,8 +17,8 @@ Aufgebaut wie die App **Herren Inter** (InterChampionship): eine einzige `index.
 
 ### Spielregeln
 
-- **Abstimmungen** (Sacceri, Spitznamen): Zweidrittelmehrheit der Stimmberechtigten. **Android-Stimmen zählen doppelt.** Das Gerät wird bei der Registrierung erkannt und kann danach nur vom **Administrator** angepasst werden, jede Änderung steht im Admin-Protokoll. Die Regeln laufen in der Datenbank (`supabase/setup.sql`) und lassen sich nicht über die App umgehen.
-- **Punkte:** Anlass +50, virtuell mit Magnum +20, organisiert +40, Gasttrinker +15, Reise +30, als Fahrer 10–50 von jedem Mitfahrer, Fahrt bewertet +5, Restaurant bewertet +5, Sammelkarte +10, Vorschlag +10. Punkte für Anlässe und Reisen zählen, sobald sie stattgefunden haben.
+- **Abstimmungen** (Sacceri, Spitznamen): Zweidrittelmehrheit der Stimmberechtigten. **Android-Stimmen zählen doppelt.** Das Gerät wird bei der Registrierung erkannt, doppelt zählt es aber erst, wenn der **Administrator** es im Mitgliederprofil bestätigt hat. Ändern kann es nur er, jede Änderung steht im Admin-Protokoll. Beim Sacceri stimmt ab, wer beim Antrag mitreist. Die Regeln laufen in der Datenbank (`supabase/setup.sql`) und lassen sich nicht über die App umgehen.
+- **Punkte:** Anlass +50, virtuell mit Magnum +20, organisiert +40, Gasttrinker +15, Reise +30, als Fahrer 10–50 von jedem Mitfahrer, Fahrt bewertet +5, Restaurant bewertet +5, Sammelkarte +10, Vorschlag +10. Punkte für Anlässe und Reisen zählen, sobald sie stattgefunden haben. An- und abmelden geht bis und mit Anlasstag, mitreisen bis und mit Starttag und solange Plätze frei sind. Vergangene Anlässe und Reisen trägt nur der Administrator nach.
 - **Ränge:** Neuling, Stammgast (200), Kellermeister (400), Magnum-Ritter (600), Club-Legende (900).
 - **Streak:** Anlässe in Folge (dabei oder virtuell). „Nur abmelden“ setzt sie auf 0.
 - **Trinkfestigkeit:** Ø Getränke pro Abend aus den fotografierten Getränken (Wein, Bier, Schnaps 1, Magnum-Glas 1,5, Wasser 0). Die App schlägt „Wein“ vor, man korrigiert mit einem Tipp. Eine automatische Bilderkennung ist noch nicht eingebaut.
@@ -48,12 +48,12 @@ scripts/                  Build (CSP), Demo, Datenbank-Tests, Vorschläge → Is
 
 1. Auf [supabase.com](https://supabase.com) kostenloses Projekt anlegen (Region Zürich/Frankfurt).
 2. **SQL Editor** → Inhalt von `supabase/setup.sql` einfügen → *Run*. (Spätere Releases spielen die Datei automatisch ein.)
-3. **Authentication → Sign In / Providers**: *Allow new users to sign up* **ausschalten**. Konten entstehen nur über Einladungslinks.
+3. **Authentication → Sign In / Providers**: *Allow new users to sign up* **ausschalten**. Konten entstehen nur über Einladungslinks. Jeder Release sperrt die Registrierung zusätzlich und bricht ab, wenn sie offen bleibt.
 4. **Authentication → URL Configuration**: *Site URL* und *Redirect URLs* = `https://<github-name>.github.io/magnum/`.
-5. **Erstes Mitglied (Admin)**: Unter **Authentication → Users → Add user** dich selbst mit Mail und Passwort anlegen (*Auto Confirm*). Dann im SQL Editor:
+5. **Erstes Mitglied (Admin)**: Unter **Authentication → Users → Add user** dich selbst mit Mail und Passwort anlegen (*Auto Confirm*). Das Konto hat noch kein Profil, weil es nicht über eine Einladung entstand. Dann im SQL Editor:
    ```sql
-   update public.profiles set display_name = 'Ot', is_admin = true, role_title = 'Präsident'
-   where id = (select id from auth.users where email = 'deine@adresse.ch');
+   insert into public.profiles (id, display_name, is_admin, role_title, since_year)
+   select id, 'Ot', true, 'Präsident', extract(year from now())::int from auth.users where email = 'deine@adresse.ch';
    ```
 6. Danach lädst du alle weiteren Mitglieder in der App ein: **Club → Einladungen → Einladungslink erstellen** und per WhatsApp schicken. Der Link gilt 7 Tage und einmal. Der Club nimmt höchstens 12 Mitglieder auf (`settings.max_members`).
 

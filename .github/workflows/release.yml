@@ -92,6 +92,18 @@ jobs:
           [ -z "$t" ] || { echo "::error::Tabellen ohne Row Level Security: $t"; exit 1; }
           echo "Funktionsrechte und Row Level Security in Ordnung"
 
+      - name: Registrierung sperren und prüfen
+        # Konten entstehen nur über Einladungen. Anders als bei den Mailvorlagen stoppt ein Fehler hier das Deployment.
+        run: |
+          soll='{"disable_signup":true,"password_min_length":8}'
+          api="https://api.supabase.com/v1/projects/$REF/config/auth"
+          code=$(curl -s -o /dev/null -w "%{http_code}" -m 30 -X PATCH "$api" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" --data "$soll")
+          [ "$code" = "200" ] || { echo "::error::Auth-Einstellungen nicht gesetzt (HTTP $code)"; exit 1; }
+          ist=$(curl -s -m 30 "$api" -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" | jq -c '{disable_signup, password_min_length}')
+          [ "$ist" = "$soll" ] || { echo "::error::Registrierung ist nicht gesperrt: $ist"; exit 1; }
+          echo "Registrierung gesperrt"
+
       - name: Funktionstest Datenbank (ohne bleibende Änderung)
         run: |
           # sichert in der echten DB und macht es sofort rückgängig; jeder andere Fehler stoppt das Release

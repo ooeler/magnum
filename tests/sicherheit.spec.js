@@ -103,13 +103,14 @@ base.test.describe("Sicherheit (statisch)", () => {
 
   base.test("Vorschläge: Issue ohne Mail-Adressen und ohne @-Erwähnungen", async () => {
     const F = await import("../supabase/functions/feedback/logic.mjs");
-    const i = F.buildIssue({ kind: "wunsch", title: "Weinkarte  @ot", text: "Hallo @beat" }, { display_name: "Ot" }, new Date("2026-10-31T10:00:00Z"));
+    const i = F.buildIssue({ kind: "wunsch", title: "Weinkarte  @ot", text: "Hallo @beat" }, new Date("2026-10-31T10:00:00Z"));
     expect(i.title).toBe("🍷 Weinkarte @​ot");
     expect(i.body).toContain("@​beat");
-    expect(i.body).toContain("Eingereicht in der App von **Ot**");
+    expect(i.body).toContain("Eingereicht in der App am");
+    expect(i.body, "das Repository ist öffentlich").not.toContain(" von ");
     expect(i.labels).toEqual(["wunsch", "aus-der-app"]);
-    expect(() => F.buildIssue({ kind: "x", title: "abc" }, {})).toThrow();
-    expect(() => F.buildIssue({ kind: "idee", title: "ab" }, {})).toThrow("3–100");
+    expect(() => F.buildIssue({ kind: "x", title: "abc" })).toThrow();
+    expect(() => F.buildIssue({ kind: "idee", title: "ab" })).toThrow("3–100");
   });
 
   base.test("Workflows: minimale Rechte, kein pull_request_target, Actions mit Commit-Hash", () => {

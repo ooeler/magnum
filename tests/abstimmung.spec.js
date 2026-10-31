@@ -89,11 +89,34 @@ test.describe("Sacceri", () => {
 
   test("Nicht-Mitreisende stimmen nicht mit", async ({ page }) => {
     await page.goto("/");
-    await as(page, OT.email, "sb.rpc('propose_sacceri', { p_trip: 't-wallis', p_target: 'u-chris' })");
-    await as(page, OT.email, "sb.from('trip_participants').delete().eq('trip_id', 't-wallis').eq('member_id', 'u-ot')");
     await as(page, BEAT.email, "sb.from('trip_participants').delete().eq('trip_id', 't-wallis').eq('member_id', 'u-beat')");
+    await as(page, OT.email, "sb.rpc('propose_sacceri', { p_trip: 't-wallis', p_target: 'u-chris' })");
     const s = await wallis(page, BEAT);
     await expect(s).toContainText("Nur Mitreisende stimmen ab.");
     await expect(s.getByRole("button", { name: "Ja, verdient" })).toHaveCount(0);
+  });
+
+  test("Beitritt nach dem Antrag gibt keine Stimme", async ({ page }) => {
+    await page.goto("/");
+    await as(page, OT.email, "sb.rpc('propose_sacceri', { p_trip: 't-wallis', p_target: 'u-chris' })");
+    await page.evaluate(() => window.__mg.asId("u-erich", (sb) => sb.from("trip_participants").insert({ trip_id: "t-wallis", member_id: "u-erich" })));
+    const r = await page.evaluate(() => {
+      const id = window.__mg.db().proposals.find((p) => p.kind == "sacceri" && p.status == "open").id;
+      return window.__mg.asId("u-erich", (sb) => sb.rpc("cast_ballot", { p_proposal: id, p_yes: false }));
+    });
+    expect(r.error.message).toContain("nicht stimmberechtigt");
+  });
+});
+
+test.describe("Android-Gewicht", () => {
+  test("zählt einfach, bis der Admin bestätigt", async ({ page }) => {
+    await page.goto("/");
+    await page.evaluate(() => { const d = window.__mg.db(); d.profiles.find((p) => p.id == "u-hans").device = "android"; localStorage.setItem("__mg_db", JSON.stringify(d)) });
+    await login(page);
+    await tab(page, "Club");
+    await page.locator(".mem", { hasText: "Hans" }).click();
+    await expect(page.locator("[data-test=geraet]")).toHaveText("Android (noch nicht bestätigt)");
+    await card(page, "Admin").getByRole("button", { name: "Android ×2" }).click();
+    await expect(page.locator("[data-test=geraet]")).toHaveText("Android (Stimme zählt doppelt)");
   });
 });

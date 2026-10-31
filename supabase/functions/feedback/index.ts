@@ -18,7 +18,7 @@ Deno.serve(async (req) => {
   const token = (req.headers.get("Authorization") || "").replace(/^Bearer /, "");
   const { data: { user } } = await db.auth.getUser(token);
   if (!user) return json({ error: "Nicht angemeldet" }, 401);
-  const { data: member } = await db.from("profiles").select("display_name").eq("id", user.id).maybeSingle();
+  const { data: member } = await db.from("profiles").select("id").eq("id", user.id).maybeSingle();
   if (!member) return json({ error: "Kein Mitglied" }, 403);
 
   const since = new Date(Date.now() - 864e5).toISOString();
@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
 
   let issue;
   try {
-    issue = buildIssue(await req.json(), member);
+    issue = buildIssue(await req.json());
   } catch (e) {
     return json({ error: (e as Error).message }, 400);
   }

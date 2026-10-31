@@ -4,11 +4,11 @@
 set client_min_messages = warning;
 
 -- Testkonten: A Admin (iPhone), B Android, C iPhone, D iPhone, X Nicht-Mitglied
-insert into auth.users (id, email, raw_user_meta_data) values
-  ('00000000-0000-0000-0000-00000000000a', 'a@test', '{"display_name":"Anna","device":"iphone"}'),
-  ('00000000-0000-0000-0000-00000000000b', 'b@test', '{"display_name":"Beat","device":"android"}'),
-  ('00000000-0000-0000-0000-00000000000c', 'c@test', '{"display_name":"Chris"}'),
-  ('00000000-0000-0000-0000-00000000000d', 'd@test', '{"display_name":"Dani","device":"iphone"}');
+insert into auth.users (id, email, raw_user_meta_data, raw_app_meta_data) values
+  ('00000000-0000-0000-0000-00000000000a', 'a@test', '{"display_name":"Anna","device":"iphone"}', '{"eingeladen":true}'),
+  ('00000000-0000-0000-0000-00000000000b', 'b@test', '{"display_name":"Beat","device":"android"}', '{"eingeladen":true}'),
+  ('00000000-0000-0000-0000-00000000000c', 'c@test', '{"display_name":"Chris"}', '{"eingeladen":true}'),
+  ('00000000-0000-0000-0000-00000000000d', 'd@test', '{"display_name":"Dani","device":"iphone"}', '{"eingeladen":true}');
 update public.profiles set is_admin = true where id = '00000000-0000-0000-0000-00000000000a';
 
 -- Hilfsfunktion: als Person X handeln
@@ -27,6 +27,9 @@ set client_min_messages = notice;
 select pg_temp.check((select count(*) from public.profiles) = 4, 'Vier Profile angelegt');
 select pg_temp.check((select device from public.profiles where display_name = 'Beat') = 'android', 'Gerät Android aus der Einladung übernommen');
 select pg_temp.check((select device from public.profiles where display_name = 'Chris') = 'iphone', 'Ohne Angabe gilt iPhone');
+select pg_temp.check(public.vote_weight('00000000-0000-0000-0000-00000000000b') = 1, 'Android zählt einfach, bis der Admin es bestätigt');
+insert into auth.users (email, raw_user_meta_data) values ('fremd@test', '{"display_name":"Fremd","device":"android"}');
+select pg_temp.check((select count(*) from public.profiles) = 4, 'Freie Registrierung ergibt kein Profil');
 
 -- 2) Ohne Login: keine Funktion ausführbar, jede Tabelle mit RLS
 select pg_temp.check((select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -38,8 +41,8 @@ select pg_temp.check((select count(*) from pg_class c join pg_namespace n on n.o
 -- 3) Testdaten als Mitglieder anlegen
 set role authenticated;
 select pg_temp.als('A');
-insert into public.trips (id, title, starts_on) values ('10000000-0000-0000-0000-000000000001', 'Wallis', '2027-05-01');
-insert into public.events (id, title, starts_at) values ('20000000-0000-0000-0000-000000000001', 'Herbst-Stamm', '2026-11-14 19:00+01');
+insert into public.trips (id, title, starts_on) values ('10000000-0000-0000-0000-000000000001', 'Wallis', current_date + 200);
+insert into public.events (id, title, starts_at) values ('20000000-0000-0000-0000-000000000001', 'Herbst-Stamm', now() + interval '14 days');
 insert into public.trip_participants (trip_id) values ('10000000-0000-0000-0000-000000000001');
 select pg_temp.als('B'); insert into public.trip_participants (trip_id) values ('10000000-0000-0000-0000-000000000001');
 select pg_temp.als('C'); insert into public.trip_participants (trip_id) values ('10000000-0000-0000-0000-000000000001');
@@ -85,6 +88,9 @@ select public.admin_set_device('00000000-0000-0000-0000-00000000000d', 'android'
 select pg_temp.check((select device from public.profiles where display_name = 'Dani') = 'android', 'Admin setzt Gerät auf Android');
 select pg_temp.check((select count(*) from public.admin_log) = 1, 'Änderung im Admin-Protokoll');
 select public.admin_set_device('00000000-0000-0000-0000-00000000000d', 'iphone');
+select public.admin_set_device('00000000-0000-0000-0000-00000000000b', 'android');
+select pg_temp.check(public.vote_weight('00000000-0000-0000-0000-00000000000b') = 2, 'Android zählt nach der Bestätigung doppelt');
+select pg_temp.check((select count(*) from public.admin_log where action = 'Gerätetyp android bestätigt') = 1, 'Bestätigung im Admin-Protokoll');
 
 -- 7) Sacceri: Antrag + ⅔ der Anwesenden, Android zählt doppelt
 --    Gewichte: A 1, B 2 (Android), C 1, D 1 → total 5, nötig 4
@@ -181,6 +187,17 @@ exception when raise_exception then
 end $$;
 select pg_temp.als('C');
 insert into public.ride_passengers (ride_id) values ('40000000-0000-0000-0000-000000000001');
+do $$ begin
+  update public.ride_passengers set points_given = 30 where passenger_id = auth.uid();
+  raise exception 'FEHLER: Bewertung vor dem Anlass';
+exception when raise_exception then
+  if sqlerrm like 'FEHLER%' then raise; end if; raise notice 'ok – bewerten erst nach dem Anlass';
+end $$;
+reset role;
+select pg_temp.als('');
+update public.events set starts_at = now() - interval '1 minute';
+set role authenticated;
+select pg_temp.als('C');
 update public.ride_passengers set stars_safe = 5, stars_punctual = 4, stars_mood = 5, points_given = 30, rated_at = now()
  where passenger_id = auth.uid();
 select pg_temp.check((select points_given from public.ride_passengers) = 30, 'Mitfahrer verteilt Punkte');
@@ -199,6 +216,10 @@ do $$ begin
   insert into storage.objects (bucket_id, name) values ('photos', 'drinks/00000000-0000-0000-0000-00000000000b/x.jpg');
   raise exception 'FEHLER: Foto in fremden Ordner hochgeladen';
 exception when insufficient_privilege then raise notice 'ok – Fotos nur in den eigenen Ordner'; end $$;
+do $$ begin
+  insert into storage.objects (bucket_id, name) values ('photos', 'x/00000000-0000-0000-0000-00000000000c/a.html');
+  raise exception 'FEHLER: Foto in unbekanntem Bereich hochgeladen';
+exception when insufficient_privilege then raise notice 'ok – nur die vier Foto-Bereiche'; end $$;
 
 -- 14) Datensicherung: für Mitglieder unerreichbar, Wiederherstellen bringt alles zurück
 select pg_temp.als('A');
@@ -211,6 +232,7 @@ do $$ begin
   raise exception 'FEHLER: Admin stellt über die App wieder her';
 exception when insufficient_privilege then raise notice 'ok – Wiederherstellen nur serverseitig'; end $$;
 reset role;
+select pg_temp.als('');  -- wie im SQL Editor: ohne Login
 
 do $$
 declare hid bigint; profile int; anlaesse int; stimmen int; n int;
@@ -292,5 +314,91 @@ select pg_temp.als('X');
 select pg_temp.check((select count(*) from storage.objects) = 0, 'Nicht-Mitglied sieht keine Fotos');
 select pg_temp.check((select count(*) from public.profiles) = 0, 'Nicht-Mitglied sieht keine Mitglieder');
 reset role;
+
+-- 16) Fristen und Spielregeln gelten auch an der App vorbei
+select pg_temp.check((select file_size_limit = 5242880 and allowed_mime_types = array['image/jpeg'] from storage.buckets where id = 'photos'), 'Speicher begrenzt: 5 MB, nur JPEG');
+create or replace function pg_temp.verboten(p_sql text, msg text) returns void language plpgsql as $$
+begin
+  begin
+    execute p_sql;
+  exception when raise_exception or insufficient_privilege then
+    raise notice 'ok – %', msg; return;
+  end;
+  raise exception 'FEHLER: %', msg;
+end $$;
+set role authenticated;
+select pg_temp.als('C');
+select pg_temp.verboten($q$insert into public.events (title, starts_at) values ('Erfunden', now() - interval '3 days')$q$, 'Keine Anlässe in der Vergangenheit');
+select pg_temp.verboten($q$insert into public.events (title, starts_at, organizer_id) values ('Erfunden', now() + interval '3 days', auth.uid())$q$, 'Organisator nicht beim Anlegen');
+select pg_temp.verboten($q$insert into public.trips (title, starts_on) values ('Erfunden', current_date - 3)$q$, 'Keine Reisen in der Vergangenheit');
+select pg_temp.verboten($q$update public.trips set title = 'Fremd' where id = '10000000-0000-0000-0000-000000000001'$q$, 'Fremde Reise nicht änderbar');
+select pg_temp.verboten($q$insert into public.rsvps (event_id, status, redeemed) values ('20000000-0000-0000-0000-000000000001', 'virtual', true)$q$, 'redeemed nicht beim Anmelden setzbar');
+select pg_temp.als('D');
+select pg_temp.verboten($q$update public.rsvps set redeemed = true where member_id = auth.uid()$q$, 'redeemed nicht änderbar');
+insert into public.rsvps (event_id, member_id, status) values ('20000000-0000-0000-0000-000000000001', auth.uid(), 'in')
+on conflict (event_id, member_id) do update set event_id = excluded.event_id, member_id = excluded.member_id, status = excluded.status;
+select pg_temp.check((select status from public.rsvps where member_id = auth.uid()) = 'in', 'Upsert wie von der App funktioniert');
+
+select pg_temp.als('C');
+insert into public.trips (id, title, starts_on, seats) values ('10000000-0000-0000-0000-000000000002', 'Klein', current_date + 30, 2);
+insert into public.trip_participants (trip_id) values ('10000000-0000-0000-0000-000000000002');
+update public.trips set program = 'Eigene Reise' where id = '10000000-0000-0000-0000-000000000002';
+select pg_temp.als('B');
+insert into public.trip_participants (trip_id) values ('10000000-0000-0000-0000-000000000002');
+update public.trips set ok_id = auth.uid() where id = '10000000-0000-0000-0000-000000000002';
+select pg_temp.check((select ok_id from public.trips where id = '10000000-0000-0000-0000-000000000002') = auth.uid(), 'OK auf fremder Reise eintragen geht');
+select pg_temp.als('D');
+select pg_temp.verboten($q$insert into public.trip_participants (trip_id) values ('10000000-0000-0000-0000-000000000002')$q$, 'Volle Reise nimmt niemanden mehr');
+
+-- Stimmberechtigt ist, wer beim Antrag mitreist: Beitritt danach zählt nicht
+select pg_temp.als('C');
+select public.propose_sacceri('10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-00000000000b');
+reset role;
+select pg_temp.als('');
+update public.trips set seats = 5 where id = '10000000-0000-0000-0000-000000000002';
+set role authenticated;
+select pg_temp.als('D');
+insert into public.trip_participants (trip_id) values ('10000000-0000-0000-0000-000000000002');
+select pg_temp.verboten($q$select public.cast_ballot((select id from public.proposals where status = 'open' and kind = 'sacceri'), true)$q$, 'Beitritt nach dem Antrag gibt keine Stimme');
+
+-- Vorbei ist vorbei: keine Anmeldung, keine Abmeldung, keine Mitfahrt, kein Mitreisen
+select pg_temp.als('A');
+insert into public.events (id, title, starts_at) values ('20000000-0000-0000-0000-000000000002', 'Nachgetragen', now() - interval '3 days');
+select pg_temp.check((select count(*) from public.events where id = '20000000-0000-0000-0000-000000000002') = 1, 'Admin trägt Vergangenes nach');
+reset role;
+select pg_temp.als('');
+update public.events set starts_at = now() - interval '3 days';
+update public.trips set starts_on = current_date - 3 where id = '10000000-0000-0000-0000-000000000002';
+update public.trips set seats = 12 where id = '10000000-0000-0000-0000-000000000002';
+set role authenticated;
+select pg_temp.als('B');
+select pg_temp.verboten($q$insert into public.rsvps (event_id, status) values ('20000000-0000-0000-0000-000000000001', 'in')$q$, 'Keine Anmeldung nach dem Anlass');
+select pg_temp.verboten($q$insert into public.ride_passengers (ride_id) values ('40000000-0000-0000-0000-000000000001')$q$, 'Keine Mitfahrt nach dem Anlass');
+select pg_temp.als('A');
+insert into public.rsvps (event_id, status) values ('20000000-0000-0000-0000-000000000002', 'in');
+select pg_temp.check((select count(*) from public.rsvps where event_id = '20000000-0000-0000-0000-000000000002') = 1, 'Admin trägt seine Anwesenheit nach');
+delete from public.trip_participants where trip_id = '10000000-0000-0000-0000-000000000002' and member_id = auth.uid();
+select pg_temp.als('D');
+select pg_temp.verboten($q$delete from public.rsvps where member_id = auth.uid()$q$, 'Keine Abmeldung nach dem Anlass');
+select pg_temp.verboten($q$update public.rsvps set status = 'out' where member_id = auth.uid()$q$, 'Status nach dem Anlass fest');
+select pg_temp.verboten($q$select public.claim_organizer('20000000-0000-0000-0000-000000000002')$q$, 'Vergangenes nicht organisieren');
+select pg_temp.check((select organizer_id from public.events where id = '20000000-0000-0000-0000-000000000002') is null, 'Organisator blieb leer');
+delete from public.trip_participants where trip_id = '10000000-0000-0000-0000-000000000002' and member_id = auth.uid();
+select pg_temp.verboten($q$insert into public.trip_participants (trip_id) values ('10000000-0000-0000-0000-000000000002')$q$, 'Kein Mitreisen nach dem Start');
+
+-- Server legt Busse und Zeitpunkt fest
+select pg_temp.als('C');
+insert into public.phrases (speaker_id, phrase, fee_chf, created_at) values (auth.uid(), 'Am Ende des Tages', -9999.99, '2099-01-01');
+select pg_temp.check((select fee_chf = 2 and created_at < now() + interval '1 minute' from public.phrases where phrase = 'Am Ende des Tages'), 'Busse und Zeitpunkt vom Server');
+insert into public.posts (text, created_at) values ('Zukunft', '2099-01-01');
+select pg_temp.check((select created_at < now() + interval '1 minute' from public.posts where text = 'Zukunft'), 'Beitrag bekommt die Serverzeit');
+select pg_temp.verboten($q$update public.phrases set fee_chf = 0 where reported_by = auth.uid()$q$, 'Busse nachträglich nicht änderbar');
+reset role;
+select pg_temp.als('');
+
+-- Club voll: ab settings.max_members wird das Konto abgelehnt
+update public.settings set max_members = (select count(*) from public.profiles);
+select pg_temp.verboten($q$insert into auth.users (email, raw_app_meta_data) values ('zuviel@test', '{"eingeladen":true}')$q$, 'Voller Club nimmt niemanden auf');
+update public.settings set max_members = 12;
 
 select 'ALLE DB-TESTS GRÜN' as ergebnis;

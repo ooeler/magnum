@@ -25,11 +25,11 @@
       app_status: [{ id: "main", maintenance: false }],
       profiles: [
         P(M.ot, "Ot", "Präsident", 2009, "iphone", { is_admin: true, fav_wine: "Cornalin", specialty: "Reden nach Mitternacht" }),
-        P(M.beat, "Beat", "Kassier", 2011, "android", { fav_wine: "Riesling", specialty: "Bezahlt nie die letzte Runde" }),
+        P(M.beat, "Beat", "Kassier", 2011, "android", { device_set_by_admin: true, fav_wine: "Riesling", specialty: "Bezahlt nie die letzte Runde" }),
         P(M.chris, "Chris", "Reiseleiter", 2012, "iphone", { nickname: "Navi", fav_wine: "Barolo", specialty: "Findet jede Besenbeiz" }),
         P(M.dani, "Dani", "Kellermeister", 2015, "iphone"), P(M.erich, "Erich", "Aktuar", 2018, "iphone"),
-        P(M.fritz, "Fritz", "Mitglied", 2016, "android"), P(M.gabi, "Gabi", "Mitglied", 2013, "iphone"),
-        P(M.hans, "Hans", "Mitglied", 2017, "iphone"), P(M.ivo, "Ivo", "Mitglied", 2019, "android"),
+        P(M.fritz, "Fritz", "Mitglied", 2016, "android", { device_set_by_admin: true }), P(M.gabi, "Gabi", "Mitglied", 2013, "iphone"),
+        P(M.hans, "Hans", "Mitglied", 2017, "iphone"), P(M.ivo, "Ivo", "Mitglied", 2019, "android", { device_set_by_admin: true }),
         P(M.jurg, "Jürg", "Mitglied", 2021, "iphone"), P(M.kurt, "Kurt", "Mitglied", 2024, "iphone")
       ],
       events: [
@@ -111,7 +111,8 @@
     post_prosts: ["post_id", "member_id"], ride_passengers: ["ride_id", "passenger_id"], ballots: ["proposal_id", "voter_id"] };
   var PERSONAL = ["restaurant_ratings", "rsvps", "trip_participants", "drinks", "saying_prosts", "post_prosts", "ride_passengers", "rides"];
   var COLS = { profiles: ["display_name", "fav_wine", "specialty"], trips: ["title", "starts_on", "ends_on", "program", "seats", "color", "ok_id", "kassier_id"],
-    events: ["title", "starts_at", "location"], ride_passengers: ["stars_safe", "stars_punctual", "stars_mood", "points_given", "rated_at"] };
+    events: ["title", "starts_at", "location"], ride_passengers: ["stars_safe", "stars_punctual", "stars_mood", "points_given", "rated_at"],
+    rsvps: ["event_id", "member_id", "status", "updated_at"], posts: ["text"], sayings: ["text"], phrases: ["phrase"] };
   var READONLY = ["settings", "proposals", "ballots", "admin_log", "feedback"];
   var CASCADE = { events: [["rsvps", "event_id"], ["magnums", "event_id"], ["rides", "event_id"]], magnums: [["magnum_guests", "magnum_id"]], rides: [["ride_passengers", "ride_id"]],
     trips: [["trip_participants", "trip_id"], ["trip_photos", "trip_id"], ["proposals", "trip_id"]], posts: [["post_prosts", "post_id"]], sayings: [["saying_prosts", "saying_id"]],
@@ -133,6 +134,33 @@
     var r = d.rides.find(function (x) { return x.id == row.ride_id }); if (!r) return "Fahrt nicht gefunden";
     if (r.driver_id == row.passenger_id) return "Du kannst nicht bei dir selbst mitfahren";
     if (isNew && d.ride_passengers.filter(function (x) { return x.ride_id == row.ride_id }).length >= r.seats) return "Das Auto ist voll";
+    if (isNew && tag(eventOf(d, r.event_id).starts_at) < day(0)) return "Der Anlass ist vorbei";
+    if (isNew && (row.stars_safe != null || row.stars_punctual != null || row.stars_mood != null || row.points_given != null || row.rated_at != null)) return "Bewerten geht erst nach dem Anlass";
+    if (!isNew && new Date(eventOf(d, r.event_id).starts_at) > new Date()) return "Bewerten geht erst nach dem Anlass";
+    return null;
+  }
+  function tag(s) { var d = new Date(s); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0") }
+  function eventOf(d, id) { return d.events.find(function (e) { return e.id == id }) || { starts_at: new Date().toISOString() } }
+  // Spiegel der Trigger check_event, check_rsvp, check_trip und check_trip_participant
+  function checkRow(d, t, r, old, loeschen) {
+    if (admin(d)) return null;
+    if (t == "events") {
+      if (!old && r.organizer_id) return "Der Organisator trägt sich selbst ein";
+      if ((!old || r.starts_at != old.starts_at) && tag(r.starts_at) < day(0)) return "Ein Anlass kann nicht in der Vergangenheit liegen";
+    }
+    if (t == "rsvps") {
+      if (old && !loeschen && r.event_id != old.event_id) return "Der Anlass lässt sich nicht ändern";
+      if (tag(eventOf(d, r.event_id).starts_at) < day(0)) return "Der Anlass ist vorbei, die Anmeldung ist geschlossen";
+    }
+    if (t == "trips") {
+      if ((!old || r.starts_on != old.starts_on) && r.starts_on < day(0)) return "Eine Reise kann nicht in der Vergangenheit liegen";
+      if (old && old.created_by != me() && ["title", "starts_on", "ends_on", "program", "seats", "color"].some(function (c) { return r[c] != old[c] })) return "Nur wer die Reise erfasst hat, kann sie ändern";
+    }
+    if (t == "trip_participants" && !old) {
+      var tr = d.trips.find(function (x) { return x.id == r.trip_id });
+      if (tr.starts_on < day(0)) return "Die Reise hat schon begonnen";
+      if (d.trip_participants.filter(function (x) { return x.trip_id == r.trip_id }).length >= tr.seats) return "Die Reise ist ausgebucht";
+    }
     return null;
   }
 
@@ -178,8 +206,12 @@
         if (own && r[own] == null) r[own] = u;
         if (own && r[own] != u) return RLS(t);
         if (t == "trips" && r.sacceri_id) return RLS(t);
+        if (t == "rsvps" && "redeemed" in r) return fail("permission denied for table rsvps", "42501");
         var ex = d[t].find(function (x) { return pkMatch(t, x, r) && (PK[t] || r.id) });
         if (ex && q.op == "insert") return fail("duplicate key value violates unique constraint", "23505");
+        var bad = checkRow(d, t, r, ex); if (bad) return fail(bad);
+        if (t == "phrases") r.fee_chf = d.settings[0].phrase_fee;
+        if (t == "posts" || t == "sayings" || t == "phrases") r.created_at = new Date().toISOString();
         if (t == "ride_passengers") { var e = checkRide(d, r, !ex); if (e) return fail(e) }
         if (ex) { Object.assign(ex, r); out.push(ex); continue }
         if (!PK[t] && r.id == null) r.id = uuid();
@@ -194,18 +226,23 @@
     if (q.op == "update") {
       var cols = Object.keys(q.payload);
       if (COLS[t] && cols.some(function (c) { return COLS[t].indexOf(c) < 0 })) return fail("permission denied for table " + t, "42501");
-      hit.forEach(function (r) {
-        var allowed = t == "profiles" ? r.id == u : t == "trips" ? true : PERSONAL.indexOf(t) >= 0 ? r[own] == u : (r[own] == u || admin(d));
-        if (allowed) { Object.assign(r, q.payload); out.push(r) }
-      });
+      for (var h = 0; h < hit.length; h++) {
+        var r = hit[h], allowed = t == "profiles" ? r.id == u : t == "trips" ? true : PERSONAL.indexOf(t) >= 0 ? r[own] == u : (r[own] == u || admin(d));
+        if (!allowed) continue;
+        var neu = Object.assign({}, r, q.payload), e2 = t == "ride_passengers" ? checkRide(d, neu, false) : checkRow(d, t, neu, r);
+        if (e2) return fail(e2);
+        Object.assign(r, q.payload); out.push(r);
+      }
       save(d); notify();
       return Promise.resolve(q.ret ? shape(q, out) : { data: null, error: null });
     }
     if (q.op == "delete") {
-      hit.forEach(function (r) {
-        var allowed = t == "trips" ? (r.created_by == u || admin(d)) : own && (r[own] == u || admin(d));
-        if (allowed) { d[t] = d[t].filter(function (x) { return x !== r }); removeCascade(d, t, r); out.push(r) }
-      });
+      for (var k = 0; k < hit.length; k++) {
+        var r2 = hit[k], darf = t == "trips" ? (r2.created_by == u || admin(d)) : own && (r2[own] == u || admin(d));
+        if (!darf) continue;
+        var e3 = t == "rsvps" ? checkRow(d, t, r2, r2, true) : null; if (e3) return fail(e3);
+        d[t] = d[t].filter(function (x) { return x !== r2 }); removeCascade(d, t, r2); out.push(r2);
+      }
       save(d); notify();
       return Promise.resolve({ data: null, error: null });
     }
@@ -213,9 +250,9 @@
   }
 
   // ───────────── Datenbank-Funktionen ─────────────
-  function weight(d, id) { var p = d.profiles.find(function (x) { return x.id == id }); return p && p.device == "android" ? 2 : 1 }
+  function weight(d, id) { var p = d.profiles.find(function (x) { return x.id == id }); return p && p.device == "android" && p.device_set_by_admin ? 2 : 1 }
   function eligible(d, p) {
-    if (p.kind == "sacceri") return d.trip_participants.filter(function (t) { return t.trip_id == p.trip_id }).map(function (t) { return t.member_id });
+    if (p.kind == "sacceri") return p.voters || [];
     return d.profiles.filter(function (x) { return x.id != p.target_id }).map(function (x) { return x.id });
   }
   function resolve(d, p) {
@@ -245,8 +282,8 @@
     open_magnum_kasse: function (d, u) { if (!admin(d)) throw "Nur der Administrator öffnet die Kasse"; var n = 0; d.rsvps.forEach(function (r) { if (r.status == "virtual" && !r.redeemed) { r.redeemed = true; n++ } }); return n },
     admin_set_device: function (d, u, a) {
       if (!admin(d)) throw "Nur der Administrator darf den Gerätetyp ändern";
-      var p = d.profiles.find(function (x) { return x.id == a.p_member }); if (!p) throw "Mitglied nicht gefunden"; if (p.device == a.p_device) return;
-      d.admin_log.push({ id: ++d.__seq, admin_id: u, member_id: p.id, action: "Gerätetyp " + p.device + " → " + a.p_device, created_at: new Date().toISOString() });
+      var p = d.profiles.find(function (x) { return x.id == a.p_member }); if (!p) throw "Mitglied nicht gefunden"; if (p.device == a.p_device && (p.device_set_by_admin || a.p_device == "iphone")) return;
+      d.admin_log.push({ id: ++d.__seq, admin_id: u, member_id: p.id, action: p.device == a.p_device ? "Gerätetyp " + p.device + " bestätigt" : "Gerätetyp " + p.device + " → " + a.p_device, created_at: new Date().toISOString() });
       p.device = a.p_device; p.device_set_by_admin = true;
     },
     admin_set_role: function (d, u, a) {
@@ -259,7 +296,7 @@
       if (!d.trip_participants.some(function (t) { return t.trip_id == a.p_trip && t.member_id == a.p_target })) throw "Nur Mitreisende können ausgezeichnet werden";
       var tr = d.trips.find(function (x) { return x.id == a.p_trip }); if (tr.sacceri_id) throw "Diese Reise hat schon einen Sacceri";
       if (d.proposals.some(function (p) { return p.kind == "sacceri" && p.trip_id == a.p_trip && p.status == "open" })) throw "duplicate key value violates unique constraint";
-      var p = { id: uuid(), kind: "sacceri", target_id: a.p_target, trip_id: a.p_trip, value: null, proposed_by: u, seconded_by: null, status: "open", created_at: new Date().toISOString() };
+      var p = { id: uuid(), kind: "sacceri", target_id: a.p_target, trip_id: a.p_trip, value: null, proposed_by: u, seconded_by: null, voters: d.trip_participants.filter(function (t) { return t.trip_id == a.p_trip }).map(function (t) { return t.member_id }), status: "open", created_at: new Date().toISOString() };
       d.proposals.push(p);
       if (d.trip_participants.some(function (t) { return t.trip_id == a.p_trip && t.member_id == u })) ballot(d, p.id, u, true);
       resolve(d, p); return p.id;
@@ -323,6 +360,7 @@
       if (!member(d)) return fnFail("Nur Mitglieder dürfen einladen.");
       if (b.action == "create") {
         if (full) return fnFail("Der Club ist voll (12 Mitglieder).");
+        if (!admin(d) && d.__invites.filter(function (x) { return x.created_by == u && !x.used_at && x.expires_at > now }).length >= 3) return fnFail("Du hast schon 3 offene Einladungen. Ziehe zuerst eine zurück.");
         var t = token(); d.__invites.push({ id: ++d.__seq, token: t, created_by: u, created_at: now, expires_at: new Date(Date.now() + 7 * 864e5).toISOString(), used_at: null }); save(d);
         return ok({ ok: true, token: t });
       }
@@ -349,7 +387,7 @@
   var storage = { from: function () { return {
     upload: function (path, blob) {
       var u = me(); if (!u) return fail("JWT expired");
-      if (path.split("/")[1] != u) return RLS("objects");
+      if (path.split("/")[1] != u || ["drinks", "trips", "cards", "receipts"].indexOf(path.split("/")[0]) < 0) return RLS("objects");
       return new Promise(function (res) {
         var fr = new FileReader(); fr.onload = function () { FILES[path] = fr.result; try { localStorage.setItem(FILESK, JSON.stringify(FILES)) } catch (e) {} res({ data: { path: path }, error: null }) };
         fr.onerror = function () { res({ data: null, error: { message: "Upload fehlgeschlagen" } }) }; fr.readAsDataURL(blob);

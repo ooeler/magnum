@@ -19,7 +19,8 @@ alter default privileges in schema public grant usage on sequences to authentica
 create table if not exists auth.users (
   id uuid primary key default gen_random_uuid(),
   email text,
-  raw_user_meta_data jsonb default '{}'::jsonb
+  raw_user_meta_data jsonb default '{}'::jsonb,
+  raw_app_meta_data jsonb default '{}'::jsonb
 );
 
 -- Test: die "angemeldete" Person kommt aus einer Session-Variable
@@ -28,7 +29,7 @@ create or replace function auth.uid() returns uuid language sql stable as $$
 $$;
 grant execute on function auth.uid() to anon, authenticated, service_role;
 
-create table if not exists storage.buckets (id text primary key, name text, public boolean);
+create table if not exists storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
 create table if not exists storage.objects (
   id uuid primary key default gen_random_uuid(),
   bucket_id text, name text, owner uuid
