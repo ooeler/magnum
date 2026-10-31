@@ -63,7 +63,7 @@ test.describe("Profil", () => {
 
   test("Funktion ändern ist Nicht-Admins verwehrt", async ({ page }) => {
     await login(page, BEAT);
-    const r = await page.evaluate(() => window.supabase.createClient().rpc("admin_set_role", { p_member: "u-beat", p_role: "Präsident" }));
+    const r = await page.evaluate(() => window.magnumDb.createClient().rpc("admin_set_role", { p_member: "u-beat", p_role: "Präsident" }));
     expect(r.error).toBeTruthy();
   });
 });

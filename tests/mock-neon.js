@@ -1,6 +1,6 @@
-// Test- und Demo-Ersatz für Supabase. Wird anstelle von app/config.js ausgeliefert (Tests, npm run demo).
+// Test- und Demo-Ersatz für das Neon-Backend. Wird anstelle von app/config.js ausgeliefert (Tests, npm run demo).
 // Bildet nach: Login, Einladungslinks (Edge Function invite), Vorschläge (feedback), Tabellen mit den
-// Zugriffsregeln aus supabase/setup.sql, die Datenbank-Funktionen (Abstimmungen mit ⅔-Mehrheit und
+// Zugriffsregeln aus db/setup.sql, die Datenbank-Funktionen (Abstimmungen mit ⅔-Mehrheit und
 // doppelten Android-Stimmen, Organisator, Kasse, Admin) sowie Fotos und Live-Sync zwischen Tabs.
 (function () {
   var DBK = "__mg_db", SESS = "__mg_session", USERSK = "__mg_users", FILESK = "__mg_files";
@@ -103,7 +103,7 @@
   function db() { var d = get(DBK); if (!d) { d = seed(); set(DBK, d) } return d }
   function save(d) { set(DBK, d) }
 
-  // ───────────── Regeln (Spiegel von supabase/setup.sql) ─────────────
+  // ───────────── Regeln (Spiegel von db/setup.sql) ─────────────
   var OWNER = { restaurant_ratings: "member_id", rsvps: "member_id", trip_participants: "member_id", drinks: "member_id", saying_prosts: "member_id", post_prosts: "member_id",
     ride_passengers: "passenger_id", rides: "driver_id", restaurants: "created_by", restaurant_visits: "created_by", events: "created_by", magnums: "brought_by", magnum_guests: "added_by",
     trip_photos: "uploaded_by", cards: "created_by", phrases: "reported_by", sayings: "author_id", posts: "author_id", trips: "created_by" };
@@ -432,6 +432,6 @@
     maintenance: function (on) { var d = db(); d.app_status[0].maintenance = on; save(d) },
     reset: function () { localStorage.removeItem(DBK); localStorage.removeItem(USERSK); localStorage.removeItem(FILESK) }
   };
-  Object.defineProperty(window, "supabase", { value: { createClient: createClient }, writable: false, configurable: false });
-  window.MG_CONFIG = { url: "https://mock.supabase.test", key: "mock-anon-key" };
+  Object.defineProperty(window, "magnumDb", { value: { createClient: createClient }, writable: false, configurable: false });
+  window.MG_CONFIG = { data: "https://mock.neon.test/rest", api: "https://mock.neon.test/api" };
 })();

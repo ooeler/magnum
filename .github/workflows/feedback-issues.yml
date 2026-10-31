@@ -27,6 +27,6 @@ jobs:
           node-version: 22
       - run: node scripts/feedback-to-issues.mjs
         env:
-          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-          CRON_SECRET: ${{ secrets.SUPABASE_CRON_SECRET }}
+          MAGNUM_API_URL: ${{ vars.MAGNUM_API_URL }}
+          CRON_SECRET: ${{ secrets.MAGNUM_CRON_SECRET }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -7,9 +7,8 @@ const { execSync } = require("child_process");
 
 const root = path.join(__dirname, "..");
 const read = (f) => fs.readFileSync(path.join(root, f), "utf8");
-const sqlFiles = ["supabase/setup.sql", ...fs.readdirSync(path.join(root, "supabase/migrations")).filter((f) => f.endsWith(".sql")).map((f) => "supabase/migrations/" + f)];
+const sqlFiles = ["db/setup.sql", ...fs.readdirSync(path.join(root, "db/migrations")).filter((f) => f.endsWith(".sql")).map((f) => "supabase/migrations/" + f)];
 const sql = sqlFiles.map(read).join("\n");
-const fnDirs = fs.readdirSync(path.join(root, "supabase/functions")).filter((d) => !d.startsWith("_"));
 const workflows = fs.readdirSync(path.join(root, ".github/workflows")).map((f) => [f, read(".github/workflows/" + f)]);
 
 test.describe("Sicherheit im Browser", () => {
@@ -70,16 +69,17 @@ base.test.describe("Sicherheit (statisch)", () => {
   base.test("Gerät, Admin, Spitzname und Sacceri sind nicht direkt änderbar", () => {
     expect(sql).toMatch(/revoke update on public\.profiles from authenticated;\s*grant update \(display_name, fav_wine, specialty\) on public\.profiles/);
     expect(sql).toMatch(/revoke update on public\.trips from authenticated;\s*grant update \(title, starts_on, ends_on, program, seats, color, ok_id, kassier_id\)/);
-    expect(sql).toMatch(/revoke all on table public\.invites from anon, authenticated/);
+    expect(sql).toMatch(/revoke all on table public\.invites from anonymous, authenticated/);
   });
 
-  base.test("Edge Functions prüfen Login oder Secret, Secrets in konstanter Zeit", async () => {
-    for (const d of fnDirs) {
-      const src = read(`supabase/functions/${d}/index.ts`);
-      expect(/auth\.getUser\(|safeEqual\(token/.test(src), `${d}: keine Zugriffsprüfung`).toBe(true);
-      expect(src, `${d}: Secret mit === verglichen`).not.toMatch(/[!=]==\s*Deno\.env\.get\("CRON_SECRET"\)/);
-    }
-    const S = await import("../supabase/functions/_shared/sicherheit.mjs");
+  base.test("Function prüft Login oder Secret, Secrets in konstanter Zeit", async () => {
+    const src = read("functions/index.ts");
+    for (const r of ["/feedback\"", "/fotos\"", "/fotos/links\""]) expect(src.slice(src.indexOf(r)), r).toMatch(/^[^\n]*\n\s*const m = await member\(c\.req\.raw\);/);
+    expect(src).toContain("safeEqual(token, process.env.CRON_SECRET)");
+    expect(src).toContain("parseTriggerDelivery(c.req.raw)");
+    expect(src).toContain("cors({ origin: ORIGIN");
+    expect(src, "Secret mit === verglichen").not.toMatch(/[!=]==\s*process\.env\.CRON_SECRET/);
+    const S = await import("../functions/sicherheit.mjs");
     expect(S.safeEqual("abc", "abc")).toBe(true);
     expect(S.safeEqual("abc", "abd")).toBe(false);
     expect(S.safeEqual("", "")).toBe(false);
@@ -87,7 +87,7 @@ base.test.describe("Sicherheit (statisch)", () => {
   });
 
   base.test("Einladung: Token, Eingaben und volle Clubs", async () => {
-    const L = await import("../supabase/functions/invite/logic.mjs");
+    const L = await import("../functions/invite.mjs");
     const t = L.newToken();
     expect(t).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(await L.hashToken(t)).toMatch(/^[0-9a-f]{64}$/);
@@ -102,7 +102,7 @@ base.test.describe("Sicherheit (statisch)", () => {
   });
 
   base.test("Vorschläge: Issue ohne Mail-Adressen und ohne @-Erwähnungen", async () => {
-    const F = await import("../supabase/functions/feedback/logic.mjs");
+    const F = await import("../functions/vorschlag.mjs");
     const i = F.buildIssue({ kind: "wunsch", title: "Weinkarte  @ot", text: "Hallo @beat" }, new Date("2026-10-31T10:00:00Z"));
     expect(i.title).toBe("🍷 Weinkarte @​ot");
     expect(i.body).toContain("@​beat");
@@ -128,17 +128,22 @@ base.test.describe("Sicherheit (statisch)", () => {
     const rel = workflows.find(([f]) => f.includes("release"))[1];
     expect(rel.indexOf("snapshot_club('vor Release")).toBeGreaterThan(-1);
     expect(rel.indexOf("snapshot_club('vor Release")).toBeLessThan(rel.indexOf("Wartungsseite einschalten"));
-    expect(rel.indexOf("Wartungsseite einschalten")).toBeLessThan(rel.indexOf("-f supabase/setup.sql"));
+    expect(rel.indexOf("Wartungsseite einschalten")).toBeLessThan(rel.indexOf("db/setup.sql"));
     for (const f of ["backup_tables\\(\\)", "snapshot_club\\(text\\)", "restore_club\\(bigint\\)"])
-      expect(sql).toMatch(new RegExp(`revoke execute on function public\\.${f} from public, anon, authenticated`));
+      expect(sql).toMatch(new RegExp(`revoke execute on function public\\.${f} from public, anonymous, authenticated`));
     expect(sql).not.toMatch(/on public\.backups\s+for/i);
   });
 
-  base.test("Mailvorlagen: nur Magnum, alle mit Link oder Code", () => {
-    const m = JSON.parse(read("supabase/mail-vorlagen.json"));
-    const txt = JSON.stringify(m);
-    expect(txt).not.toMatch(/Herren Inter|Spielleitung|Let's fly/);
-    for (const [k, v] of Object.entries(m)) if (k.includes("_content")) expect(v, k).toMatch(/\{\{ \.(ConfirmationURL|Token) \}\}/);
+  base.test("Fotos: nur JPEG bis 5 MB, nur der eigene Ordner", async () => {
+    const F = await import("../functions/fotos.mjs");
+    const id = "00000000-0000-0000-0000-00000000000a", jpg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
+    expect(() => F.checkFoto(`drinks/${id}/a.jpg`, id, jpg)).not.toThrow();
+    expect(() => F.checkFoto(`drinks/00000000-0000-0000-0000-00000000000b/a.jpg`, id, jpg)).toThrow("eigenen Ordner");
+    expect(() => F.checkFoto(`x/${id}/a.jpg`, id, jpg)).toThrow("Speicherort");
+    expect(() => F.checkFoto(`drinks/${id}/a.html`, id, jpg)).toThrow("Speicherort");
+    expect(() => F.checkFoto(`drinks/${id}/../a.jpg`, id, jpg)).toThrow("Speicherort");
+    expect(() => F.checkFoto(`drinks/${id}/a.jpg`, id, new TextEncoder().encode("<html>"))).toThrow("JPEG");
+    expect(() => F.checkFoto(`drinks/${id}/a.jpg`, id, new Uint8Array(F.MAX_FOTO + 1).fill(0xff))).toThrow("gross");
   });
 
   base.test("Keine Secrets im Repository", () => {

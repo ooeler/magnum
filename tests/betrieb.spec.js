@@ -41,18 +41,17 @@ test.describe("Deployment", () => {
     expect(release).toContain('"window.MG_CONFIG = "');
   });
 
-  test("Reihenfolge: Tests, Backup, Wartung an, Datenbank, Funktionstest, Functions, Mails, App, Wartung aus", () => {
-    const schritte = ["needs: test", "Backup vor dem Deployment", "Wartungsseite einschalten", "-f supabase/setup.sql", "Sicherheitsprüfung Datenbank",
-      "Funktionstest Datenbank", "- name: Edge Functions", "Mailvorlagen auf Deutsch", "needs: backend", "wartung-aus:"];
+  test("Reihenfolge: Tests, Backup, Wartung an, Neon-Dienste, Datenbank, Funktionstest, App, Wartung aus", () => {
+    const schritte = ["needs: test", "Backup vor dem Deployment", "Wartungsseite einschalten", "neon deploy --env", "-f db/setup.sql", "Sicherheitsprüfung Datenbank",
+      "Funktionstest Datenbank", "needs: backend", "wartung-aus:"];
     const pos = schritte.map((s) => release.indexOf(s));
     expect(pos, "Schritt fehlt").not.toContain(-1);
     expect(pos).toEqual([...pos].sort((a, b) => a - b));
   });
 
-  test("Release sperrt die Registrierung und prüft das Ergebnis", () => {
-    const t = release.slice(release.indexOf("Registrierung sperren und prüfen"), release.indexOf("Funktionstest Datenbank"));
-    expect(t).toContain('"disable_signup":true,"password_min_length":8');
-    expect(t).toContain('[ "$ist" = "$soll" ] ||');
+  test("Release prüft, dass Konten nur mit Einladung entstehen", () => {
+    const t = release.slice(release.indexOf("Sicherheitsprüfung Datenbank"), release.indexOf("Funktionstest Datenbank"));
+    expect(t).toContain("user_gate");
     expect(t).toMatch(/exit 1/);
   });
 
@@ -61,7 +60,7 @@ test.describe("Deployment", () => {
   });
 
   test("Funktionstest lässt keine Spuren in der echten Datenbank", () => {
-    const t = release.slice(release.indexOf("Funktionstest Datenbank"), release.indexOf("Secret für die Vorschläge"));
+    const t = release.slice(release.indexOf("Funktionstest Datenbank"), release.indexOf("  pages:"));
     expect(t).toContain("raise exception using errcode = 'P0099'");
     expect(t).toContain("when sqlstate 'P0099' then null");
   });
@@ -73,21 +72,13 @@ test.describe("Deployment", () => {
     for (const [n, v] of Object.entries({ ...pkg.dependencies, ...pkg.devDependencies })) expect(lock.packages["node_modules/" + n].version, n).toBe(v);
   });
 
-  test("Token-Erinnerung: läuft täglich, legt ihr Label selbst an", () => {
-    const y = read(".github/workflows/token-erinnerung.yml");
-    expect(y).toMatch(/cron: /);
-    expect(y).toContain("issues: write");
-    expect(y.indexOf("gh label create wartung")).toBeGreaterThan(-1);
-    expect(y.indexOf("gh label create wartung")).toBeLessThan(y.indexOf("gh issue create"));
-  });
-
   test("Lokaler Server übersteht ungültige Adressen", async ({ request }) => {
     expect((await request.get("/%")).status()).toBe(400);
     expect((await request.get("/")).status()).toBe(200);
   });
 
   test("Migrationen sind richtig benannt", () => {
-    const f = fs.readdirSync(path.join(root, "supabase/migrations")).filter((x) => x.endsWith(".sql"));
+    const f = fs.readdirSync(path.join(root, "db/migrations")).filter((x) => x.endsWith(".sql"));
     for (const n of f) expect(n).toMatch(/^\d{8}_\d{2}_[a-z0-9_]+\.sql$/);
   });
 });

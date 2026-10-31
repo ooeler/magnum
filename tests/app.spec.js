@@ -225,7 +225,7 @@ test.describe("Club", () => {
     await expect(page.locator("section", { hasText: "Administration" })).toHaveCount(0);
     await page.locator(".mem", { hasText: "Hans" }).click();
     await expect(card(page, "Admin")).toHaveCount(0);
-    const r = await page.evaluate(() => window.supabase.createClient().rpc("admin_set_device", { p_member: "u-hans", p_device: "android" }));
+    const r = await page.evaluate(() => window.magnumDb.createClient().rpc("admin_set_device", { p_member: "u-hans", p_device: "android" }));
     expect(r.error.message).toContain("Nur der Administrator");
   });
 

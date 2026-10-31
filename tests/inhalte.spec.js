@@ -103,7 +103,7 @@ test.describe("Löschen", () => {
     await tab(page, "Reisen");
     await page.locator(".trip", { hasText: "Wallis" }).click();
     await expect(page.getByRole("button", { name: "Reise löschen" })).toHaveCount(0);
-    const r = await page.evaluate(() => window.supabase.createClient().from("events").delete().eq("id", "e-2"));
+    const r = await page.evaluate(() => window.magnumDb.createClient().from("events").delete().eq("id", "e-2"));
     expect(r.error).toBeNull();
     expect(await page.evaluate(() => window.__mg.db().events.some((e) => e.id == "e-2"))).toBe(true);
   });
@@ -139,7 +139,7 @@ test.describe("Termine", () => {
   test("Mitglieder öffnen die Kasse nicht", async ({ page }) => {
     await login(page, BEAT);
     await expect(card(page, "Magnum-Kasse").getByRole("button", { name: "Kasse öffnen (Admin)" })).toHaveCount(0);
-    const r = await page.evaluate(() => window.supabase.createClient().rpc("open_magnum_kasse"));
+    const r = await page.evaluate(() => window.magnumDb.createClient().rpc("open_magnum_kasse"));
     expect(r.error.message).toContain("Nur der Administrator");
   });
 

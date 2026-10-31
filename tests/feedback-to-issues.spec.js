@@ -1,8 +1,8 @@
-// Tests für die Brücke Supabase → GitHub-Issues (scripts/feedback-to-issues.mjs).
+// Tests für die Brücke Neon → GitHub-Issues (scripts/feedback-to-issues.mjs).
 // Sie stellen sicher, dass die Verbindung ohne persönliches Token funktioniert und Fehler sichtbar werden.
 const { test, expect } = require("@playwright/test");
 
-const ENV = { SUPABASE_URL: "https://x.supabase.co", CRON_SECRET: "geheim", GITHUB_TOKEN: "gh-auto", GITHUB_REPOSITORY: "ooeler/magnum" };
+const ENV = { MAGNUM_API_URL: "https://x.neon.test", CRON_SECRET: "geheim", GITHUB_TOKEN: "gh-auto", GITHUB_REPOSITORY: "ooeler/magnum" };
 const res = (status, body) => ({ ok: status < 300, status, json: async () => body, text: async () => JSON.stringify(body) });
 
 function fakeFetch({ pending = [], githubStatus = 201, opsStatus = 200 } = {}) {
@@ -11,7 +11,7 @@ function fakeFetch({ pending = [], githubStatus = 201, opsStatus = 200 } = {}) {
   const f = async (url, init) => {
     const body = JSON.parse(init.body);
     calls.push({ url, auth: init.headers.Authorization, body });
-    if (url.endsWith("/functions/v1/feedback-export")) {
+    if (url.endsWith("/feedback-export")) {
       if (body.action === "pending") return res(opsStatus, { items: pending });
       return res(200, { ok: true });
     }
@@ -53,7 +53,7 @@ test("GitHub-Fehler wird gespeichert und lässt den Lauf fehlschlagen", async ()
   expect(failed.body.error).toContain("401");
 });
 
-test("nicht erreichbare Supabase-Funktion lässt den Lauf fehlschlagen", async () => {
+test("nicht erreichbare Neon-Funktion lässt den Lauf fehlschlagen", async () => {
   const { f } = fakeFetch({ opsStatus: 403 });
   await expect(run({ env: ENV, fetch: f, log: () => {} })).rejects.toThrow("HTTP 403");
 });
@@ -76,7 +76,7 @@ test("meldet geschlossene Issues zurück: umgesetzt oder nicht umgesetzt", async
     14: null,
   };
   const f = async (url, init) => {
-    if (url.endsWith("/functions/v1/feedback-export")) {
+    if (url.endsWith("/feedback-export")) {
       const body = JSON.parse(init.body);
       calls.push(body);
       if (body.action === "pending") return res(200, { items: [] });

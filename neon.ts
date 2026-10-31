@@ -1,8 +1,29 @@
 import { defineConfig } from "@neon/config/v1";
 
 export default defineConfig({
-  // Declare your Neon services here
-  auth: false,
+  auth: true,
+  dataApi: true,
+  buckets: {
+    photos: { access: "private" },
+  },
+  functions: {
+    api: {
+      name: "Magnum API",
+      source: "functions/index.ts",
+      env: {
+        APP_URL: process.env.APP_URL!,
+        CRON_SECRET: process.env.CRON_SECRET!,
+      },
+    },
+  },
+  triggers: {
+    "tagessicherung": {
+      type: "schedule",
+      function: "api",
+      cron: "30 2 * * *",
+      functionPath: "/backup",
+    },
+  },
   // Branch policy: per-branch tuning
   branch: (branch) => {
     if (branch.isDefault) {

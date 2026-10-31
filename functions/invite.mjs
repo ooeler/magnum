@@ -38,7 +38,7 @@ export function clubFull(count, max) {
   return Number(count) >= Number(max || 12);
 }
 
-// Verständliche Meldung für die häufigsten Fehler von Supabase
+// Verständliche Meldung für die häufigsten Fehler des Auth-Dienstes
 export function joinError(message = "") {
   if (/already been registered|already registered|exists/i.test(message)) return "Diese Adresse hat bereits ein Konto. Bitte normal anmelden.";
   if (/password/i.test(message)) return "Das Passwort ist zu schwach. Bitte ein längeres wählen.";

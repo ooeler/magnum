@@ -4,11 +4,13 @@
 set client_min_messages = warning;
 
 -- Testkonten: A Admin (iPhone), B Android, C iPhone, D iPhone, X Nicht-Mitglied
-insert into auth.users (id, email, raw_user_meta_data, raw_app_meta_data) values
-  ('00000000-0000-0000-0000-00000000000a', 'a@test', '{"display_name":"Anna","device":"iphone"}', '{"eingeladen":true}'),
-  ('00000000-0000-0000-0000-00000000000b', 'b@test', '{"display_name":"Beat","device":"android"}', '{"eingeladen":true}'),
-  ('00000000-0000-0000-0000-00000000000c', 'c@test', '{"display_name":"Chris"}', '{"eingeladen":true}'),
-  ('00000000-0000-0000-0000-00000000000d', 'd@test', '{"display_name":"Dani","device":"iphone"}', '{"eingeladen":true}');
+insert into public.invites (token_hash, expires_at, used_at, email, name, device) values
+  ('h-a', now() + interval '1 day', now(), 'a@test', 'Anna', 'iphone'),
+  ('h-b', now() + interval '1 day', now(), 'b@test', 'Beat', 'android'),
+  ('h-c', now() + interval '1 day', now(), 'c@test', 'Chris', null),
+  ('h-d', now() + interval '1 day', now(), 'd@test', 'Dani', 'iphone');
+insert into neon_auth."user" (id, email) values
+  ('00000000-0000-0000-0000-00000000000a', 'a@test'), ('00000000-0000-0000-0000-00000000000b', 'b@test'), ('00000000-0000-0000-0000-00000000000c', 'c@test'), ('00000000-0000-0000-0000-00000000000d', 'd@test');
 update public.profiles set is_admin = true where id = '00000000-0000-0000-0000-00000000000a';
 
 -- Hilfsfunktion: als Person X handeln
@@ -28,12 +30,26 @@ select pg_temp.check((select count(*) from public.profiles) = 4, 'Vier Profile a
 select pg_temp.check((select device from public.profiles where display_name = 'Beat') = 'android', 'Gerät Android aus der Einladung übernommen');
 select pg_temp.check((select device from public.profiles where display_name = 'Chris') = 'iphone', 'Ohne Angabe gilt iPhone');
 select pg_temp.check(public.vote_weight('00000000-0000-0000-0000-00000000000b') = 1, 'Android zählt einfach, bis der Admin es bestätigt');
-insert into auth.users (email, raw_user_meta_data) values ('fremd@test', '{"display_name":"Fremd","device":"android"}');
-select pg_temp.check((select count(*) from public.profiles) = 4, 'Freie Registrierung ergibt kein Profil');
+do $$ begin
+  insert into neon_auth."user" (email) values ('fremd@test');
+  raise exception 'FEHLER: Konto ohne Einladung angelegt';
+exception when raise_exception then
+  if sqlerrm like 'FEHLER%' then raise; end if; raise notice 'ok – Konto nur mit Einladung';
+end $$;
+select pg_temp.check((select count(*) from neon_auth."user") = 4, 'Freie Registrierung hinterlässt kein Konto');
+do $$ begin
+  update public.invites set used_at = now() - interval '6 minutes' where token_hash = 'h-a';
+  insert into public.invites (token_hash, expires_at, used_at, email) values ('h-alt', now(), now() - interval '6 minutes', 'alt@test');
+  insert into neon_auth."user" (email) values ('alt@test');
+  raise exception 'FEHLER: abgelaufene Reservation angenommen';
+exception when raise_exception then
+  if sqlerrm like 'FEHLER%' then raise; end if; raise notice 'ok – Reservation läuft nach 5 Minuten ab';
+end $$;
+select pg_temp.check((select count(*) from public.invites where used_by is not null) = 4, 'Einladungen sind eingelöst');
 
 -- 2) Ohne Login: keine Funktion ausführbar, jede Tabelle mit RLS
 select pg_temp.check((select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-  where n.nspname = 'public' and p.prorettype <> 'trigger'::regtype and has_function_privilege('anon', p.oid, 'EXECUTE')) = 0,
+  where n.nspname = 'public' and p.prorettype <> 'trigger'::regtype and has_function_privilege('anonymous', p.oid, 'EXECUTE')) = 0,
   'Keine Funktion ohne Login ausführbar');
 select pg_temp.check((select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity) = 0, 'Alle Tabellen mit Row Level Security');
@@ -209,18 +225,6 @@ exception when raise_exception then
   if sqlerrm like 'FEHLER%' then raise; end if; raise notice 'ok – volles Auto';
 end $$;
 
--- 13) Fotos nur in den eigenen Ordner
-select pg_temp.als('C');
-insert into storage.objects (bucket_id, name) values ('photos', 'drinks/00000000-0000-0000-0000-00000000000c/a.jpg');
-do $$ begin
-  insert into storage.objects (bucket_id, name) values ('photos', 'drinks/00000000-0000-0000-0000-00000000000b/x.jpg');
-  raise exception 'FEHLER: Foto in fremden Ordner hochgeladen';
-exception when insufficient_privilege then raise notice 'ok – Fotos nur in den eigenen Ordner'; end $$;
-do $$ begin
-  insert into storage.objects (bucket_id, name) values ('photos', 'x/00000000-0000-0000-0000-00000000000c/a.html');
-  raise exception 'FEHLER: Foto in unbekanntem Bereich hochgeladen';
-exception when insufficient_privilege then raise notice 'ok – nur die vier Foto-Bereiche'; end $$;
-
 -- 14) Datensicherung: für Mitglieder unerreichbar, Wiederherstellen bringt alles zurück
 select pg_temp.als('A');
 do $$ begin
@@ -309,14 +313,15 @@ exception when raise_exception then
   if sqlerrm like 'FEHLER%' then raise; end if; raise notice 'ok – abgeschlossene Abstimmung ist zu';
 end $$;
 select pg_temp.als('A');
-select pg_temp.check((select count(*) from public.backups) = 0, 'Sicherungen auch für den Admin nicht lesbar');
+do $$ begin
+  perform 1 from public.backups;
+  raise exception 'FEHLER: Sicherungen für den Admin lesbar';
+exception when insufficient_privilege then raise notice 'ok – Sicherungen auch für den Admin nicht lesbar'; end $$;
 select pg_temp.als('X');
-select pg_temp.check((select count(*) from storage.objects) = 0, 'Nicht-Mitglied sieht keine Fotos');
 select pg_temp.check((select count(*) from public.profiles) = 0, 'Nicht-Mitglied sieht keine Mitglieder');
 reset role;
 
 -- 16) Fristen und Spielregeln gelten auch an der App vorbei
-select pg_temp.check((select file_size_limit = 5242880 and allowed_mime_types = array['image/jpeg'] from storage.buckets where id = 'photos'), 'Speicher begrenzt: 5 MB, nur JPEG');
 create or replace function pg_temp.verboten(p_sql text, msg text) returns void language plpgsql as $$
 begin
   begin
@@ -398,7 +403,8 @@ select pg_temp.als('');
 
 -- Club voll: ab settings.max_members wird das Konto abgelehnt
 update public.settings set max_members = (select count(*) from public.profiles);
-select pg_temp.verboten($q$insert into auth.users (email, raw_app_meta_data) values ('zuviel@test', '{"eingeladen":true}')$q$, 'Voller Club nimmt niemanden auf');
+insert into public.invites (token_hash, expires_at, used_at, email) values ('h-zuviel', now() + interval '1 day', now(), 'zuviel@test');
+select pg_temp.verboten($q$insert into neon_auth."user" (email) values ('zuviel@test')$q$, 'Voller Club nimmt niemanden auf');
 update public.settings set max_members = 12;
 
 select 'ALLE DB-TESTS GRÜN' as ergebnis;

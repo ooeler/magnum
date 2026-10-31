@@ -6,6 +6,6 @@ import { build } from "./build.mjs";
 import { serve } from "./serve.mjs";
 
 const out = build();
-copyFileSync(join(out, "..", "tests", "mock-supabase.js"), join(out, "config.js"));
+copyFileSync(join(out, "..", "tests", "mock-neon.js"), join(out, "config.js"));
 console.log("Demo: http://localhost:4174  (Login z. B. ot@magnum.test / magnum123)");
 serve(out, 4174);

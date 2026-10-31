@@ -1,5 +1,5 @@
 -- Magnum – Datenbank einrichten.
--- Im Supabase-Dashboard → SQL Editor einfügen und ausführen. Mehrfaches Ausführen ist unproblematisch.
+-- Spielt der Release-Workflow ein (Neon Auth und Data API müssen aktiv sein). Mehrfaches Ausführen ist unproblematisch.
 -- Grundsatz: Mitglieder sehen alles im Club und ändern nur ihre eigenen Einträge.
 -- Ohne Login sieht man nichts. Abstimmungen, Einladungen und Admin-Rechte laufen nur über Funktionen.
 
@@ -24,11 +24,11 @@ create table if not exists public.app_status (
 alter table public.app_status enable row level security;
 insert into public.app_status (id) values ('main') on conflict do nothing;
 drop policy if exists "Status lesen" on public.app_status;
-create policy "Status lesen" on public.app_status for select to anon, authenticated using (true);
+create policy "Status lesen" on public.app_status for select to anonymous, authenticated using (true);
 
 -- ───────────── Mitglieder ─────────────
 create table if not exists public.profiles (
-  id                  uuid primary key references auth.users(id) on delete cascade,
+  id                  uuid primary key references neon_auth."user"(id) on delete cascade,
   display_name        text not null default '' check (length(display_name) <= 40),
   nickname            text check (length(nickname) <= 40),
   role_title          text not null default 'Mitglied' check (length(role_title) <= 40),
@@ -81,23 +81,55 @@ drop trigger if exists club_size_check on public.profiles;
 create trigger club_size_check before insert on public.profiles
   for each row execute function public.check_club_size();
 
--- Neue Konten entstehen nur über die Edge Function "invite". Nur sie kann app_metadata setzen, bei einer
--- freien Registrierung fehlt das Merkmal: Das Konto bekommt kein Profil und bleibt ohne Zugriff.
--- Name und Gerät kommen aus den Metadaten, die die Function beim Anlegen mitgibt.
-create or replace function public.handle_new_user() returns trigger
+-- ───────────── Einladungen (Link statt Mail, siehe functions/index.ts) ─────────────
+create table if not exists public.invites (
+  id          bigint generated always as identity primary key,
+  token_hash  text not null unique,
+  created_by  uuid references neon_auth."user"(id) on delete set null,
+  created_at  timestamptz not null default now(),
+  expires_at  timestamptz not null,
+  used_at     timestamptz,
+  used_by     uuid references neon_auth."user"(id) on delete set null,
+  email       text,                           -- Reservation beim Einlösen, siehe gate_new_user
+  name        text,
+  device      text,
+  als_admin   boolean not null default false  -- nur der allererste Link (scripts/erster-link.mjs)
+);
+alter table public.invites enable row level security;
+revoke all on table public.invites from anonymous, authenticated;
+
+-- Neue Konten entstehen nur über einen Einladungslink: Die Function reserviert die Adresse, erst dann
+-- nimmt die Datenbank das Konto an. Eine freie Registrierung über den Auth-Dienst scheitert hier.
+create or replace function public.gate_new_user() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
-  if new.raw_app_meta_data->>'eingeladen' is distinct from 'true' then return new; end if;
-  insert into public.profiles (id, display_name, device, since_year)
-  values (new.id,
-          left(coalesce(nullif(trim(new.raw_user_meta_data->>'display_name'), ''), split_part(new.email, '@', 1)), 40),
-          case when new.raw_user_meta_data->>'device' = 'android' then 'android' else 'iphone' end,
-          extract(year from now())::int)
-  on conflict do nothing;
+  if not exists (select 1 from public.invites where email = lower(new.email) and used_by is null and used_at > now() - interval '5 minutes') then
+    raise exception 'Konto nur mit Einladung';
+  end if;
   return new;
 end $$;
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created after insert on auth.users
+drop trigger if exists user_gate on neon_auth."user";
+create trigger user_gate before insert on neon_auth."user"
+  for each row execute function public.gate_new_user();
+
+-- Name und Gerät stehen in der Reservation
+create or replace function public.handle_new_user() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare i public.invites;
+begin
+  select * into i from public.invites where email = lower(new.email) and used_by is null order by used_at desc limit 1;
+  if not found then return new; end if;
+  insert into public.profiles (id, display_name, device, since_year, is_admin, invited_by)
+  values (new.id, left(coalesce(nullif(trim(i.name), ''), split_part(new.email, '@', 1)), 40),
+          case when i.device = 'android' then 'android' else 'iphone' end,
+          extract(year from now())::int, i.als_admin,
+          (select p.id from public.profiles p where p.id = i.created_by))
+  on conflict do nothing;
+  update public.invites set used_by = new.id where id = i.id;
+  return new;
+end $$;
+drop trigger if exists on_auth_user_created on neon_auth."user";
+create trigger on_auth_user_created after insert on neon_auth."user"
   for each row execute function public.handle_new_user();
 
 -- Beim App-Start: eigenes Profil + letzter Besuch (für "willkommen zurück"), Besuch speichern
@@ -110,19 +142,6 @@ begin
   update public.profiles set last_seen = now() where id = auth.uid();
   return json_build_object('id', r.id, 'is_admin', r.is_admin, 'prev_seen', r.last_seen);
 end $$;
-
--- ───────────── Einladungen (Link statt Mail, siehe functions/invite) ─────────────
-create table if not exists public.invites (
-  id          bigint generated always as identity primary key,
-  token_hash  text not null unique,
-  created_by  uuid references auth.users(id) on delete set null,
-  created_at  timestamptz not null default now(),
-  expires_at  timestamptz not null,
-  used_at     timestamptz,
-  used_by     uuid references auth.users(id) on delete set null
-);
-alter table public.invites enable row level security;
-revoke all on table public.invites from anon, authenticated;
 
 -- ───────────── Admin: Gerätetyp und Funktion anpassen (mit Protokoll) ─────────────
 create table if not exists public.admin_log (
@@ -646,10 +665,10 @@ drop trigger if exists phrase_fee_set on public.phrases;
 create trigger phrase_fee_set before insert on public.phrases for each row execute function public.set_phrase_fee();
 
 -- ───────────── Verbesserungsvorschläge → GitHub-Issues ─────────────
--- Geschrieben nur von den Edge Functions "feedback" / "feedback-export" (Service Role).
+-- Geschrieben nur von der Function "api", die als Datenbank-Besitzer läuft.
 create table if not exists public.feedback (
   id           bigint generated always as identity primary key,
-  user_id      uuid not null references auth.users(id) on delete cascade,
+  user_id      uuid not null references neon_auth."user"(id) on delete cascade,
   kind         text not null default 'idee' check (kind in ('idee', 'fehler', 'wunsch')),
   title        text not null,
   body         text not null,
@@ -663,7 +682,27 @@ create table if not exists public.feedback (
 create index if not exists feedback_status on public.feedback (status, created_at);
 alter table public.feedback enable row level security;
 
+-- Live-Sync: Jede Änderung erhöht den Stand, die offene App fragt danach (app/client.js)
+create table if not exists public.sync_stand (
+  id    int primary key default 1 check (id = 1),
+  stand bigint not null default 0
+);
+alter table public.sync_stand enable row level security;
+insert into public.sync_stand (id) values (1) on conflict do nothing;
+create or replace function public.sync_bump() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  update public.sync_stand set stand = stand + 1 where id = 1;
+  return null;
+end $$;
+
 -- ═════════════ Zugriffsregeln (Row Level Security) ═════════════
+
+-- Die Data API läuft als Rolle "authenticated". Was sie darf, regeln danach Spalten-Rechte und Policies.
+grant usage on schema public to anonymous, authenticated;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+revoke all on table public.invites from anonymous, authenticated;
+grant select on public.app_status to anonymous;
 
 -- Lesen: alle Mitglieder (Einladungen nie direkt, nur über die Edge Function)
 do $$
@@ -672,7 +711,7 @@ begin
   foreach t in array array['settings', 'profiles', 'admin_log', 'restaurants', 'restaurant_visits',
     'restaurant_ratings', 'events', 'rsvps', 'magnums', 'magnum_guests', 'rides', 'ride_passengers', 'trips',
     'trip_participants', 'trip_photos', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
-    'phrases', 'sayings', 'saying_prosts', 'feedback']
+    'phrases', 'sayings', 'saying_prosts', 'feedback', 'sync_stand']
   loop
     execute format('drop policy if exists "Mitglieder lesen" on public.%I', t);
     execute format('create policy "Mitglieder lesen" on public.%I for select to authenticated using (public.is_member())', t);
@@ -758,66 +797,48 @@ grant update (phrase) on public.phrases to authenticated;
 -- ═════════════ Funktionsrechte ═════════════
 -- In Postgres darf standardmässig jeder (PUBLIC) Funktionen ausführen – deshalb überall explizit entziehen.
 alter default privileges in schema public revoke execute on functions from public;
-revoke execute on function public.is_member() from public, anon;
-revoke execute on function public.is_admin() from public, anon;
-revoke execute on function public.vote_weight(uuid) from public, anon;
-revoke execute on function public.me() from public, anon;
-revoke execute on function public.admin_set_device(uuid, text) from public, anon;
-revoke execute on function public.admin_set_role(uuid, text) from public, anon;
-revoke execute on function public.claim_organizer(uuid) from public, anon;
-revoke execute on function public.open_magnum_kasse() from public, anon;
-revoke execute on function public.eligible_voters(uuid) from public, anon;
-revoke execute on function public.resolve_proposal(uuid) from public, anon, authenticated;
-revoke execute on function public.propose_sacceri(uuid, uuid) from public, anon;
-revoke execute on function public.propose_nickname(uuid, text) from public, anon;
-revoke execute on function public.second_proposal(uuid) from public, anon;
-revoke execute on function public.cast_ballot(uuid, boolean) from public, anon;
-revoke execute on function public.handle_new_user() from public, anon, authenticated;
-revoke execute on function public.check_ride_passenger() from public, anon, authenticated;
-revoke execute on function public.heute() from public, anon, authenticated;
-revoke execute on function public.check_club_size() from public, anon, authenticated;
-revoke execute on function public.check_event() from public, anon, authenticated;
-revoke execute on function public.check_rsvp() from public, anon, authenticated;
-revoke execute on function public.check_trip() from public, anon, authenticated;
-revoke execute on function public.check_trip_participant() from public, anon, authenticated;
-revoke execute on function public.set_created_at() from public, anon, authenticated;
-revoke execute on function public.set_phrase_fee() from public, anon, authenticated;
+revoke execute on function public.is_member() from public, anonymous;
+revoke execute on function public.is_admin() from public, anonymous;
+revoke execute on function public.vote_weight(uuid) from public, anonymous;
+revoke execute on function public.me() from public, anonymous;
+revoke execute on function public.admin_set_device(uuid, text) from public, anonymous;
+revoke execute on function public.admin_set_role(uuid, text) from public, anonymous;
+revoke execute on function public.claim_organizer(uuid) from public, anonymous;
+revoke execute on function public.open_magnum_kasse() from public, anonymous;
+revoke execute on function public.eligible_voters(uuid) from public, anonymous;
+revoke execute on function public.resolve_proposal(uuid) from public, anonymous, authenticated;
+revoke execute on function public.propose_sacceri(uuid, uuid) from public, anonymous;
+revoke execute on function public.propose_nickname(uuid, text) from public, anonymous;
+revoke execute on function public.second_proposal(uuid) from public, anonymous;
+revoke execute on function public.cast_ballot(uuid, boolean) from public, anonymous;
+revoke execute on function public.handle_new_user() from public, anonymous, authenticated;
+revoke execute on function public.gate_new_user() from public, anonymous, authenticated;
+revoke execute on function public.sync_bump() from public, anonymous, authenticated;
+revoke execute on function public.check_ride_passenger() from public, anonymous, authenticated;
+revoke execute on function public.heute() from public, anonymous, authenticated;
+revoke execute on function public.check_club_size() from public, anonymous, authenticated;
+revoke execute on function public.check_event() from public, anonymous, authenticated;
+revoke execute on function public.check_rsvp() from public, anonymous, authenticated;
+revoke execute on function public.check_trip() from public, anonymous, authenticated;
+revoke execute on function public.check_trip_participant() from public, anonymous, authenticated;
+revoke execute on function public.set_created_at() from public, anonymous, authenticated;
+revoke execute on function public.set_phrase_fee() from public, anonymous, authenticated;
 grant execute on function public.is_member(), public.is_admin(), public.vote_weight(uuid), public.me(),
   public.admin_set_device(uuid, text), public.admin_set_role(uuid, text), public.claim_organizer(uuid),
   public.open_magnum_kasse(), public.eligible_voters(uuid), public.propose_sacceri(uuid, uuid),
   public.propose_nickname(uuid, text), public.second_proposal(uuid), public.cast_ballot(uuid, boolean)
   to authenticated;
 
--- ═════════════ Fotos: privat, nur für Mitglieder ═════════════
--- Pfad: <bereich>/<user-id>/<datei>.jpg – hochladen nur in den eigenen Ordner.
--- Die App verkleinert jedes Bild zu einem JPEG, der Speicher nimmt nichts anderes an.
-insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('photos', 'photos', false, 5242880, array['image/jpeg'])
-on conflict (id) do update set public = false, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
-drop policy if exists "Fotos: Mitglieder lesen" on storage.objects;
-drop policy if exists "Fotos: in eigenen Ordner hochladen" on storage.objects;
-drop policy if exists "Fotos: eigene löschen" on storage.objects;
-create policy "Fotos: Mitglieder lesen" on storage.objects for select to authenticated
-  using (bucket_id = 'photos' and public.is_member());
-create policy "Fotos: in eigenen Ordner hochladen" on storage.objects for insert to authenticated
-  with check (bucket_id = 'photos' and public.is_member() and (storage.foldername(name))[2] = auth.uid()::text
-    and (storage.foldername(name))[1] in ('drinks', 'trips', 'cards', 'receipts'));
-create policy "Fotos: eigene löschen" on storage.objects for delete to authenticated
-  using (bucket_id = 'photos' and ((storage.foldername(name))[2] = auth.uid()::text or public.is_admin()));
-
--- ═════════════ Live-Sync: Änderungen erscheinen sofort auf allen Handys ═════════════
+-- ═════════════ Live-Sync: Änderungen melden ═════════════
 do $$
 declare t text;
 begin
-  if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then return; end if;
   foreach t in array array['profiles', 'events', 'rsvps', 'magnums', 'magnum_guests', 'rides', 'ride_passengers',
     'trips', 'trip_participants', 'trip_photos', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
-    'phrases', 'sayings', 'saying_prosts', 'restaurants', 'restaurant_visits', 'restaurant_ratings', 'feedback',
-    'admin_log', 'app_status']
+    'phrases', 'sayings', 'saying_prosts', 'restaurants', 'restaurant_visits', 'restaurant_ratings', 'feedback', 'admin_log']
   loop
-    if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t) then
-      execute format('alter publication supabase_realtime add table public.%I', t);
-    end if;
+    execute format('drop trigger if exists sync_bump on public.%I', t);
+    execute format('create trigger sync_bump after insert or update or delete on public.%I for each statement execute function public.sync_bump()', t);
   end loop;
 end $$;
 
@@ -832,6 +853,7 @@ create table if not exists public.backups (
 );
 create index if not exists backups_saved_at on public.backups (saved_at desc);
 alter table public.backups enable row level security;
+revoke all on table public.backups from anonymous, authenticated;
 
 -- Alle Tabellen in der Reihenfolge der Fremdschlüssel: referenzierte zuerst. Neue Tabellen sind automatisch dabei.
 create or replace function public.backup_tables() returns text[]
@@ -839,7 +861,7 @@ language plpgsql stable set search_path = public as $$
 declare rest text[]; frei text[]; fertig text[] := '{}';
 begin
   select array_agg(c.relname::text) into rest from pg_class c join pg_namespace n on n.oid = c.relnamespace
-  where n.nspname = 'public' and c.relkind = 'r' and c.relname not in ('backups', 'schema_migrations', 'app_status');
+  where n.nspname = 'public' and c.relkind = 'r' and c.relname not in ('backups', 'schema_migrations', 'app_status', 'sync_stand');
   while cardinality(rest) > 0 loop
     select array_agg(t) into frei from unnest(rest) t
     where not exists (
@@ -852,7 +874,7 @@ begin
   end loop;
   return fertig;
 end $$;
-revoke execute on function public.backup_tables() from public, anon, authenticated;
+revoke execute on function public.backup_tables() from public, anonymous, authenticated;
 
 create or replace function public.snapshot_club(p_reason text default 'manuell') returns bigint
 language plpgsql set search_path = public as $$
@@ -869,7 +891,7 @@ begin
     select id from public.backups where reason like 'vor Release%' order by saved_at desc, id desc offset 30);
   return hid;
 end $$;
-revoke execute on function public.snapshot_club(text) from public, anon, authenticated;
+revoke execute on function public.snapshot_club(text) from public, anonymous, authenticated;
 
 -- Stand wiederherstellen, nur im SQL Editor: select public.restore_club(<id>);
 -- Läuft als eine Transaktion: Scheitert etwas, bleibt alles wie es war. Der aktuelle Stand wird vorher gesichert.
@@ -891,13 +913,6 @@ begin
     end if;
   end loop;
 end $$;
-revoke execute on function public.restore_club(bigint) from public, anon, authenticated;
+revoke execute on function public.restore_club(bigint) from public, anonymous, authenticated;
 
--- Tägliche Sicherung um 02:30 UTC (pg_cron gibt es in Supabase, im Test-Postgres nicht)
-do $$
-begin
-  if exists (select 1 from pg_available_extensions where name = 'pg_cron') then
-    create extension if not exists pg_cron;
-    perform cron.schedule('club-backup', '30 2 * * *', $job$ select public.snapshot_club('täglich') $job$);
-  end if;
-end $$;
+-- Die tägliche Sicherung startet ein Function Trigger (neon.ts): pg_cron läuft nicht, solange die Datenbank schläft.

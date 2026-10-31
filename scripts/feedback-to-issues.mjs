@@ -1,11 +1,11 @@
-// Holt neue Verbesserungsvorschläge aus Supabase und legt sie als GitHub-Issues an.
+// Holt neue Verbesserungsvorschläge aus Neon und legt sie als GitHub-Issues an.
 // Läuft in GitHub Actions (feedback-issues.yml) mit dem eingebauten GITHUB_TOKEN.
-// Env: SUPABASE_URL, CRON_SECRET, GITHUB_TOKEN, GITHUB_REPOSITORY
+// Env: MAGNUM_API_URL, CRON_SECRET, GITHUB_TOKEN, GITHUB_REPOSITORY
 // Exit-Code 1, wenn etwas schiefgeht → GitHub meldet den fehlgeschlagenen Lauf per Mail.
 
 export async function run({ env, fetch: f = fetch, log = console.log }) {
   const ops = (body) =>
-    f(`${env.SUPABASE_URL}/functions/v1/feedback-export`, {
+    f(`${env.MAGNUM_API_URL}/feedback-export`, {
       method: "POST",
       headers: { Authorization: `Bearer ${env.CRON_SECRET}`, "Content-Type": "application/json" },
       body: JSON.stringify(body),

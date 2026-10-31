@@ -133,13 +133,13 @@ details summary{cursor:pointer;font-weight:700;list-style:none}details summary::
 <div id="app"></div>
 <div id="toast" role="status" hidden></div>
 <script src="config.js"></script>
-<script src="vendor/supabase.js"></script>
+<script src="client.js"></script>
 <script>
 "use strict";
 // ═══════════════════════════════════════════════════════════════════════
 //  Magnum – App des Magnum Clubs: Anlässe, Reisen, Mitglieder, Sammelkarten, Statistik.
 //  Gamification (Punkte, Streak, Ränge), Zusammenhalt (Club-Ziel, Prost-Wand), Geselligkeit.
-//  Daten: Supabase (Row Level Security). Abstimmungen laufen über Datenbank-Funktionen.
+//  Daten: Neon (Row Level Security). Abstimmungen laufen über Datenbank-Funktionen.
 // ═══════════════════════════════════════════════════════════════════════
 var C = window.MG_CONFIG || {}, sb = null, ME = null, PRF = null, PREV = null, MAINT = false, READY = false;
 var TABLES = ["settings", "profiles", "events", "rsvps", "magnums", "magnum_guests", "rides", "ride_passengers", "trips",
@@ -408,7 +408,7 @@ function render() {
   var keep = { main: window.scrollY, ov: ov ? ov.scrollTop : 0, sh: sh ? sh.scrollTop : 0 };
   var f = document.activeElement, fk = f && f.getAttribute && f.getAttribute("data-k"), fs = f && f.selectionStart;
   var html;
-  if (!sb) html = authShell('<div class="card"><b>Noch nicht eingerichtet</b><span class="mu sm">In <code>config.js</code> fehlen die Supabase-Werte (siehe README).</span></div>');
+  if (!sb) html = authShell('<div class="card"><b>Noch nicht eingerichtet</b><span class="mu sm">In <code>config.js</code> fehlen die Neon-Adressen (siehe README).</span></div>');
   else if (MAINT) html = authShell('<div class="card"><span class="big">Update wird eingespielt</span><span class="mu">Gleich geht es weiter. Die App lädt danach von selbst neu.</span></div>');
   else if (INVITE) html = joinView();
   else if (AUTH.mode == "recovery") html = recoveryView();
@@ -1215,8 +1215,8 @@ function readInvite() {
   });
 }
 function start() {
-  if (!C.url || !C.key || !window.supabase) { render(); return }
-  sb = window.supabase.createClient(C.url, C.key);
+  if (!C.data || !C.api || !window.magnumDb) { render(); return }
+  sb = window.magnumDb.createClient(C);
   sb.from("app_status").select("maintenance").eq("id", "main").maybeSingle().then(function (r) { if (r.data && r.data.maintenance) { MAINT = true; render() } });
   readInvite();
   sb.auth.onAuthStateChange(function (ev, s) {
@@ -1226,7 +1226,6 @@ function start() {
     if (was == ME.id && READY) return;
     if (INVITE && INVITE.state != "bad") { INVITE = null; history.replaceState(null, "", location.pathname + location.search) }
     READY = false; render();
-    // Keine Supabase-Aufrufe direkt im Callback (supabase-js kann sonst blockieren) – darum setTimeout
     setTimeout(function () {
       sb.rpc("me").then(function (r) { PREV = r.data && r.data.prev_seen; return loadAll() }).then(function () { READY = true; render(); loadInvites() });
       if (CH) return;

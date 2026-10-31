@@ -8,22 +8,20 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const src = join(root, "app"), out = join(root, "dist");
-const supabase = process.env.SUPABASE_URL || "https://*.supabase.co";
+// Adressen der Data API, der Function und des Foto-Speichers. Ohne Angabe: alle Neon-Hosts
+const hosts = (process.env.NEON_HOSTS || "https://*.neon.tech").split(",");
 
-export function csp(html, supabaseUrl = supabase) {
+export function csp(html, neon = hosts) {
   const hashes = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)]
     .map((m) => `'sha256-${createHash("sha256").update(m[1], "utf8").digest("base64")}'`);
-  const host = supabaseUrl.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
-  // http nur für die lokale Test-Datenbank der E2E-Tests, ausgeliefert wird immer https
-  const [http, ws] = /^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(supabaseUrl) ? ["http", "ws"] : ["https", "wss"];
   return [
     "default-src 'self'",
     `script-src 'self' ${hashes.join(" ")}`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
-    `connect-src 'self' ${http}://${host} ${ws}://${host}`,
-    // Fotos kommen als signierte Links aus dem privaten Supabase-Speicher
-    `img-src 'self' data: blob: ${http}://${host}`,
+    `connect-src 'self' ${neon.join(" ")}`,
+    // Fotos kommen als signierte Links aus dem privaten Neon-Speicher
+    `img-src 'self' data: blob: ${neon.join(" ")}`,
     "worker-src 'self'",
     "manifest-src 'self'",
     "base-uri 'none'",

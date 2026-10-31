@@ -1,6 +1,6 @@
 // Bei jeder Änderung an der App die Version erhöhen, damit Handys das Update laden (macht der Release-Workflow).
 var V = "mg-v1";
-var SHELL = ["./", "index.html", "config.js", "vendor/supabase.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png"];
+var SHELL = ["./", "index.html", "config.js", "client.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png"];
 
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(V).then(function (c) { return c.addAll(SHELL) }).then(function () { return self.skipWaiting() }));
@@ -13,7 +13,7 @@ self.addEventListener("activate", function (e) {
 });
 
 // App-Dateien: zuerst Netz (für Updates), offline aus dem Cache. Schriften: Cache zuerst.
-// Anfragen an Supabase (andere Domain, auch Fotos) werden nie gecacht.
+// Anfragen an Neon (andere Domain, auch Fotos) werden nie gecacht.
 self.addEventListener("fetch", function (e) {
   var r = e.request;
   if (r.method != "GET") return;

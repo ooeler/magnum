@@ -1,17 +1,16 @@
 const path = require("path");
 const base = require("@playwright/test");
 
-const MOCK = path.join(__dirname, "mock-supabase.js");
+const MOCK = path.join(__dirname, "mock-neon.js");
 const OT = { email: "ot@magnum.test", password: "magnum123" };      // Admin, iPhone
 const BEAT = { email: "beat@magnum.test", password: "magnum123" };  // Android
 const CHRIS = { email: "chris@magnum.test", password: "magnum123" };
 
-// Jede Seite: feste Zeit, Supabase-Nachbau statt config.js, keine externen Requests.
+// Jede Seite: feste Zeit, Neon-Nachbau statt config.js, keine externen Requests.
 async function setup(page) {
   await page.clock.setFixedTime(new Date("2026-10-31T10:00:00+01:00"));
   await page.addInitScript(() => { try { Object.defineProperty(navigator, "share", { value: undefined }) } catch (e) {} });
   await page.route("**/config.js", (r) => r.fulfill({ path: MOCK, contentType: "application/javascript" }));
-  await page.route("**/vendor/supabase.js", (r) => r.fulfill({ body: "", contentType: "application/javascript" }));
   await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
   page.on("dialog", (d) => d.accept());
 }
