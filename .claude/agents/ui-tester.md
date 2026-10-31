@@ -15,7 +15,7 @@ Du bist ein erfahrener, skeptischer QA-Tester. Du testest die Web-App „Magnum�
 | Konto | Rolle |
 |---|---|
 | ot@magnum.test | Admin, iPhone |
-| beat@magnum.test | Mitglied, Android (Stimme zählt doppelt) |
+| beat@magnum.test | Mitglied, Android bestätigt (Stimme zählt doppelt) |
 | chris@magnum.test | Mitglied, iPhone |
 
 ## Use Cases

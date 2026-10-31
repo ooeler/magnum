@@ -10,7 +10,7 @@
     function claims(t) { try { return JSON.parse(decodeURIComponent(escape(atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))))) } catch (e) { return {} } }
     function sitzung(session, token) { var c = claims(token); return { session: session, token: token, exp: c.exp || 0, user: { id: c.sub, email: c.email } } }
     function melden(ev, s) { SUBS.forEach(function (cb) { cb(ev, s) }) }
-    function fehler(j, r) { return { message: (j && (j.message || j.error)) || "Fehler " + r.status, code: j && j.code } }
+    function fehler(j, r) { return { message: (j && (j.message || j.error)) || "Fehler " + r.status, code: j && j.code, status: r.status } }
 
     function api(pfad, body, kopf) {
       var h = Object.assign({ "Content-Type": "application/json" }, kopf || {});
@@ -23,9 +23,11 @@
       if (!S) return Promise.resolve(null);
       if (S.exp * 1000 - Date.now() > 60000) return Promise.resolve(S.token);
       return api("/auth/token", { session: S.session }).then(function (r) {
-        if (r.error) { merken(null); melden("SIGNED_OUT", null); return null }
+        // Nur eine wirklich abgelaufene Sitzung meldet ab. Bei Überlast oder ohne Netz bleibt man angemeldet
+        if (r.error && r.error.status == 401) { merken(null); melden("SIGNED_OUT", null); return null }
+        if (r.error) return S.token;
         merken(sitzung(S.session, r.data.token)); return S.token;
-      });
+      }).catch(function () { return S.token });
     }
     function mitLogin(fn) { return token().then(function (t) { return fn(t ? { Authorization: "Bearer " + t } : {}) }) }
 

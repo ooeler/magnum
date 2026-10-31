@@ -17,9 +17,4 @@ create table if not exists neon_auth."user" (
   name text
 );
 
--- Test: die "angemeldete" Person kommt aus einer Session-Variable
-create or replace function auth.uid() returns uuid language sql stable as $$
-  select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
-$$;
-grant execute on function auth.uid() to anonymous, authenticated;
 

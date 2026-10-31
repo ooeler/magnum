@@ -43,10 +43,13 @@ const auth = (pfad: string, body?: unknown, cookie?: string) => fetch(AUTH + pfa
   body: body ? JSON.stringify(body) : undefined,
 });
 const cookies = (r: Response) => r.headers.getSetCookie().map((x) => x.split(";")[0]).join("; ");
+// Der Auth-Dienst begrenzt Anfragen pro Absender, und für ihn sind alle Mitglieder diese Function:
+// Überlast (429) heisst nicht, dass die Sitzung abgelaufen ist.
 const tokenFor = async (session: string) => {
   const r = await auth("/token", undefined, session);
-  return r.ok ? (await r.json()).token as string : null;
+  return { status: r.status, token: r.ok ? (await r.json()).token as string : null };
 };
+const BESETZT = { error: "Gerade sehr viel los. Bitte in ein paar Sekunden nochmals versuchen." };
 const userId = async (req: Request) => {
   const t = (req.headers.get("authorization") || "").replace(/^Bearer /, "");
   if (!t) return null;
@@ -74,14 +77,17 @@ app.get("/status", async (c) => {
 app.post("/auth/login", async (c) => {
   const b = await c.req.json().catch(() => ({}));
   const r = await auth("/sign-in/email", { email: String(b.email ?? ""), password: String(b.password ?? "") });
+  if (r.status === 429) return c.json(BESETZT, 429);
   if (!r.ok) return c.json({ error: "Invalid login credentials" }, 400);
-  const session = cookies(r), token = await tokenFor(session);
-  return token ? c.json({ session, token }) : c.json({ error: "Anmeldung fehlgeschlagen" }, 500);
+  const session = cookies(r), t = await tokenFor(session);
+  if (t.status === 429) return c.json(BESETZT, 429);
+  return t.token ? c.json({ session, token: t.token }) : c.json({ error: "Anmeldung fehlgeschlagen" }, 500);
 });
 app.post("/auth/token", async (c) => {
   const b = await c.req.json().catch(() => ({}));
-  const token = await tokenFor(String(b.session ?? ""));
-  return token ? c.json({ token }) : c.json({ error: "Sitzung abgelaufen" }, 401);
+  const t = await tokenFor(String(b.session ?? ""));
+  if (t.status === 429) return c.json(BESETZT, 429);
+  return t.token ? c.json({ token: t.token }) : c.json({ error: "Sitzung abgelaufen" }, 401);
 });
 app.post("/auth/logout", async (c) => {
   const b = await c.req.json().catch(() => ({}));
@@ -131,6 +137,7 @@ app.post("/invite", async (c) => {
     const r = await auth("/sign-up/email", { email: j.email, password: j.password, name: j.name });
     if (!r.ok) {
       await q("update public.invites set used_at = null, email = null, name = null, device = null where id = $1", [inv.id]); // Link bleibt gültig
+      if (r.status === 429) return c.json(BESETZT, 429);
       // Hat jemand gleichzeitig den letzten Platz genommen, kommt nur ein allgemeiner Fehler zurück
       if (await full()) return c.json({ error: "Der Club ist voll. Bitte beim Admin melden." }, 409);
       const e = await r.json().catch(() => ({}));
