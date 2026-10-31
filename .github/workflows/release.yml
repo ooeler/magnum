@@ -1,7 +1,7 @@
 # Deployment. Läuft automatisch nach jedem gemergten Pull Request (siehe auto-merge.yml)
 # oder manuell über ein veröffentlichtes Release / "Run workflow".
-# Reihenfolge: Tests → Wartungsseite an → Datenbank (setup.sql + Migrationen) → Sicherheitsprüfung → Edge Functions → App (GitHub Pages) → Wartungsseite aus.
-# Bricht ein Schritt ab, geht nichts Neues live.
+# Reihenfolge: Tests → Backup → Wartungsseite an → Datenbank (setup.sql + Migrationen) → Sicherheitsprüfung → Funktionstest → Edge Functions → Mailvorlagen → App (GitHub Pages) → Wartungsseite aus.
+# Bricht ein Schritt ab, geht nichts Neues live; das Backup erlaubt jederzeit ein Rollback (README: Rollback).
 name: Release
 
 on:
@@ -48,6 +48,15 @@ jobs:
         with:
           version: 2.122.0  # gleiche Version wie lokal getestet
 
+      - name: Backup vor dem Deployment
+        # direkt per SQL – beim allerersten Release gibt es die Funktion noch nicht
+        run: |
+          supabase db query --agent no --linked --project-ref "$REF" \
+            "do \$\$ begin if to_regprocedure('public.snapshot_club(text)') is not null then
+               perform public.snapshot_club('vor Release ${GITHUB_REF_NAME}');
+             end if; end \$\$" > /dev/null
+          echo "Backup vor Release ${GITHUB_REF_NAME} erstellt"
+
       - name: Wartungsseite einschalten
         # offene Apps zeigen sofort "Update wird eingespielt" und speichern nichts, bis das Update live ist
         run: |
@@ -83,6 +92,14 @@ jobs:
           [ -z "$t" ] || { echo "::error::Tabellen ohne Row Level Security: $t"; exit 1; }
           echo "Funktionsrechte und Row Level Security in Ordnung"
 
+      - name: Funktionstest Datenbank (ohne bleibende Änderung)
+        run: |
+          # sichert in der echten DB und macht es sofort rückgängig; jeder andere Fehler stoppt das Release
+          supabase db query --agent no --linked --project-ref "$REF" \
+            "do \$\$ begin begin perform public.snapshot_club('Funktionstest'); raise exception using errcode = 'P0099';
+             exception when sqlstate 'P0099' then null; end; end \$\$" > /dev/null
+          echo "snapshot_club funktioniert"
+
       - name: Secret für die Vorschläge-Schnittstelle (feedback-export)
         run: supabase secrets set CRON_SECRET="$CRON_SECRET" --project-ref "$REF" > /dev/null
 
@@ -93,6 +110,14 @@ jobs:
             case "$fn" in feedback) flags="" ;; *) flags="--no-verify-jwt" ;; esac  # invite (Einladung ohne Login) und feedback-export prüfen selbst
             supabase functions deploy "$fn" $flags --use-api --project-ref "$REF"
           done
+
+      - name: Mailvorlagen auf Deutsch (Passwort zurücksetzen usw.)
+        # Die Standardvorlagen von Supabase sind englisch. Ein Fehler hier stoppt das Deployment nicht, wird aber gemeldet.
+        run: |
+          code=$(curl -s -o /tmp/antwort.json -w "%{http_code}" -m 30 -X PATCH "https://api.supabase.com/v1/projects/$REF/config/auth" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" --data @supabase/mail-vorlagen.json)
+          if [ "$code" = "200" ]; then echo "Mailvorlagen aktuell"; else echo "::warning::Mailvorlagen nicht aktualisiert (HTTP $code): $(jq -r '.message // .error // "keine Angabe"' /tmp/antwort.json 2>/dev/null | head -c 300)"; fi
+          rm -f /tmp/antwort.json  # die Antwort enthält die Auth-Konfiguration
 
   pages:
     needs: backend
@@ -109,7 +134,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
-      - run: if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev --no-audit --no-fund; fi
+      - run: npm ci --omit=dev
       - name: config.js aus den Repository-Variablen schreiben
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}

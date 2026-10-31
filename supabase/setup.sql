@@ -668,3 +668,84 @@ begin
     end if;
   end loop;
 end $$;
+
+-- ═════════════ Datensicherung ═════════════
+-- Vor jedem Release und täglich wird der ganze Club als JSON gesichert (ohne Fotos, die liegen im Speicher).
+-- Niemand kommt über die App an die Sicherungen: keine Policy, Funktionen nur im SQL Editor / Release / Cron.
+create table if not exists public.backups (
+  id       bigint generated always as identity primary key,
+  reason   text not null,
+  data     jsonb not null,
+  saved_at timestamptz not null default now()
+);
+create index if not exists backups_saved_at on public.backups (saved_at desc);
+alter table public.backups enable row level security;
+
+-- Alle Tabellen in der Reihenfolge der Fremdschlüssel: referenzierte zuerst. Neue Tabellen sind automatisch dabei.
+create or replace function public.backup_tables() returns text[]
+language plpgsql stable set search_path = public as $$
+declare rest text[]; frei text[]; fertig text[] := '{}';
+begin
+  select array_agg(c.relname::text) into rest from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relkind = 'r' and c.relname not in ('backups', 'schema_migrations', 'app_status');
+  while cardinality(rest) > 0 loop
+    select array_agg(t) into frei from unnest(rest) t
+    where not exists (
+      select 1 from pg_constraint k join pg_class z on z.oid = k.confrelid
+      where k.contype = 'f' and k.conrelid = format('public.%I', t)::regclass
+        and k.confrelid <> k.conrelid and z.relname::text = any(rest) and z.relname::text <> t);
+    if frei is null then raise exception 'Fremdschlüssel im Kreis: %', rest; end if;
+    fertig := fertig || frei;
+    rest := array(select unnest(rest) except select unnest(frei));
+  end loop;
+  return fertig;
+end $$;
+revoke execute on function public.backup_tables() from public, anon, authenticated;
+
+create or replace function public.snapshot_club(p_reason text default 'manuell') returns bigint
+language plpgsql set search_path = public as $$
+declare t text; zeilen jsonb; alles jsonb := '{}'; hid bigint;
+begin
+  foreach t in array public.backup_tables() loop
+    execute format('select coalesce(jsonb_agg(to_jsonb(x)), ''[]''::jsonb) from public.%I x', t) into zeilen;
+    alles := alles || jsonb_build_object(t, zeilen);
+  end loop;
+  insert into public.backups (reason, data) values (coalesce(nullif(trim(p_reason), ''), 'manuell'), alles)
+  returning id into hid;
+  delete from public.backups where reason = 'täglich' and saved_at < now() - interval '30 days';
+  delete from public.backups where id in (
+    select id from public.backups where reason like 'vor Release%' order by saved_at desc, id desc offset 30);
+  return hid;
+end $$;
+revoke execute on function public.snapshot_club(text) from public, anon, authenticated;
+
+-- Stand wiederherstellen, nur im SQL Editor: select public.restore_club(<id>);
+-- Läuft als eine Transaktion: Scheitert etwas, bleibt alles wie es war. Der aktuelle Stand wird vorher gesichert.
+create or replace function public.restore_club(p_backup bigint) returns void
+language plpgsql set search_path = public as $$
+declare d jsonb; tabellen text[]; t text; i int;
+begin
+  select data into d from public.backups where id = p_backup;
+  if d is null then raise exception 'Sicherung % nicht gefunden', p_backup; end if;
+  perform public.snapshot_club('vor Wiederherstellung');
+  tabellen := public.backup_tables();
+  for i in reverse cardinality(tabellen)..1 loop
+    execute format('delete from public.%I', tabellen[i]);
+  end loop;
+  foreach t in array tabellen loop
+    if d ? t then
+      execute format('insert into public.%I overriding system value select * from jsonb_populate_recordset(null::public.%I, $1)', t, t)
+      using d -> t;
+    end if;
+  end loop;
+end $$;
+revoke execute on function public.restore_club(bigint) from public, anon, authenticated;
+
+-- Tägliche Sicherung um 02:30 UTC (pg_cron gibt es in Supabase, im Test-Postgres nicht)
+do $$
+begin
+  if exists (select 1 from pg_available_extensions where name = 'pg_cron') then
+    create extension if not exists pg_cron;
+    perform cron.schedule('club-backup', '30 2 * * *', $job$ select public.snapshot_club('täglich') $job$);
+  end if;
+end $$;

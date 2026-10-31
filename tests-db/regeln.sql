@@ -200,5 +200,49 @@ do $$ begin
   raise exception 'FEHLER: Foto in fremden Ordner hochgeladen';
 exception when insufficient_privilege then raise notice 'ok – Fotos nur in den eigenen Ordner'; end $$;
 
+-- 14) Datensicherung: für Mitglieder unerreichbar, Wiederherstellen bringt alles zurück
+select pg_temp.als('A');
+do $$ begin
+  perform public.snapshot_club('Test');
+  raise exception 'FEHLER: Admin legt über die App eine Sicherung an';
+exception when insufficient_privilege then raise notice 'ok – Sicherung nur serverseitig'; end $$;
+do $$ begin
+  perform public.restore_club(1);
+  raise exception 'FEHLER: Admin stellt über die App wieder her';
+exception when insufficient_privilege then raise notice 'ok – Wiederherstellen nur serverseitig'; end $$;
 reset role;
+
+do $$
+declare hid bigint; profile int; anlaesse int; stimmen int; n int;
+begin
+  select count(*) into profile from public.profiles;
+  select count(*) into anlaesse from public.events;
+  select count(*) into stimmen from public.ballots;
+  if anlaesse = 0 or stimmen = 0 then raise exception 'FEHLER: Test braucht Anlässe und Stimmen'; end if;
+  hid := public.snapshot_club('Test');
+  delete from public.events; delete from public.proposals;
+  update public.settings set max_members = 99;
+  perform public.restore_club(hid);
+  select count(*) into n from public.events;
+  if n <> anlaesse then raise exception 'FEHLER: Anlässe nicht wiederhergestellt'; end if;
+  select count(*) into n from public.ballots;
+  if n <> stimmen then raise exception 'FEHLER: Stimmen nicht wiederhergestellt'; end if;
+  select count(*) into n from public.profiles;
+  if n <> profile then raise exception 'FEHLER: Profile nicht wiederhergestellt'; end if;
+  if (select max_members from public.settings) <> 12 then raise exception 'FEHLER: Einstellungen nicht wiederhergestellt'; end if;
+  if not exists (select 1 from public.backups where reason = 'vor Wiederherstellung') then
+    raise exception 'FEHLER: Stand vor dem Wiederherstellen nicht gesichert';
+  end if;
+  raise notice 'ok – Sicherung und Wiederherstellung';
+end $$;
+do $$
+declare i int;
+begin
+  for i in 1..35 loop perform public.snapshot_club('vor Release v' || i); end loop;
+  if (select count(*) from public.backups where reason like 'vor Release%') <> 30 then
+    raise exception 'FEHLER: Es bleiben nicht die letzten 30 Release-Sicherungen';
+  end if;
+  raise notice 'ok – die letzten 30 Release-Sicherungen bleiben';
+end $$;
+
 select 'ALLE DB-TESTS GRÜN' as ergebnis;

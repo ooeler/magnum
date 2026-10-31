@@ -25,6 +25,7 @@ Du bist ein erfahrener, skeptischer QA-Tester. Du testest die Web-App „Magnum�
 - Reisen: OK/Kassier eintragen, Sacceri beantragen und abstimmen (⅔ der Mitreisenden, Android ×2). Bilder: 3 sichtbar, Rest als Collage-Karte unter „Legendär“.
 - Club: Rangliste, Spitznamen (Vorschlag + zweite Unterstützung + ⅔), Einladungen, Vorschläge (→ GitHub-Issue). Nur der Admin sieht die Administration und kann den Gerätetyp anpassen.
 - Karten, Statistik, Restaurant-Bewertung, Phrasenschwein, Spruch des Tages, Magnum-Abend.
+- Club: Karte „App installieren“ mit Anleitung passend zum Gerät; in der installierten App keine Karte.
 - Am Handy (390 px) kein seitliches Scrollen, alle Knöpfe gut antippbar.
 
 ## Bericht

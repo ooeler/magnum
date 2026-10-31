@@ -123,6 +123,23 @@ base.test.describe("Sicherheit (statisch)", () => {
     }
   });
 
+  base.test("Datensicherung: Backup vor dem Release, Funktionen nur serverseitig, nicht lesbar", () => {
+    const rel = workflows.find(([f]) => f.includes("release"))[1];
+    expect(rel.indexOf("snapshot_club('vor Release")).toBeGreaterThan(-1);
+    expect(rel.indexOf("snapshot_club('vor Release")).toBeLessThan(rel.indexOf("Wartungsseite einschalten"));
+    expect(rel.indexOf("Wartungsseite einschalten")).toBeLessThan(rel.indexOf("-f supabase/setup.sql"));
+    for (const f of ["backup_tables\\(\\)", "snapshot_club\\(text\\)", "restore_club\\(bigint\\)"])
+      expect(sql).toMatch(new RegExp(`revoke execute on function public\\.${f} from public, anon, authenticated`));
+    expect(sql).not.toMatch(/on public\.backups\s+for/i);
+  });
+
+  base.test("Mailvorlagen: nur Magnum, alle mit Link oder Code", () => {
+    const m = JSON.parse(read("supabase/mail-vorlagen.json"));
+    const txt = JSON.stringify(m);
+    expect(txt).not.toMatch(/Herren Inter|Spielleitung|Let's fly/);
+    for (const [k, v] of Object.entries(m)) if (k.includes("_content")) expect(v, k).toMatch(/\{\{ \.(ConfirmationURL|Token) \}\}/);
+  });
+
   base.test("Keine Secrets im Repository", () => {
     let files;
     try { files = execSync("git ls-files", { cwd: root, encoding: "utf8" }).split("\n").filter(Boolean) } catch { base.test.skip(); return }

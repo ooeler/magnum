@@ -18,9 +18,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
-      - name: Pakete installieren
-        # package-lock.json fehlt nur beim allerersten Lauf; danach wie bei Herren Inter mit npm ci
-        run: if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
+      - run: npm ci
       - run: npx playwright install --with-deps chromium webkit
       - run: npm test
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -53,7 +51,7 @@ jobs:
           grep -q "ALLE DB-TESTS GRÜN" /tmp/db.log
 
   security:
-    # Sicherheitsprüfung vor jedem Merge (zusätzlich: CodeQL und die statischen Tests in tests/sicherheit-statisch.spec.js)
+    # Sicherheitsprüfung vor jedem Merge (zusätzlich: CodeQL und die statischen Tests in tests/sicherheit.spec.js)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     container:
@@ -68,5 +66,4 @@ jobs:
       - name: Abhängigkeiten mit bekannten Schwachstellen
         run: |
           apk add --no-cache nodejs npm > /dev/null 2>&1 || true
-          [ -f package-lock.json ] || npm install --package-lock-only --no-audit --no-fund
           npm audit --audit-level=high

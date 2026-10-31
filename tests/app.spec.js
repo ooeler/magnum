@@ -339,6 +339,43 @@ test.describe("Sammelkarten & Statistik", () => {
   });
 });
 
+test.describe("App installieren", () => {
+  const inst = (page) => page.locator(".inst");
+
+  test("Anleitung passend zum Gerät", async ({ page }) => {
+    await login(page);
+    await tab(page, "Club");
+    await expect(inst(page)).toContainText("Zum Home-Bildschirm");
+  });
+
+  test("Anleitung für Android", async ({ page }) => {
+    await login(page, BEAT);
+    await tab(page, "Club");
+    await expect(inst(page)).toContainText("In Chrome");
+  });
+
+  test("Android/Chrome: Knopf öffnet den Installations-Dialog", async ({ page }) => {
+    await login(page);
+    await tab(page, "Club");
+    await page.evaluate(() => {
+      const e = new Event("beforeinstallprompt", { cancelable: true });
+      e.prompt = () => { window.__prompted = true };
+      window.dispatchEvent(e);
+    });
+    await inst(page).locator("[data-a=install]").click();
+    expect(await page.evaluate(() => window.__prompted)).toBe(true);
+    await expect(inst(page).locator("[data-a=install]")).toHaveCount(0);
+  });
+
+  test("schon installiert: keine Karte", async ({ page }) => {
+    await page.addInitScript(() => { const mm = window.matchMedia; window.matchMedia = (q) => q.includes("standalone") ? { matches: true, addEventListener() {}, removeEventListener() {} } : mm.call(window, q) });
+    await login(page);
+    await tab(page, "Club");
+    await expect(page.locator("[aria-label=Rangliste]")).toBeVisible();
+    await expect(inst(page)).toHaveCount(0);
+  });
+});
+
 test.describe("Darstellung", () => {
   test("kein seitliches Scrollen in allen Bereichen", async ({ page }) => {
     await login(page);

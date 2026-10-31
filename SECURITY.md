@@ -8,6 +8,7 @@ Bitte nicht als öffentliches Issue, sondern über **Security → Report a vulne
 - Row Level Security auf jeder Tabelle: Wer nicht Mitglied ist, sieht nichts. Mitglieder ändern nur ihre eigenen Einträge.
 - Gerätetyp (Stimmgewicht), Admin-Status, Spitznamen und die Sacceri-Auszeichnung sind nicht direkt änderbar, sondern nur über Datenbank-Funktionen mit Prüfung (Admin bzw. Abstimmung mit ⅔-Mehrheit). Admin-Änderungen werden protokolliert.
 - Keine Datenbank-Funktion ist ohne Login ausführbar.
+- Sicherungen (`public.backups`) sind über die App nicht erreichbar: keine Policy, Funktionen nur serverseitig ausführbar.
 - Fotos liegen in einem privaten Speicher; hochladen nur in den eigenen Ordner, anzeigen nur über zeitlich begrenzte Links.
 - Die ausgelieferte App hat eine Content-Security-Policy mit Prüfsumme: Nur der eigene Code läuft, eingeschleuster Code wird vom Browser blockiert. Alle Texte von Mitgliedern werden escaped.
 

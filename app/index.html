@@ -589,6 +589,15 @@ function sacceri(tr, part) {
 }
 
 // ═════════════ Tab: Club ═════════════
+// App installieren: Android/Chrome über den Installations-Dialog, iPhone mit Anleitung (Safari erlaubt keinen Dialog)
+var INST = null;
+window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); INST = e; if (document.querySelector(".inst")) render() });
+function isApp() { return (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true }
+function installCard() {
+  if (isApp()) return "";
+  return '<section class="card col inst" style="gap:8px" aria-label="App installieren"><span class="b" style="font-size:15px">App installieren</span><span class="sm mu">Auf dem Startbildschirm startet Magnum wie eine richtige App: schneller und im Vollbild.</span>' +
+    (INST ? '<button class="btn" data-a="install">Jetzt installieren</button>' : '<span class="sm">' + (PRF.device == "android" ? "In Chrome: Menü ⋮ → «App installieren»" : "In Safari: Teilen → «Zum Home-Bildschirm»") + "</span>") + "</section>";
+}
 function club() {
   var me = uid(), B = board(), st = S();
   var h = "<h2>Saison-Rangliste</h2><ol class=\"card lst\" aria-label=\"Rangliste\">" + B.map(function (x) {
@@ -609,6 +618,7 @@ function club() {
     '<label class="f">Spezialität<input class="t" data-k="pfSpec" value="' + esc(v("pfSpec", PRF.specialty || "")) + '" maxlength="80"></label><button class="btn">Speichern</button></form>' +
     '<span class="sm mu">Gerät: ' + (PRF.device == "android" ? "Android (Stimme zählt doppelt)" : "iPhone") + " · ändern kann es nur der Administrator.</span>" +
     '<button class="btn ghost" data-a="logout">Abmelden</button></section>';
+  h += installCard();
   return h;
 }
 function invites() {
@@ -753,7 +763,7 @@ function statistik() {
       return '<button type="button" class="row" style="background:none;border:0;border-top:1px solid var(--ln);width:100%;text-align:left;color:var(--tx)" data-a="ov" data-t="resto" data-id="' + x.r.id + '"><span class="grow col" style="gap:2px"><b class="sm">' + esc(x.r.name) + '</b><span class="xs mu">' + esc(x.r.place || "") + (x.v.length ? " · " + x.v.length + " Besuch" + (x.v.length > 1 ? "e" : "") : "") + '</span></span><span class="col" style="gap:0;align-items:flex-end"><b style="font:900 20px var(--hf);color:var(--ac)">' + (x.s ? x.s.all.toFixed(1).replace(".", ",") : "–") + '</b><span class="xs mu">' + (x.s ? x.s.n + " Bew." : "neu") + "</span></span></button>";
     }).join("") + "</div>" : '<span class="empty">Noch keine Beiz erfasst.</span>') +
     (UI.newResto ? restoForm() : '<button class="btn file" data-a="ui" data-k="newResto" data-v="1">' + CAM + "Quittung fotografieren / Beiz erfassen</button>") + "</section>";
-  h += '<section class="card row"><span class="grow sm">Dein Gerät: <b>' + (PRF.device == "android" ? "Android" : "iPhone") + '</b><br><span class="mu">Installieren: ' + (PRF.device == "android" ? "Menü ⋮ → «App installieren»" : "Teilen → «Zum Home-Bildschirm»") + "</span></span></section>";
+  h += '<section class="card row"><span class="grow sm">Dein Gerät: <b>' + (PRF.device == "android" ? "Android" : "iPhone") + "</b></span></section>";
   return h;
 }
 function restoForm() {
@@ -872,6 +882,7 @@ function sheet() {
 function post(text) { return sb.from("posts").insert({ author_id: uid(), text: text }) }
 var ACT = {
   tab: function (d) { TAB = d.v; lsSet("mg_tab", TAB); OV = null; SH = null; render(); window.scrollTo(0, 0) },
+  install: function () { var p = INST; INST = null; if (p) p.prompt(); render() },
   ui: function (d) { UI[d.k] = d.v || null; render() },
   setui: function (d) { UI[d.k] = UI[d.k] == d.v && d.k == "phText" ? "" : d.v; render() },
   ov: function (d) { OV = { t: d.t, id: d.id }; UI.gOpen = null; UI.rideForm = null; render(); var o = document.getElementById("ov"); if (o) o.scrollTop = 0 },

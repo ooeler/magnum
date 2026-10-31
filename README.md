@@ -62,7 +62,7 @@ scripts/                  Build (CSP), Demo, Datenbank-Tests, Vorschläge → Is
 1. Code in das Repository `magnum` pushen.
 2. **Settings → Pages** → *Source: GitHub Actions*.
 3. **Settings → Secrets and variables → Actions**
-   - *Variables*: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_PROJECT_REF`
+   - *Variables*: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_PROJECT_REF`, `SUPABASE_TOKEN_EXPIRES` (Ablaufdatum des Tokens, Format `JJJJ-MM-TT`)
    - *Secrets*: `SUPABASE_ACCESS_TOKEN` (Supabase → Account → Access Tokens), `SUPABASE_CRON_SECRET` (beliebige lange Zufallszeichenfolge)
 4. **Settings → Code security**: *Dependabot alerts* und *security updates* einschalten.
 5. Erstes Release: **Releases → Draft a new release** → `v1.0.0` → *Publish*. Danach ist die App unter `https://<github-name>.github.io/magnum/` erreichbar.
@@ -74,8 +74,20 @@ Im Tab **Club** können alle Mitglieder Ideen, Fehler und Wünsche melden. Die E
 ## Ablauf im Alltag (wie bei Herren Inter)
 
 - **Jede Änderung über einen Branch + Pull Request**: `feature/…` → Minor-Release, `fix/…` → Patch-Release, `docs/…`, `ci/…` → nur mergen. Sind Tests, Datenbank-Tests, Semgrep, npm audit und CodeQL grün, wird automatisch gemergt und deployt.
-- **Release** = Tests → Wartungsseite an → `setup.sql` + Migrationen → Sicherheitsprüfung der echten Datenbank → Edge Functions → App → Wartungsseite aus.
+- **Release** = Tests → Backup → Wartungsseite an → `setup.sql` + Migrationen → Sicherheitsprüfung der echten Datenbank → Funktionstest → Edge Functions → Mailvorlagen → App → Wartungsseite aus.
 - Falls die Wartungsseite hängen bleibt: `update public.app_status set maintenance = false;`
+- **Token-Erinnerung:** 14 Tage vor `SUPABASE_TOKEN_EXPIRES` (oder sofort, wenn das Token ungültig ist) legt der Ablauf ein Issue mit Anleitung an.
+
+### Rollback
+
+Vor jedem Release (die letzten 30) und täglich um 02:30 UTC (30 Tage) wird der ganze Club in `public.backups` gesichert. Fotos liegen im Speicher und sind nicht enthalten. Wiederherstellen im SQL Editor:
+
+```sql
+select id, reason, saved_at from public.backups order by saved_at desc limit 20;
+select public.restore_club(<id>);
+```
+
+Das ersetzt alle Club-Daten durch den gesicherten Stand. Der aktuelle Stand wird vorher als „vor Wiederherstellung“ gesichert. Passt eine Sicherung nicht mehr, etwa weil ein Mitgliedskonto inzwischen gelöscht wurde, bricht die Wiederherstellung ab und es ändert sich nichts.
 
 ## Lokal entwickeln
 
@@ -95,6 +107,7 @@ Demo-Konten: `ot@magnum.test` (Admin, iPhone), `beat@magnum.test` (Android), `ch
 ## Nächste Schritte
 
 - Push-Nachrichten vor Anlässen (wie bei Herren Inter mit VAPID und Edge Function `notify`)
+- End-to-End-Tests gegen eine lokale Supabase (wie bei Herren Inter in `tests-e2e/`)
 - Bilderkennung für Getränkefotos
 - Karte mit allen Beizen in der App (heute: Link pro Beiz zu Google Maps)
 - Teilen-Knöpfe für die WhatsApp-Gruppe
