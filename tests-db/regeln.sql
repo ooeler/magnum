@@ -245,4 +245,52 @@ begin
   raise notice 'ok – die letzten 30 Release-Sicherungen bleiben';
 end $$;
 
+-- 15) Fremde Einträge bleiben tabu, auch mit direktem Zugriff an der App vorbei
+set role authenticated;
+select pg_temp.als('C');
+do $$ begin
+  insert into public.rsvps (event_id, member_id, status) values ((select id from public.events limit 1), '00000000-0000-0000-0000-00000000000b', 'in');
+  raise exception 'FEHLER: Anmeldung für jemand anderen';
+exception when insufficient_privilege then raise notice 'ok – niemand meldet andere an'; end $$;
+with x as (update public.rsvps set status = 'out' where member_id <> auth.uid() returning 1)
+select pg_temp.check((select count(*) from x) = 0, 'Fremde Anmeldungen nicht änderbar');
+with x as (delete from public.events where created_by <> auth.uid() returning 1)
+select pg_temp.check((select count(*) from x) = 0, 'Fremde Anlässe nicht löschbar');
+with x as (update public.settings set max_members = 99 returning 1)
+select pg_temp.check((select count(*) from x) = 0, 'Einstellungen nicht änderbar');
+do $$ begin
+  perform 1 from public.invites;
+  raise exception 'FEHLER: Einladungen direkt lesbar';
+exception when insufficient_privilege then raise notice 'ok – Einladungen nicht direkt lesbar'; end $$;
+do $$ begin
+  insert into public.proposals (kind, target_id, proposed_by, status) values ('nickname', auth.uid(), auth.uid(), 'passed');
+  raise exception 'FEHLER: Antrag direkt angelegt';
+exception when insufficient_privilege then raise notice 'ok – Anträge nur über Funktionen'; end $$;
+do $$ begin
+  insert into public.ballots (proposal_id, voter_id, vote) values ((select id from public.proposals limit 1), auth.uid(), true);
+  raise exception 'FEHLER: Stimme direkt abgegeben';
+exception when insufficient_privilege then raise notice 'ok – Stimmen nur über Funktionen'; end $$;
+do $$ begin
+  insert into public.admin_log (admin_id, action) values (auth.uid(), 'gefälscht');
+  raise exception 'FEHLER: Admin-Protokoll gefälscht';
+exception when insufficient_privilege then raise notice 'ok – Admin-Protokoll nicht fälschbar'; end $$;
+do $$ begin
+  perform public.admin_set_role(auth.uid(), 'Präsident');
+  raise exception 'FEHLER: Funktion ohne Admin-Recht geändert';
+exception when raise_exception then
+  if sqlerrm like 'FEHLER%' then raise; end if; raise notice 'ok – Funktion ändert nur der Admin';
+end $$;
+do $$ begin
+  perform public.cast_ballot((select id from public.proposals where status = 'passed' limit 1), false);
+  raise exception 'FEHLER: Stimme nach Abschluss';
+exception when raise_exception then
+  if sqlerrm like 'FEHLER%' then raise; end if; raise notice 'ok – abgeschlossene Abstimmung ist zu';
+end $$;
+select pg_temp.als('A');
+select pg_temp.check((select count(*) from public.backups) = 0, 'Sicherungen auch für den Admin nicht lesbar');
+select pg_temp.als('X');
+select pg_temp.check((select count(*) from storage.objects) = 0, 'Nicht-Mitglied sieht keine Fotos');
+select pg_temp.check((select count(*) from public.profiles) = 0, 'Nicht-Mitglied sieht keine Mitglieder');
+reset role;
+
 select 'ALLE DB-TESTS GRÜN' as ergebnis;

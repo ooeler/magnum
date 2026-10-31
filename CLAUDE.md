@@ -15,7 +15,7 @@ Gebaut wie InterChampionship (Herren Inter). Sprache in App, Code-Kommentaren, C
 - Neue Funktion mit `security definer`: `revoke execute … from public, anon` und gezielt `grant … to authenticated` (der Test in `tests/sicherheit.spec.js` prüft das).
 
 ## Tests (vor jedem Commit)
-- `npm test`: Playwright gegen die nachgebaute Datenbank (`tests/mock-supabase.js`). Neue Funktionen dort nachbilden und einen Test in `tests/app.spec.js` ergänzen.
+- `npm test`: Playwright gegen die nachgebaute Datenbank (`tests/mock-supabase.js`). Neue Funktionen dort nachbilden und einen Test ergänzen: Ablauf in `tests/app.spec.js`, Konto in `konto.spec.js`, Abstimmungen in `abstimmung.spec.js`, Inhalte in `inhalte.spec.js`, Deployment in `betrieb.spec.js`.
 - `npm run test:db`: Regeltests gegen Postgres (`tests-db/regeln.sql`). Neue Regeln dort testen.
 - `npm run demo`: App mit Demo-Daten auf http://localhost:4174.
 

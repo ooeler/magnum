@@ -10,7 +10,8 @@ const TYPES = { ".html": "text/html; charset=utf-8", ".js": "application/javascr
 export function serve(dir, port) {
   const root = resolve(dir);
   return createServer(async (req, res) => {
-    const path = decodeURIComponent(new URL(req.url, "http://x").pathname);
+    let path;
+    try { path = decodeURIComponent(new URL(req.url, "http://x").pathname) } catch { res.writeHead(400).end(); return }
     const file = normalize(join(root, path.endsWith("/") ? path + "index.html" : path));
     if (!file.startsWith(root)) { res.writeHead(403).end(); return }
     try {

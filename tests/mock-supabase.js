@@ -389,6 +389,9 @@
     as: function (email, fn) { var U = users(); return window.__mg.asId(U[email].id, fn) },
     asId: function (id, fn) { AS = id; try { var r = fn(createClient()); return r && r.then ? r.then(function (x) { return x }) : r } finally { AS = null } },
     db: function () { return db() },
+    // Link aus der Passwort-Mail geöffnet
+    recovery: function () { emit("PASSWORD_RECOVERY", get(SESS)) },
+    maintenance: function (on) { var d = db(); d.app_status[0].maintenance = on; save(d) },
     reset: function () { localStorage.removeItem(DBK); localStorage.removeItem(USERSK); localStorage.removeItem(FILESK) }
   };
   Object.defineProperty(window, "supabase", { value: { createClient: createClient }, writable: false, configurable: false });
