@@ -5,7 +5,7 @@
   "description": "Magnum – PWA des Magnum Clubs: Anlässe, Reisen, Rangliste, Sammelkarten, Statistik",
   "scripts": {
     "postinstall": "node scripts/vendor.js",
-    "start": "node scripts/build.mjs && node scripts/serve.mjs dist 4173",
+    "start": "node scripts/build.mjs && node scripts/serve.mjs dist 4183",
     "demo": "node scripts/demo.mjs",
     "test": "playwright test",
     "test:ui": "playwright test --ui",

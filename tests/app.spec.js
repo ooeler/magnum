@@ -339,6 +339,52 @@ test.describe("Sammelkarten & Statistik", () => {
   });
 });
 
+test.describe("Am Tag danach", () => {
+  // Uhr der Tests: Samstag, 31.10.2026, 10:00
+  async function anlass(page, tag, status) {
+    await login(page);
+    await as(page, "ot@magnum.test", "sb.from('events').insert({ id: 'e-kater', title: 'Grosse Nacht', starts_at: arg, location: 'Keller', created_by: 'u-ot' })", tag + "T19:00:00+01:00");
+    await as(page, "ot@magnum.test", `sb.from('rsvps').upsert({ event_id: 'e-kater', member_id: 'u-ot', status: '${status}' })`);
+    await page.reload();
+    await expect(page.locator("nav")).toBeVisible();
+  }
+  const KATER = /Hast du Kopfweh, Ot?|Hallo Brummschädel Ot!/;
+
+  test("wer dabei war, wird nach dem Kopf gefragt", async ({ page }) => {
+    await anlass(page, "2026-10-30", "in");
+    await expect(page.locator(".hello")).toHaveText(KATER);
+  });
+
+  test("beide Sprüche kommen vor, pro Tag bleibt es derselbe", async ({ page }) => {
+    await anlass(page, "2026-10-30", "in");
+    const vorher = await page.locator(".hello").textContent();
+    await page.reload();
+    await expect(page.locator(".hello")).toHaveText(vorher);
+    const texte = await page.evaluate(() => {
+      const f = window.first, t = new Set();
+      for (const n of ["Ot", "Beat", "Chris", "Dani", "Erich", "Fritz"]) { window.first = () => n; t.add(hello().replace(n, "X")) }
+      window.first = f;
+      return [...t].sort();
+    });
+    expect(texte).toEqual(["Hallo Brummschädel X!", "Hast du Kopfweh, X?"]);
+  });
+
+  test("virtuell Dabeigewesene haben kein Kopfweh", async ({ page }) => {
+    await anlass(page, "2026-10-30", "virtual");
+    await expect(page.locator(".hello")).not.toHaveText(KATER);
+  });
+
+  test("Abgemeldete auch nicht", async ({ page }) => {
+    await anlass(page, "2026-10-30", "out");
+    await expect(page.locator(".hello")).not.toHaveText(KATER);
+  });
+
+  test("zwei Tage später ist es vorbei", async ({ page }) => {
+    await anlass(page, "2026-10-29", "in");
+    await expect(page.locator(".hello")).not.toHaveText(KATER);
+  });
+});
+
 test.describe("App installieren", () => {
   const inst = (page) => page.locator(".inst");
 

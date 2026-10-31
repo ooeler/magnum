@@ -322,6 +322,9 @@ function hello() {
   if (ev && h >= 17) return pick(["Prost", "Zum Wohl", "Santé"], k) + sp + "! Heute ist " + ev.title + ".";
   if (ev) return "Hallo" + sp + ", heute ist " + ev.title + "!";
   if (h >= 23 || h < 4) return "Hallo Nachtschwärmer" + sp + "!";
+  // Am Tag nach dem Anlass: nur wer wirklich dabei war, nicht wer virtuell mitgetrunken hat
+  var gestern = localDay(new Date(now() - 864e5).toISOString());
+  if (PRF && pastEvents().some(function (e) { return localDay(e.starts_at) == gestern && rsvp(e.id, PRF.id) == "in" })) return pick(["Hast du Kopfweh" + (n ? ", " + n : "") + "?", "Hallo Brummschädel" + sp + "!"], k);
   if (new Date().getDay() == 5 && h >= 12) return "Happy Friday" + sp + "! Zeit für ein Glas.";
   var s = PRF && stats(PRF.id);
   if (s && s.streak >= 3) return "Hallo" + sp + "! " + s.streak + " Anlässe in Folge, stark!";

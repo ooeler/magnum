@@ -24,5 +24,5 @@ export function serve(dir, port) {
 }
 
 if (process.argv[1] && process.argv[1].split("\\").join("/").endsWith("scripts/serve.mjs")) {
-  serve(process.argv[2] || "dist", Number(process.argv[3] || 4173));
+  serve(process.argv[2] || "dist", Number(process.argv[3] || 4183));
 }

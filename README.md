@@ -8,7 +8,7 @@ Aufgebaut wie die App **Herren Inter** (InterChampionship): eine einzige `index.
 
 | Bereich | Inhalt |
 |---|---|
-| 🍷 Termine | Spruch des Tages, eigener Rang mit Punkten, Streak und errechneter Trinkfestigkeit, Club-Ziel, nächste Anlässe mit „Bin dabei“ / „Abmelden“. Beim Abmelden: **„Ich kann nicht, möchte aber virtuell dabei sein und bezahle eine Magnum“** (Streak bleibt, Magnum geht in die Kasse). „Ich organisiere den Abend“. Magnum-Kasse, Magnum-Abend mit hüpfenden Weingläsern, „Mein Abend“ (Getränke fotografieren), Phrasenschwein, Prost-Wand |
+| 🍷 Termine | Begrüssung je nach Lage, am Tag nach einem Anlass für alle, die dabei waren: „Hast du Kopfweh?“ oder „Hallo Brummschädel“. Spruch des Tages, eigener Rang mit Punkten, Streak und errechneter Trinkfestigkeit, Club-Ziel, nächste Anlässe mit „Bin dabei“ / „Abmelden“. Beim Abmelden: **„Ich kann nicht, möchte aber virtuell dabei sein und bezahle eine Magnum“** (Streak bleibt, Magnum geht in die Kasse). „Ich organisiere den Abend“. Magnum-Kasse, Magnum-Abend mit hüpfenden Weingläsern, „Mein Abend“ (Getränke fotografieren), Phrasenschwein, Prost-Wand |
 | Anlass-Details | Wer dabei ist, **Magnums des Abends mit Gasttrinkern pro Magnum**, Heimweg/Fahrservice: Mitfahrer bewerten den Fahrer (3 Kriterien) und verteilen 10–50 Punkte |
 | ✈️ Reisen | Reisen erfassen, mitreisen, **OK und Kassier** eintragen, **Auszeichnung „De Sacceri“**: Antrag durch ein Mitglied, ⅔-Mehrheit der Anwesenden. Beste Bilder hochladen: 3 sichtbar, der Rest wird zur **Collage-Karte unter „Legendär“** |
 | 👥 Club | Saison-Rangliste (gleiche Punkte = gleicher Rang), Mitgliederprofile, **Spitznamen** (Vorschlag + zweite Unterstützung + ⅔-Mehrheit), Einladungen, Verbesserungsvorschläge (→ GitHub-Issue), Administration |
@@ -99,7 +99,7 @@ npx playwright install
 npm run demo      # App mit Demo-Daten ohne Backend: http://localhost:4174 (ot@magnum.test / magnum123)
 npm test          # alle Tests (nachgebaute Datenbank, Android/iPhone/Desktop)
 npm run test:db   # Regeltests gegen Postgres (DB_URL=postgres://… setzen)
-npm start         # App unter http://localhost:4173 (config.js mit Supabase-Werten füllen)
+npm start         # App unter http://localhost:4183 (config.js mit Supabase-Werten füllen)
 ```
 
 Demo-Konten: `ot@magnum.test` (Admin, iPhone), `beat@magnum.test` (Android), `chris@magnum.test`, Passwort jeweils `magnum123`.

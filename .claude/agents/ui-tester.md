@@ -24,6 +24,7 @@ Du bist ein erfahrener, skeptischer QA-Tester. Du testest die Web-App „Magnum�
 - Anlass-Details: Magnums erfassen, Gasttrinker pro Magnum. Fahrservice: mitfahren, Fahrer mit 3 Kriterien bewerten und 10–50 Punkte verteilen; nicht beim eigenen Auto.
 - Reisen: OK/Kassier eintragen, Sacceri beantragen und abstimmen (⅔ der Mitreisenden, Android ×2). Bilder: 3 sichtbar, Rest als Collage-Karte unter „Legendär“.
 - Club: Rangliste, Spitznamen (Vorschlag + zweite Unterstützung + ⅔), Einladungen, Vorschläge (→ GitHub-Issue). Nur der Admin sieht die Administration und kann den Gerätetyp anpassen.
+- Am Tag nach einem Anlass: Wer dabei war, wird mit „Hast du Kopfweh?“ oder „Hallo Brummschädel“ begrüsst, virtuell Dabeigewesene nicht.
 - Karten, Statistik, Restaurant-Bewertung, Phrasenschwein, Spruch des Tages, Magnum-Abend.
 - Club: Karte „App installieren“ mit Anleitung passend zum Gerät; in der installierten App keine Karte.
 - Am Handy (390 px) kein seitliches Scrollen, alle Knöpfe gut antippbar.
