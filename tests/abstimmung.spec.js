@@ -4,7 +4,7 @@ const { test, expect, login, tab, as, OT, BEAT, CHRIS } = require("./fixtures");
 const card = (page, label) => page.locator(`[aria-label="${label}"]`);
 const toast = (page) => page.locator("#toast");
 
-// Ot schlägt für Hans vor, Beat unterstützt. Alle ausser Hans: total 13, nötig 9; Ot 1 + Beat 2 = 3
+// Ot schlägt für Hans vor, Beat unterstützt. Alle ausser Hans: total 10, nötig 7; Ot + Beat = 2
 async function vorschlag(page) {
   await page.goto("/");
   await as(page, OT.email, "sb.rpc('propose_nickname', { p_target: 'u-hans', p_nick: 'Hansi' })");
@@ -31,7 +31,7 @@ test.describe("Spitzname", () => {
     await n.getByRole("button", { name: "Ich unterstütze den Vorschlag" }).click();
     await expect(toast(page)).toContainText("Unterstützt · Abstimmung offen");
     await expect(n.locator("[data-test=nickstatus]")).toContainText("unterstützt von Beat");
-    await expect(n).toContainText("Ja 3 · Nein 0 · offen 10 · nötig 9");
+    await expect(n).toContainText("Ja 2 · Nein 0 · offen 8 · nötig 7");
   });
 
   test("Antragsteller sieht keinen Unterstützen-Knopf", async ({ page }) => {
@@ -46,13 +46,13 @@ test.describe("Spitzname", () => {
     const n = await hans(page, CHRIS);
     await n.getByRole("button", { name: "Ja, passt" }).click();
     await expect(toast(page)).toContainText("Stimme abgegeben");
-    await expect(n).toContainText("Ja 4 · Nein 0 · offen 9 · nötig 9");
+    await expect(n).toContainText("Ja 3 · Nein 0 · offen 7 · nötig 7");
     await expect(n.getByRole("button", { name: "Ja, passt" })).toHaveCount(0);
   });
 
   test("letzte nötige Stimme: Spitzname ist vergeben", async ({ page }) => {
     await unterstuetzt(page);
-    await stimmen(page, ["u-dani", "u-erich", "u-gabi", "u-jurg", "u-kurt"], true); // 3 + 5 = 8 von nötig 9
+    await stimmen(page, ["u-dani", "u-erich", "u-gabi", "u-jurg"], true); // 2 + 4 = 6 von nötig 7
     const n = await hans(page, CHRIS);
     await n.getByRole("button", { name: "Ja, passt" }).click();
     await expect(toast(page)).toContainText("Angenommen mit Zweidrittelmehrheit!");
@@ -61,7 +61,7 @@ test.describe("Spitzname", () => {
 
   test("Nein macht die Mehrheit unmöglich: abgelehnt", async ({ page }) => {
     await unterstuetzt(page);
-    await stimmen(page, ["u-fritz", "u-ivo"], false); // Android: 4 Nein, mit einem weiteren bleiben nur noch 8 möglich
+    await stimmen(page, ["u-fritz", "u-ivo", "u-kurt"], false); // mit einem weiteren Nein bleiben nur noch 6 möglich
     const n = await hans(page, CHRIS);
     await n.getByRole("button", { name: "Nein" }).click();
     await expect(toast(page)).toContainText("Abgelehnt");
@@ -77,13 +77,13 @@ test.describe("Sacceri", () => {
     return card(page, "Auszeichnung De Sacceri");
   }
 
-  test("Mitreisende stimmen per Knopf ab, Android zählt doppelt", async ({ page }) => {
+  test("Mitreisende stimmen per Knopf ab, jede Stimme zählt gleich", async ({ page }) => {
     await page.goto("/");
     await as(page, OT.email, "sb.rpc('propose_sacceri', { p_trip: 't-wallis', p_target: 'u-chris' })");
     const s = await wallis(page, BEAT);
     await s.getByRole("button", { name: "Ja, verdient" }).click();
     await expect(toast(page)).toContainText("Stimme abgegeben");
-    await expect(s.locator("[data-test=tally]")).toHaveText("Ja 3 · Nein 0 · offen 2 · nötig 4");
+    await expect(s.locator("[data-test=tally]")).toHaveText("Ja 2 · Nein 0 · offen 2 · nötig 3");
     await expect(s).toContainText("Deine Stimme ist abgegeben");
   });
 
@@ -105,18 +105,5 @@ test.describe("Sacceri", () => {
       return window.__mg.asId("u-erich", (sb) => sb.rpc("cast_ballot", { p_proposal: id, p_yes: false }));
     });
     expect(r.error.message).toContain("nicht stimmberechtigt");
-  });
-});
-
-test.describe("Android-Gewicht", () => {
-  test("zählt einfach, bis der Admin bestätigt", async ({ page }) => {
-    await page.goto("/");
-    await page.evaluate(() => { const d = window.__mg.db(); d.profiles.find((p) => p.id == "u-hans").device = "android"; localStorage.setItem("__mg_db", JSON.stringify(d)) });
-    await login(page);
-    await tab(page, "Club");
-    await page.locator(".mem", { hasText: "Hans" }).click();
-    await expect(page.locator("[data-test=geraet]")).toHaveText("Android (noch nicht bestätigt)");
-    await card(page, "Admin").getByRole("button", { name: "Android ×2" }).click();
-    await expect(page.locator("[data-test=geraet]")).toHaveText("Android (Stimme zählt doppelt)");
   });
 });

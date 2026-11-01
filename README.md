@@ -17,11 +17,11 @@ Aufgebaut wie die App **Herren Inter** (InterChampionship), als Backend aber [Ne
 
 ### Spielregeln
 
-- **Abstimmungen** (Sacceri, Spitznamen): Zweidrittelmehrheit der Stimmberechtigten. **Android-Stimmen zählen doppelt.** Das Gerät wird bei der Registrierung erkannt, doppelt zählt es aber erst, wenn der **Administrator** es im Mitgliederprofil bestätigt hat. Ändern kann es nur er, jede Änderung steht im Admin-Protokoll. Beim Sacceri stimmt ab, wer beim Antrag mitreist. Die Regeln laufen in der Datenbank (`db/setup.sql`) und lassen sich nicht über die App umgehen.
+- **Abstimmungen** (Sacceri, Spitznamen): Zweidrittelmehrheit der Stimmberechtigten. Jede Stimme zählt gleich viel. Beim Sacceri stimmt ab, wer beim Antrag mitreist. Die Regeln laufen in der Datenbank (`db/setup.sql`) und lassen sich nicht über die App umgehen.
 - **Punkte:** Anlass +50, virtuell mit Magnum +20, organisiert +40, Gasttrinker +15, Reise +30, als Fahrer 10–50 von jedem Mitfahrer, Fahrt bewertet +5, Restaurant bewertet +5, Sammelkarte +10, Vorschlag +10. Punkte für Anlässe und Reisen zählen, sobald sie stattgefunden haben. An- und abmelden geht bis und mit Anlasstag, mitreisen bis und mit Starttag und solange Plätze frei sind. Vergangene Anlässe und Reisen trägt nur der Administrator nach.
 - **Ränge:** Neuling, Stammgast (200), Kellermeister (400), Magnum-Ritter (600), Club-Legende (900).
 - **Streak:** Anlässe in Folge (dabei oder virtuell). „Nur abmelden“ setzt sie auf 0, der **Rekord** bleibt stehen.
-- **Duell des Monats:** Anwesenheit in Prozent, Android gegen iPhone (das Gerät zählt wie im Profil, auch unbestätigt). Es zählt nur, wer wirklich dabei war. Wer im Vormonat verloren hat, bringt die nächste Magnum; das zeigt die App nur an.
+- **Duell des Monats:** Anwesenheit in Prozent, Android gegen iPhone (das Gerät wird bei der Registrierung erkannt, ändern kann es nur der Administrator). Es zählt nur, wer wirklich dabei war. Wer im Vormonat verloren hat, bringt die nächste Magnum; das zeigt die App nur an.
 - **Effekte:** Am Anlasstag fliegen gefüllte Weingläser durchs Bild, an besonderen Tagen Emojis (Samichlaus, Halloween, Ostern usw.). Im Advent trägt das Glas eine Mütze, an manchen Wintertagen schneit es. Bei „Bewegung reduzieren“ bewegt sich nichts.
 - **Trinkfestigkeit:** Ø Getränke pro Abend aus den fotografierten Getränken (Wein, Bier, Schnaps 1, Magnum-Glas 1,5, Wasser 0). Die App schlägt „Wein“ vor, man korrigiert mit einem Tipp. Eine automatische Bilderkennung ist noch nicht eingebaut.
 
@@ -71,8 +71,6 @@ DATABASE_URL="$(neon connection-string main)" node scripts/erster-link.mjs https
 ```
 
 Alle weiteren Mitglieder lädst du in der App ein: **Club → Einladungen → Einladungslink erstellen** und per WhatsApp schicken. Der Link gilt 7 Tage und einmal. Der Club nimmt höchstens 12 Mitglieder auf (`settings.max_members`).
-
-**Android-Mitglieder** bestätigst du im Mitgliederprofil, sonst zählt ihre Stimme einfach.
 
 ### 4. Verbesserungsvorschläge → GitHub-Issues
 

@@ -104,6 +104,7 @@ test.describe("Wartung und Fehler", () => {
     await page.locator("[data-a=pprost][data-id=po-2]").click();
     await expect(page.locator(".auth")).toContainText("Update wird eingespielt");
     await expect(page.locator(".auth .ladeglas")).toBeVisible();
+    await expect(page.locator(".auth .wein"), "füllt sich langsam und bleibt voll").toHaveCSS("animation-name", "mgVoll");
     await expect(page.locator("#toast")).not.toContainText("Datenbank");
   });
 

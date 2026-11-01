@@ -85,15 +85,13 @@ test("Login: falsches Passwort, Token erneuern, Abmelden", async () => {
   expect((await post("/auth/token", { session: "x=y" })).s).toBe(401);
 });
 
-test("Mitglied über Einladung, Android zählt erst nach Bestätigung", async () => {
+test("Mitglied über Einladung, Gerät wird gespeichert", async () => {
   const c = await post("/invite", { action: "create" }, bearer(A.token));
   expect(c.s, JSON.stringify(c.j)).toBe(200);
   const email = `beat-${zufall()}@magnum.test`;
   expect((await post("/invite", { action: "join", token: c.j.token, name: "Beat", email, password: pw, device: "android" })).s).toBe(200);
   const l = await post("/auth/login", { email, password: pw });
   B = l.j; B.id = JSON.parse(Buffer.from(B.token.split(".")[1], "base64url")).sub;
-  const w = await daten(B.token, "/rpc/vote_weight", { method: "POST", body: JSON.stringify({ p_member: B.id }) });
-  expect(w.j).toBe(1);
   const inv = await db.query("select invited_by, device from public.profiles where id = $1", [B.id]);
   expect(inv.rows[0].device).toBe("android");
   expect(inv.rows[0].invited_by).toBeTruthy();

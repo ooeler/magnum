@@ -29,7 +29,6 @@ set client_min_messages = notice;
 select pg_temp.check((select count(*) from public.profiles) = 4, 'Vier Profile angelegt');
 select pg_temp.check((select device from public.profiles where display_name = 'Beat') = 'android', 'Gerät Android aus der Einladung übernommen');
 select pg_temp.check((select device from public.profiles where display_name = 'Chris') = 'iphone', 'Ohne Angabe gilt iPhone');
-select pg_temp.check(public.vote_weight('00000000-0000-0000-0000-00000000000b') = 1, 'Android zählt einfach, bis der Admin es bestätigt');
 do $$ begin
   insert into neon_auth."user" (email) values ('fremd@test');
   raise exception 'FEHLER: Konto ohne Einladung angelegt';
@@ -104,19 +103,16 @@ select public.admin_set_device('00000000-0000-0000-0000-00000000000d', 'android'
 select pg_temp.check((select device from public.profiles where display_name = 'Dani') = 'android', 'Admin setzt Gerät auf Android');
 select pg_temp.check((select count(*) from public.admin_log) = 1, 'Änderung im Admin-Protokoll');
 select public.admin_set_device('00000000-0000-0000-0000-00000000000d', 'iphone');
-select public.admin_set_device('00000000-0000-0000-0000-00000000000b', 'android');
-select pg_temp.check(public.vote_weight('00000000-0000-0000-0000-00000000000b') = 2, 'Android zählt nach der Bestätigung doppelt');
-select pg_temp.check((select count(*) from public.admin_log where action = 'Gerätetyp android bestätigt') = 1, 'Bestätigung im Admin-Protokoll');
 
--- 7) Sacceri: Antrag + ⅔ der Anwesenden, Android zählt doppelt
---    Gewichte: A 1, B 2 (Android), C 1, D 1 → total 5, nötig 4
+-- 7) Sacceri: Antrag + ⅔ der Anwesenden, jede Stimme zählt gleich
+--    A, B, C, D → total 4, nötig 3
 select pg_temp.als('A');
 select public.propose_sacceri('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000c');
-select pg_temp.check((select status from public.proposals where kind = 'sacceri') = 'open', 'Antrag offen nach Ja des Antragstellers (1 von 4)');
+select pg_temp.check((select status from public.proposals where kind = 'sacceri') = 'open', 'Antrag offen nach Ja des Antragstellers (1 von 3)');
 select pg_temp.als('B');
-select pg_temp.check(public.cast_ballot((select id from public.proposals where kind = 'sacceri'), true) = 'open', 'Android-Ja zählt 2 → 3 von 4, noch offen');
+select pg_temp.check(public.cast_ballot((select id from public.proposals where kind = 'sacceri'), true) = 'open', 'Android-Ja zählt einfach → 2 von 3, noch offen');
 select pg_temp.als('D');
-select pg_temp.check(public.cast_ballot((select id from public.proposals where kind = 'sacceri'), true) = 'passed', '4 von 4 → Auszeichnung verliehen');
+select pg_temp.check(public.cast_ballot((select id from public.proposals where kind = 'sacceri'), true) = 'passed', '3 von 3 → Auszeichnung verliehen');
 select pg_temp.check((select sacceri_id from public.trips) = '00000000-0000-0000-0000-00000000000c', 'Sacceri bei der Reise eingetragen');
 select pg_temp.check((select count(*) from public.posts where text like '%Sacceri%') = 1, 'Meldung auf der Prost-Wand');
 do $$ begin
@@ -127,7 +123,7 @@ exception when raise_exception then
 end $$;
 
 -- 8) Spitzname: Vorschlag + zweite Unterstützung + ⅔ (ohne die Person selbst)
---    Für Dani stimmen A 1, B 2, C 1 → total 4, nötig 3
+--    Für Dani stimmen A, B, C → total 3, nötig 2
 select pg_temp.als('A');
 select public.propose_nickname('00000000-0000-0000-0000-00000000000d', 'Navi');
 select pg_temp.check((select nickname from public.profiles where display_name = 'Dani') is null, 'Ohne zweite Unterstützung kein Spitzname');
@@ -152,16 +148,9 @@ exception when raise_exception then
 end $$;
 select pg_temp.als('B');
 select pg_temp.check(public.second_proposal((select id from public.proposals where kind = 'nickname')) = 'passed',
-  'Unterstützung durch Android (1 + 2 = 3 von 3) → bestätigt');
+  'Vorschlag + Unterstützung (2 von 2) → bestätigt');
 select pg_temp.check((select nickname from public.profiles where display_name = 'Dani') = 'Navi', 'Spitzname gesetzt');
 
--- Abgelehnt: Für Chris stimmen A 1, B 2, D 1 → total 4, nötig 3; Nein von B (2) macht 3 unmöglich
-select pg_temp.als('A');
-select public.propose_nickname('00000000-0000-0000-0000-00000000000c', 'Chrigu');
-select pg_temp.als('D');
-select pg_temp.check(public.second_proposal((select id from public.proposals where kind = 'nickname' and status = 'open')) = 'open', '2 von 3 → offen');
-select pg_temp.als('B');
-select pg_temp.check(public.cast_ballot((select id from public.proposals where kind = 'nickname' and status = 'open'), false) = 'rejected', 'Android-Nein → abgelehnt');
 
 -- 9) Organisator: nur einmal, und man ist dann angemeldet
 select pg_temp.als('C');
@@ -365,6 +354,9 @@ set role authenticated;
 select pg_temp.als('D');
 insert into public.trip_participants (trip_id) values ('10000000-0000-0000-0000-000000000002');
 select pg_temp.verboten($q$select public.cast_ballot((select id from public.proposals where status = 'open' and kind = 'sacceri'), true)$q$, 'Beitritt nach dem Antrag gibt keine Stimme');
+-- Abgelehnt: C und B stimmen, nötig 2. Ein Nein macht die Mehrheit unmöglich
+select pg_temp.als('B');
+select pg_temp.check(public.cast_ballot((select id from public.proposals where status = 'open' and kind = 'sacceri'), false) = 'rejected', 'Nein macht die Mehrheit unmöglich → abgelehnt');
 
 -- Vorbei ist vorbei: keine Anmeldung, keine Abmeldung, keine Mitfahrt, kein Mitreisen
 select pg_temp.als('A');

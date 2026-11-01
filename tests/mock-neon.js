@@ -1,7 +1,7 @@
 // Test- und Demo-Ersatz für das Neon-Backend. Wird anstelle von app/config.js ausgeliefert (Tests, npm run demo).
 // Bildet nach: Login, Einladungslinks (Edge Function invite), Vorschläge (feedback), Tabellen mit den
-// Zugriffsregeln aus db/setup.sql, die Datenbank-Funktionen (Abstimmungen mit ⅔-Mehrheit und
-// doppelten Android-Stimmen, Organisator, Kasse, Admin) sowie Fotos und Live-Sync zwischen Tabs.
+// Zugriffsregeln aus db/setup.sql, die Datenbank-Funktionen (Abstimmungen mit ⅔-Mehrheit,
+// Organisator, Kasse, Admin) sowie Fotos und Live-Sync zwischen Tabs.
 (function () {
   var DBK = "__mg_db", SESS = "__mg_session", USERSK = "__mg_users", FILESK = "__mg_files";
   var PW = "magnum123";
@@ -251,7 +251,6 @@
   }
 
   // ───────────── Datenbank-Funktionen ─────────────
-  function weight(d, id) { var p = d.profiles.find(function (x) { return x.id == id }); return p && p.device == "android" && p.device_set_by_admin ? 2 : 1 }
   function eligible(d, p) {
     if (p.kind == "sacceri") return p.voters || [];
     return d.profiles.filter(function (x) { return x.id != p.target_id }).map(function (x) { return x.id });
@@ -261,7 +260,7 @@
     if (p.kind == "nickname" && !p.seconded_by) return "open";
     var V = eligible(d, p), tot = 0, yes = 0, no = 0, by = {};
     d.ballots.filter(function (b) { return b.proposal_id == p.id }).forEach(function (b) { by[b.voter_id] = b.vote });
-    V.forEach(function (v) { var w = weight(d, v); tot += w; if (by[v] === true) yes += w; else if (by[v] === false) no += w });
+    V.forEach(function (v) { tot++; if (by[v] === true) yes++; else if (by[v] === false) no++ });
     var need = Math.ceil(tot * 2 / 3);
     if (tot > 0 && yes >= need) {
       Object.assign(p, { status: "passed", yes_weight: yes, total_weight: tot, decided_at: new Date().toISOString() });
@@ -283,8 +282,8 @@
     open_magnum_kasse: function (d, u) { if (!admin(d)) throw "Nur der Administrator öffnet die Kasse"; var n = 0; d.rsvps.forEach(function (r) { if (r.status == "virtual" && !r.redeemed) { r.redeemed = true; n++ } }); return n },
     admin_set_device: function (d, u, a) {
       if (!admin(d)) throw "Nur der Administrator darf den Gerätetyp ändern";
-      var p = d.profiles.find(function (x) { return x.id == a.p_member }); if (!p) throw "Mitglied nicht gefunden"; if (p.device == a.p_device && (p.device_set_by_admin || a.p_device == "iphone")) return;
-      d.admin_log.push({ id: ++d.__seq, admin_id: u, member_id: p.id, action: p.device == a.p_device ? "Gerätetyp " + p.device + " bestätigt" : "Gerätetyp " + p.device + " → " + a.p_device, created_at: new Date().toISOString() });
+      var p = d.profiles.find(function (x) { return x.id == a.p_member }); if (!p) throw "Mitglied nicht gefunden"; if (p.device == a.p_device) return;
+      d.admin_log.push({ id: ++d.__seq, admin_id: u, member_id: p.id, action: "Gerätetyp " + p.device + " → " + a.p_device, created_at: new Date().toISOString() });
       p.device = a.p_device; p.device_set_by_admin = true;
     },
     admin_set_role: function (d, u, a) {

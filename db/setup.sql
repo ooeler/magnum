@@ -63,12 +63,8 @@ language sql stable security definer set search_path = public as $$
   select coalesce((select is_admin from public.profiles where id = public.uid()), false)
 $$;
 
--- Bei Abstimmungen zählen Android-Stimmen doppelt, sobald der Admin das Gerät bestätigt hat.
--- Das Gerät aus der Registrierung ist nur eine Angabe der App und lässt sich nicht prüfen.
-create or replace function public.vote_weight(p_member uuid) returns int
-language sql stable security definer set search_path = public as $$
-  select case when device = 'android' and device_set_by_admin then 2 else 1 end from public.profiles where id = p_member
-$$;
+-- Jede Stimme zählt gleich viel. Das Gerät zählt nur fürs Duell des Monats.
+drop function if exists public.vote_weight(uuid);
 
 -- Heutiger Tag im Club. Die Fristen unten gelten nur für Anfragen aus der App (public.uid() gesetzt):
 -- Wiederherstellung, Release und SQL Editor laufen ohne Login und sind nicht betroffen.
@@ -164,16 +160,16 @@ alter table public.admin_log enable row level security;
 
 create or replace function public.admin_set_device(p_member uuid, p_device text) returns void
 language plpgsql security definer set search_path = public as $$
-declare v_old text; v_bestaetigt boolean;
+declare v_old text;
 begin
   if not public.is_admin() then raise exception 'Nur der Administrator darf den Gerätetyp ändern'; end if;
   if p_device not in ('iphone', 'android') then raise exception 'Unbekannter Gerätetyp'; end if;
-  select device, device_set_by_admin into v_old, v_bestaetigt from public.profiles where id = p_member;
+  select device into v_old from public.profiles where id = p_member;
   if v_old is null then raise exception 'Mitglied nicht gefunden'; end if;
-  if v_old = p_device and (v_bestaetigt or p_device = 'iphone') then return; end if;
+  if v_old = p_device then return; end if;
   update public.profiles set device = p_device, device_set_by_admin = true where id = p_member;
   insert into public.admin_log (admin_id, member_id, action)
-  values (public.uid(), p_member, case when v_old = p_device then 'Gerätetyp ' || p_device || ' bestätigt' else 'Gerätetyp ' || v_old || ' → ' || p_device end);
+  values (public.uid(), p_member, 'Gerätetyp ' || v_old || ' → ' || p_device);
 end $$;
 
 create or replace function public.admin_set_role(p_member uuid, p_role text) returns void
@@ -452,7 +448,7 @@ create table if not exists public.post_prosts (
 alter table public.post_prosts enable row level security;
 
 -- ───────────── Abstimmungen: Sacceri-Auszeichnung und Spitznamen ─────────────
--- Zweidrittelmehrheit der Stimmberechtigten, Android-Stimmen zählen doppelt.
+-- Zweidrittelmehrheit der Stimmberechtigten, jede Stimme zählt gleich viel.
 create table if not exists public.proposals (
   id           uuid primary key default gen_random_uuid(),
   kind         text not null check (kind in ('sacceri', 'nickname')),
@@ -504,9 +500,8 @@ begin
   if p.status <> 'open' then return p.status; end if;
   if p.kind = 'nickname' and p.seconded_by is null then return 'open'; end if;
 
-  select coalesce(sum(public.vote_weight(v)), 0) into v_total from public.eligible_voters(p.id) v;
-  select coalesce(sum(case when b.vote then public.vote_weight(b.voter_id) else 0 end), 0),
-         coalesce(sum(case when not b.vote then public.vote_weight(b.voter_id) else 0 end), 0)
+  select count(*) into v_total from public.eligible_voters(p.id) v;
+  select count(*) filter (where b.vote), count(*) filter (where not b.vote)
     into v_yes, v_no
     from public.ballots b
    where b.proposal_id = p.id and b.voter_id in (select public.eligible_voters(p.id));
@@ -808,7 +803,6 @@ grant update (phrase) on public.phrases to authenticated;
 alter default privileges in schema public revoke execute on functions from public;
 revoke execute on function public.is_member() from public, anonymous;
 revoke execute on function public.is_admin() from public, anonymous;
-revoke execute on function public.vote_weight(uuid) from public, anonymous;
 revoke execute on function public.me() from public, anonymous;
 revoke execute on function public.admin_set_device(uuid, text) from public, anonymous;
 revoke execute on function public.admin_set_role(uuid, text) from public, anonymous;
@@ -832,7 +826,7 @@ revoke execute on function public.check_trip() from public, anonymous, authentic
 revoke execute on function public.check_trip_participant() from public, anonymous, authenticated;
 revoke execute on function public.set_created_at() from public, anonymous, authenticated;
 revoke execute on function public.set_phrase_fee() from public, anonymous, authenticated;
-grant execute on function public.is_member(), public.is_admin(), public.vote_weight(uuid), public.me(),
+grant execute on function public.is_member(), public.is_admin(), public.me(),
   public.admin_set_device(uuid, text), public.admin_set_role(uuid, text), public.claim_organizer(uuid),
   public.open_magnum_kasse(), public.eligible_voters(uuid), public.propose_sacceri(uuid, uuid),
   public.propose_nickname(uuid, text), public.second_proposal(uuid), public.cast_ballot(uuid, boolean)
