@@ -97,7 +97,7 @@ test("Mitglied über Einladung, Android zählt erst nach Bestätigung", async ()
   const inv = await db.query("select invited_by, device from public.profiles where id = $1", [B.id]);
   expect(inv.rows[0].device).toBe("android");
   expect(inv.rows[0].invited_by).toBeTruthy();
-  for (let i = 0, n = 0; i < 4; i++) { const r = await post("/invite", { action: "create" }, bearer(B.token)); if (r.s == 200) n++; if (i == 3) expect(n).toBe(3) }
+  for (let i = 0; i < 4; i++) expect((await post("/invite", { action: "create" }, bearer(B.token))).s).toBe(200);
 });
 
 test("Rechte an der App vorbei", async () => {

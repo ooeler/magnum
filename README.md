@@ -70,7 +70,7 @@ Nach dem ersten Release einen Einladungslink erzeugen. Wer ihn einlöst, wird Ad
 DATABASE_URL="$(neon connection-string main)" node scripts/erster-link.mjs https://<github-name>.github.io/magnum/
 ```
 
-Alle weiteren Mitglieder lädst du in der App ein: **Club → Einladungen → Einladungslink erstellen** und per WhatsApp schicken. Der Link gilt 7 Tage und einmal, jedes Mitglied hat höchstens 3 offene Links. Der Club nimmt höchstens 12 Mitglieder auf (`settings.max_members`).
+Alle weiteren Mitglieder lädst du in der App ein: **Club → Einladungen → Einladungslink erstellen** und per WhatsApp schicken. Der Link gilt 7 Tage und einmal. Der Club nimmt höchstens 12 Mitglieder auf (`settings.max_members`).
 
 **Android-Mitglieder** bestätigst du im Mitgliederprofil, sonst zählt ihre Stimme einfach.
 
