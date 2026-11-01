@@ -1,7 +1,6 @@
 // Einladungslinks: reine Logik, damit sie getestet werden kann.
 // Jedes Mitglied darf einladen. Der Club hat höchstens settings.max_members Mitglieder (Standard 12).
 export const INVITE_DAYS = 7;
-export const MAX_OFFEN = 3; // offene Einladungen pro Mitglied, der Admin ist nicht begrenzt
 
 // Link-Token: 32 Zufallsbytes (base64url). In der Datenbank liegt nur der SHA-256-Hash.
 export function newToken() {
