@@ -1,0 +1,28 @@
+{
+  "name": "magnum",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Magnum – PWA des Magnum Clubs: Anlässe, Reisen, Rangliste, Sammelkarten, Statistik",
+  "scripts": {
+    "start": "node scripts/build.mjs && node scripts/serve.mjs dist 4183",
+    "demo": "node scripts/demo.mjs",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:db": "bash scripts/db-test.sh",
+    "build": "node scripts/build.mjs",
+    "test:neon": "playwright test -c playwright.neon.config.js"
+  },
+  "dependencies": {
+    "@neon/config": "1.10.0",
+    "@neon/env": "1.6.8"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-s3": "3.1161.0",
+    "@aws-sdk/s3-request-presigner": "3.1161.0",
+    "@neon/functions": "0.11.0",
+    "@playwright/test": "1.64.1",
+    "hono": "4.13.14",
+    "jose": "6.2.14",
+    "pg": "8.23.1"
+  }
+}

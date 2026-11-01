@@ -1,0 +1,83 @@
+# Jede Änderung kommt über einen eigenen Branch + Pull Request.
+# Sind alle Tests und Sicherheitsprüfungen grün, wird automatisch gemergt und – je nach Branch – ein Release erstellt und deployt:
+#   feature/…                  → Minor-Release (z. B. v1.1.0)
+#   fix/…, Dependabot npm       → Patch-Release (z. B. v1.0.2)  (npm-Updates sind nur Sicherheitspatches)
+#   ci/…, docs/…, Dependabot Actions → nur mergen, kein Release (Major-Actions-Updates bleiben offen)
+# Entwürfe (Draft) und Pull Requests aus Forks werden nie automatisch gemergt.
+name: Auto-Merge & Release
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  # Entwürfe in eigener Gruppe: ein übersprungener Entwurfs-Lauf darf den echten Lauf nicht abbrechen
+  group: auto-merge-${{ github.event.pull_request.number }}-${{ github.event.pull_request.draft }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
+    uses: ./.github/workflows/ci.yml
+
+  codeql:
+    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
+    uses: ./.github/workflows/codeql.yml
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+
+  merge:
+    needs: [test, codeql] # Tests, Semgrep, npm audit und CodeQL müssen grün sein
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PR: ${{ github.event.pull_request.number }}
+      BRANCH: ${{ github.event.pull_request.head.ref }}
+      TITLE: ${{ github.event.pull_request.title }}
+    steps:
+      - id: meta
+        if: github.actor == 'dependabot[bot]'
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3
+
+      - name: Art der Änderung bestimmen
+        id: kind
+        env:
+          ECO: ${{ steps.meta.outputs.package-ecosystem }}
+          UPD: ${{ steps.meta.outputs.update-type }}
+        run: |
+          bump=none; merge=true
+          case "$BRANCH" in
+            feature/*) bump=minor ;;
+            fix/*)     bump=patch ;;
+            dependabot/*)
+              if [ "$ECO" = "npm_and_yarn" ]; then bump=patch
+              elif [ "$UPD" = "version-update:semver-major" ]; then merge=false; fi ;;
+          esac
+          echo "bump=$bump" >> "$GITHUB_OUTPUT"; echo "merge=$merge" >> "$GITHUB_OUTPUT"
+          echo "Branch $BRANCH → merge=$merge, release=$bump"
+
+      - name: Mergen
+        if: steps.kind.outputs.merge == 'true'
+        run: gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --squash --delete-branch
+
+      - name: Release erstellen und deployen
+        if: steps.kind.outputs.merge == 'true' && steps.kind.outputs.bump != 'none'
+        env:
+          BUMP: ${{ steps.kind.outputs.bump }}
+        run: |
+          last=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 50 --json tagName --jq '.[].tagName' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+          IFS=. read -r ma mi pa <<< "${last#v}"; ma=${ma:-1}; mi=${mi:-0}; pa=${pa:-0}
+          if [ "$BUMP" = "minor" ]; then mi=$((mi+1)); pa=0; else pa=$((pa+1)); fi
+          tag="v$ma.$mi.$pa"; echo "Neue Version: $tag (vorher $last)"
+          gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target main --title "Magnum ${tag#v}" --generate-notes
+          # Ein mit GITHUB_TOKEN erstelltes Release startet keine Workflows → Deployment explizit anstossen
+          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "$tag" -f grund="$TITLE (#$PR)"

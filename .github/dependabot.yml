@@ -1,0 +1,22 @@
+version: 2
+updates:
+  # npm: nur Sicherheitsupdates (Limit 0 schaltet normale Versions-Updates ab).
+  # Jeder Sicherheits-PR wird nach grünen Tests gemergt und automatisch deployt (siehe ci.yml).
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: daily
+    open-pull-requests-limit: 0
+    commit-message:
+      prefix: security
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci

@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1B1416">
+<title>Magnum</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Magnum">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,900&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#1B1416;--card:#251C1F;--deep:#160F12;--ln:#3A2C30;--ln2:#4A3A3E;--tx:#F3EBDD;--mu:#C9B8A6;--mu2:#A8988A;--ac:#E8B95A;--wine:#8E2A3A;--teal:#7FC4B8;--orange:#F08A5D;--lila:#B79CE0;--pink:#E79AA8;--hf:Fraunces,Georgia,serif}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 Inter,system-ui,-apple-system,sans-serif}
+body{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+body.nonav{padding-bottom:0}
+a{color:var(--ac)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+button:disabled{opacity:.45;cursor:not-allowed}
+[hidden]{display:none!important}
+header{padding:calc(14px + env(safe-area-inset-top,0px)) 18px 14px;display:flex;align-items:flex-end;justify-content:space-between;border-bottom:1px solid var(--ln);background:var(--bg);position:sticky;top:0;z-index:4}
+header .sub{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--mu);font-weight:600}
+header h1{margin:2px 0 0;font:900 30px/1 var(--hf);letter-spacing:-.5px}
+.hello{font-size:13px;color:var(--mu);margin-top:4px}
+main{padding:16px 14px 24px;display:flex;flex-direction:column;gap:14px;max-width:640px;margin:0 auto}
+h2{margin:6px 2px 0;font:700 22px var(--hf)}
+.card{background:var(--card);border:1px solid var(--ln);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.card.gold{border-color:var(--ac);background:#2B1F23}
+.card.wine{background:var(--wine);border-color:var(--wine)}
+.lbl{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--mu);font-weight:600}
+.big{font:900 26px/1.05 var(--hf)}
+.mid{font:900 20px/1.15 var(--hf)}
+.mu{color:var(--mu)}.sm{font-size:12px}.xs{font-size:11px}.b{font-weight:700}
+.row{display:flex;align-items:center;gap:10px}.sb{justify-content:space-between}.wrap{flex-wrap:wrap}.grow{flex:1 1 auto;min-width:0}
+.col{display:flex;flex-direction:column;gap:6px}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.tile{background:var(--bg);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:2px}
+.tile b{font:900 20px var(--hf)}.tile span{font-size:11px;color:var(--mu)}
+.bar{height:8px;border-radius:4px;background:var(--ln);overflow:hidden}.bar>i{display:block;height:100%;background:var(--ac);border-radius:4px}
+.bar.teal>i{background:var(--teal)}
+.segs{display:flex;gap:4px}.segs i{flex:1 1 0;height:7px;border-radius:3px;background:var(--ln)}.segs i.on{background:var(--ac)}
+.btn{min-height:48px;border-radius:14px;border:0;background:var(--ac);color:#1B1416;font-weight:800;font-size:15px;padding:0 16px}
+.btn.teal{background:var(--teal)}.btn.pink{background:var(--pink)}.btn.lila{background:var(--lila)}
+.btn.ghost{background:transparent;color:var(--tx);border:1px solid var(--ln2);font-weight:700}
+.btn.line{background:transparent;color:var(--tx);border:1px solid var(--ac);font-weight:700}
+.btn.dash{background:transparent;color:var(--ac);border:1px dashed var(--ac);font-weight:700;min-height:42px}
+.btn.link{background:transparent;color:var(--ac);min-height:40px;padding:0 6px}
+.pill{min-height:40px;padding:0 14px;border-radius:999px;font-size:13px;font-weight:700;background:transparent;color:var(--tx);border:1px solid var(--ln2)}
+.pill.on{background:var(--ac);color:#1B1416;border-color:var(--ac)}
+.pill.out{background:var(--wine);color:#fff;border-color:var(--wine)}
+.pill.sm{min-height:36px;padding:0 12px;font-size:12px}
+.chip{font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--bg);color:var(--mu);border:1px solid var(--ln);display:inline-block}
+.chip.ja{background:var(--teal);color:#1B1416;border-color:var(--teal)}.chip.nein{background:var(--wine);color:#fff;border-color:var(--wine)}
+.chip.guest{background:#3A2A20;color:var(--tx);border-color:#5A4430}.chip.v{background:var(--teal);color:#1B1416;border-color:var(--teal);font-weight:700}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+input.t,select.t,textarea.t{width:100%;min-height:46px;border-radius:12px;border:1px solid var(--ln2);background:var(--bg);color:var(--tx);padding:0 12px;font-size:16px}
+textarea.t{padding:10px 12px;min-height:90px;resize:vertical}
+label.f{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:600;color:var(--mu)}
+.file{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
+.file input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.av{width:44px;height:44px;flex:0 0 44px;border-radius:50%;background:var(--wine);display:flex;align-items:center;justify-content:center;font:900 18px var(--hf);color:var(--tx)}
+.av.s{width:36px;height:36px;flex-basis:36px;font-size:14px}.av.l{width:64px;height:64px;flex-basis:64px;font-size:26px}.av.drv{background:#2C4A5A}
+.ev{display:flex;gap:14px}
+.dt{width:58px;flex:0 0 58px;border-radius:12px;background:var(--wine);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 0;align-self:flex-start}
+.dt b{font:900 24px/1 var(--hf)}.dt span{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#F6D9DE}
+.lst{display:flex;flex-direction:column}.lst>*{border-top:1px solid var(--ln);padding:10px 0}.lst>*:first-child{border-top:0;padding-top:0}
+.rk{width:30px;font:900 18px var(--hf);color:var(--mu2)}.rk.g1{color:#E8B95A}.rk.g2{color:#CFCFD4}.rk.g3{color:#D08A55}
+li.me{background:#3A2A20;border-radius:10px;padding-left:6px!important;padding-right:6px!important}
+ol{list-style:none;margin:0;padding:0}
+.mem{background:var(--card);border:1px solid var(--ln);border-radius:16px;padding:14px;display:flex;flex-direction:column;align-items:flex-start;gap:7px;text-align:left;color:var(--tx)}
+.nick{color:var(--ac);font-weight:700;font-size:13px}
+.trip{background:var(--card);border:1px solid var(--ln);border-radius:16px;overflow:hidden;text-align:left;padding:0;color:var(--tx);display:block;width:100%}
+.band{min-height:88px;display:flex;align-items:flex-end;justify-content:space-between;padding:12px 16px;gap:8px}
+.band b{font:900 22px var(--hf);color:#FFF8EE}.band span{font-size:12px;font-weight:700;background:var(--bg);color:var(--tx);padding:4px 10px;border-radius:999px;white-space:nowrap}
+.ph{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.ph>*{aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--bg);display:block}
+.ph img,.cimg img{width:100%;height:100%;object-fit:cover;display:block}
+.kgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.kc{background:var(--card);border:2px solid var(--c,var(--ac));border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:8px;text-align:left;min-height:220px;color:var(--tx)}
+.kc.lock{border-style:dashed;border-color:var(--ln2);background:#1F1719;color:var(--mu)}
+.kc .r{font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--c,var(--ac))}
+.cimg{flex:1 1 auto;border-radius:10px;background:var(--bg);min-height:96px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.cimg b{font:900 40px var(--hf);color:var(--c,var(--ac))}
+.coll{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px;width:100%;height:100%}.coll>*{min-height:46px;background:#3A2C30;overflow:hidden}
+nav{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border-top:1px solid var(--ln);background:var(--deep);padding:8px 4px calc(8px + env(safe-area-inset-bottom,0px));z-index:5}
+nav button{background:none;border:0;min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--mu2);font-size:11px;font-weight:600}
+nav button i{width:22px;height:4px;border-radius:2px;background:transparent}
+nav button.on{color:var(--ac)}nav button.on i{background:var(--ac)}
+#ov{position:fixed;inset:0;background:var(--bg);z-index:8;overflow-y:auto}
+#ov .top{padding:calc(14px + env(safe-area-inset-top,0px)) 16px 16px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--ln)}
+.back{width:44px;height:44px;border-radius:50%;border:1px solid var(--ln);background:var(--card);display:flex;align-items:center;justify-content:center;align-self:flex-start}
+#sh{position:fixed;inset:0;background:rgba(10,6,8,.85);z-index:9;display:flex;align-items:flex-end;justify-content:center}
+#sh section{width:100%;max-width:640px;max-height:92vh;overflow-y:auto;background:var(--card);border-radius:24px 24px 0 0;padding:24px 20px calc(30px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:12px;border-top:2px solid var(--teal)}
+.virt{min-height:64px;padding:12px 16px;border-radius:16px;border:0;background:var(--teal);color:#1B1416;font-size:15px;font-weight:700;text-align:left;line-height:1.35;display:flex;flex-direction:column;gap:2px}
+#toast{position:fixed;left:16px;right:16px;top:calc(96px + env(safe-area-inset-top,0px));max-width:600px;margin:0 auto;background:var(--ac);color:#1B1416;border-radius:14px;padding:12px 16px;font-weight:700;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.45);z-index:20}
+#party{position:fixed;inset:0;background:rgba(60,12,24,.94);z-index:15;overflow:hidden}
+#party .gx{position:absolute;left:0;display:block;animation:mgX var(--dx) linear var(--d) infinite alternate}
+#party .gy{display:block;animation:mgY var(--dy) var(--d2) infinite}
+#party .pf{position:absolute;left:0;right:0;bottom:60px;display:flex;flex-direction:column;align-items:center;gap:14px;padding:0 24px;text-align:center}
+#party .prost{font:900 48px var(--hf);color:var(--ac);animation:mgP 1.6s ease-in-out infinite}
+@keyframes mgX{0%{transform:translateX(-30px)}100%{transform:translateX(calc(100vw - 20px))}}
+@keyframes mgY{0%{transform:translateY(0) rotate(-8deg);animation-timing-function:cubic-bezier(.2,.7,.4,1)}50%{transform:translateY(-180px) rotate(10deg);animation-timing-function:cubic-bezier(.6,0,.8,.3)}100%{transform:translateY(0) rotate(-8deg)}}
+@keyframes mgP{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+@media (prefers-reduced-motion:reduce){#party .gx,#party .gy,#party .prost{animation:none}}
+.gl{position:relative;display:inline-block}
+.gl .hat{position:absolute;top:-11px;left:4px;transform:rotate(-8deg)}
+.fx,#snow{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:30}
+.fx span{position:absolute;left:0;font-size:38px;line-height:1;animation:mgFly 7s linear both}
+.fx.rv span{animation-name:mgFlyR}
+.fx svg{display:block}
+#snow i{position:absolute;top:-10px;border-radius:50%;background:#fff;opacity:.7;animation:mgSnow linear both}
+@keyframes mgFly{0%{transform:translateX(-70px) rotate(-12deg)}50%{transform:translate(50vw,-30px) rotate(10deg)}100%{transform:translateX(calc(100vw + 70px)) rotate(-12deg)}}
+@keyframes mgFlyR{0%{transform:translateX(calc(100vw + 70px)) rotate(12deg)}50%{transform:translate(50vw,-30px) rotate(-10deg)}100%{transform:translateX(-70px) rotate(12deg)}}
+@keyframes mgSnow{to{transform:translateY(105vh)}}
+@media (prefers-reduced-motion:reduce){.fx,#snow{display:none}}
+.star{width:44px;height:44px;border:0;background:transparent;padding:0;display:inline-flex;align-items:center;justify-content:center}
+.stars{display:flex;gap:2px}
+.bars{display:flex;align-items:flex-end;gap:8px;height:130px}.bars>div{flex:1 1 0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;height:100%}
+.bars i{display:block;width:100%;max-width:34px;border-radius:6px 6px 2px 2px;background:var(--wine)}.bars .last i{background:var(--ac)}
+.auth{min-height:100vh;padding:calc(60px + env(safe-area-inset-top,0px)) 24px 40px;display:flex;flex-direction:column;gap:18px;max-width:480px;margin:0 auto}
+.err{color:var(--orange);font-size:13px}
+.empty{color:var(--mu);font-size:13px;text-align:center;padding:8px}
+details summary{cursor:pointer;font-weight:700;list-style:none}details summary::-webkit-details-marker{display:none}
+.ok{color:var(--teal)}
+.mono{font-family:ui-monospace,Menlo,monospace;letter-spacing:.5px}
+.kasse{display:flex;gap:4px;flex-wrap:wrap}.kasse i{width:14px;height:28px;border-radius:4px 4px 3px 3px;background:var(--teal)}
+</style>
+</head><body>
+<div id="app"></div>
+<div id="toast" role="status" hidden></div>
+<script src="config.js"></script>
+<script src="client.js"></script>
+<script>
+"use strict";
+// ═══════════════════════════════════════════════════════════════════════
+//  Magnum – App des Magnum Clubs: Anlässe, Reisen, Mitglieder, Sammelkarten, Statistik.
+//  Gamification (Punkte, Streak, Ränge), Zusammenhalt (Club-Ziel, Prost-Wand), Geselligkeit.
+//  Daten: Neon (Row Level Security). Abstimmungen laufen über Datenbank-Funktionen.
+// ═══════════════════════════════════════════════════════════════════════
+var C = window.MG_CONFIG || {}, sb = null, ME = null, PRF = null, PREV = null, MAINT = false, READY = false;
+var TABLES = ["settings", "profiles", "events", "rsvps", "magnums", "magnum_guests", "rides", "ride_passengers", "trips",
+  "trip_participants", "trip_photos", "proposals", "ballots", "posts", "post_prosts", "cards", "drinks", "phrases", "sayings",
+  "saying_prosts", "restaurants", "restaurant_visits", "restaurant_ratings", "feedback", "admin_log"];
+var D = {}; TABLES.forEach(function (t) { D[t] = [] });
+var TAB = lsGet("mg_tab") || "termine", OV = null, SH = null, UI = {}, AUTH = { mode: "login" }, INVITE = null, INVLIST = null, NEWLINK = null, BUSY = false;
+var URLS = {}, WANT = {}, CACHE = null, CH = null;
+
+function lsGet(k) { try { return localStorage.getItem(k) } catch (e) { return null } }
+function lsSet(k, v) { try { localStorage.setItem(k, v) } catch (e) {} }
+function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] }) }
+function now() { return Date.now() }
+function uid() { return ME && ME.id }
+function localDay(iso) { var d = new Date(iso); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0") }
+function today() { var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0") }
+function pr(id) { return D.profiles.find(function (p) { return p.id == id }) || null }
+function nm(id) { var p = pr(id); return p ? (p.display_name || "Mitglied") : "–" }
+function first(id) { return nm(id).split(" ")[0] }
+function ini(id) { return (nm(id).trim().charAt(0) || "?").toUpperCase() }
+function weight(id) { var p = pr(id); return p && p.device == "android" && p.device_set_by_admin ? 2 : 1 }
+function deviceText(p) { return p.device != "android" ? "iPhone" : p.device_set_by_admin ? "Android (Stimme zählt doppelt)" : "Android (noch nicht bestätigt)" }
+function isAdmin() { return !!(PRF && PRF.is_admin) }
+function S() { return D.settings[0] || { max_members: 12, goal_title: "Club-Ziel", goal_target: 30, phrase_fee: 2, magnum_price: 45 } }
+function byDate(a, b) { return new Date(a.starts_at) - new Date(b.starts_at) }
+var MON = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+function fDate(iso, time) {
+  var d = new Date(iso); if (isNaN(d)) return "";
+  var s = d.toLocaleDateString("de-CH", { weekday: "short", day: "numeric", month: "short" });
+  return time ? s + " · " + d.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" }) : s;
+}
+function fDay(isoDate) { if (!isoDate) return ""; var d = new Date(isoDate + "T12:00:00"); return d.getDate() + ". " + MON[d.getMonth()] + " " + d.getFullYear() }
+function fMonYear(isoDate) { if (!isoDate) return ""; var d = new Date(isoDate + "T12:00:00"); return MON[d.getMonth()] + " " + d.getFullYear() }
+function chf(n) { return "CHF " + (Math.round(Number(n) * 100) / 100).toLocaleString("de-CH", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) }
+
+// ───────────── Kurze Meldung ─────────────
+var TT = null;
+function toast(t) { var e = document.getElementById("toast"); e.textContent = t; e.hidden = false; clearTimeout(TT); TT = setTimeout(function () { e.hidden = true }, 3500) }
+document.getElementById("toast").addEventListener("click", function () { this.hidden = true });
+
+// ═════════════ Spielregeln (Punkte, Streak, Ränge, Trinkfestigkeit) ═════════════
+var RANKS = [{ min: 0, name: "Neuling" }, { min: 200, name: "Stammgast" }, { min: 400, name: "Kellermeister" }, { min: 600, name: "Magnum-Ritter" }, { min: 900, name: "Club-Legende" }];
+var POINTS = [["Dabei an einem Anlass", 50], ["Virtuell dabei mit gespendeter Magnum", 20], ["Anlass organisiert", 40], ["Gasttrinker mitgebracht", 15],
+  ["Reise mitgemacht", 30], ["Punkte von Mitfahrern (als Fahrer)", "10–50"], ["Fahrt bewertet", 5], ["Restaurant bewertet", 5], ["Sammelkarte erstellt", 10], ["Verbesserungsvorschlag", 10]];
+var LEVELS = ["Apfelschorle", "Ein-Glas-Typ", "Solide", "Standfest", "Magnum-Legende"];
+var UNITS = { wein: 1, bier: 1, schnaps: 1, magnum: 1.5, wasser: 0 };
+var KINDS = [["wein", "Wein"], ["magnum", "Magnum-Glas"], ["bier", "Bier"], ["schnaps", "Schnaps"], ["wasser", "Wasser"]];
+function rankOf(p) { var r = RANKS[0]; RANKS.forEach(function (x) { if (p >= x.min) r = x }); return r }
+function pastEvents() { var t = now(); return D.events.filter(function (e) { return new Date(e.starts_at).getTime() < t }).sort(byDate).reverse() }
+function upcoming() { var t = now() - 6 * 3600e3; return D.events.filter(function (e) { return new Date(e.starts_at).getTime() >= t }).sort(byDate) }
+function rsvp(eid, mid) { var r = D.rsvps.find(function (x) { return x.event_id == eid && x.member_id == mid }); return r ? r.status : null }
+
+function stats(id) {
+  CACHE = CACHE || {};
+  if (CACHE[id]) return CACHE[id];
+  var pts = 0, parts = {}, add = function (k, n) { pts += n; parts[k] = (parts[k] || 0) + n };
+  var past = pastEvents(), streak = 0, broken = false, attended = 0, virt = 0, run = 0, rekord = 0;
+  past.forEach(function (e) {
+    var s = rsvp(e.id, id);
+    if (s == "in") { add("Anlässe", 50); attended++ } else if (s == "virtual") { add("Virtuell dabei", 20); virt++ }
+    if (e.organizer_id == id) add("Organisiert", 40);
+    if (!broken) { if (s == "in" || s == "virtual") streak++; else broken = true }
+    run = s == "in" || s == "virtual" ? run + 1 : 0; rekord = Math.max(rekord, run);
+  });
+  D.magnum_guests.forEach(function (g) { if (g.added_by == id) add("Gasttrinker", 15) });
+  var trips = D.trip_participants.filter(function (tp) {
+    var t = D.trips.find(function (x) { return x.id == tp.trip_id }); return tp.member_id == id && t && t.starts_on <= today();
+  }).length;
+  if (trips) add("Reisen", trips * 30);
+  D.ride_passengers.forEach(function (rp) {
+    var r = D.rides.find(function (x) { return x.id == rp.ride_id }); if (!r) return;
+    if (r.driver_id == id && rp.points_given) add("Als Fahrer", rp.points_given);
+    if (rp.passenger_id == id && rp.rated_at) add("Fahrt bewertet", 5);
+  });
+  D.restaurant_ratings.forEach(function (r) { if (r.member_id == id) add("Restaurant bewertet", 5) });
+  D.cards.forEach(function (c) { if (c.created_by == id) add("Sammelkarte", 10) });
+  D.feedback.forEach(function (f) { if (f.user_id == id && f.status != "fehler") add("Vorschläge", 10) });
+  var virtAll = D.rsvps.filter(function (r) { return r.member_id == id && r.status == "virtual" }).length;
+  var rank = rankOf(pts), next = RANKS.filter(function (r) { return r.min > pts })[0];
+  var res = { points: pts, parts: parts, streak: streak, rekord: rekord, attended: attended, virt: virtAll, trips: trips, rank: rank, next: next,
+    pct: next ? Math.round(100 * (pts - rank.min) / (next.min - rank.min)) : 100, drink: drinkLevel(id),
+    magnums: D.magnums.filter(function (m) { return m.brought_by == id }).length,
+    cards: D.cards.filter(function (c) { return c.created_by == id }).length };
+  CACHE[id] = res;
+  return res;
+}
+// Trinkfestigkeit: Ø Einheiten pro Abend aus den fotografierten Getränken
+function drinkLevel(id) {
+  var days = {};
+  D.drinks.forEach(function (d) { if (d.member_id == id) days[d.drunk_on] = (days[d.drunk_on] || 0) + (UNITS[d.kind] || 0) });
+  var n = Object.keys(days).length, photos = D.drinks.filter(function (d) { return d.member_id == id }).length;
+  if (!n) return { level: 0, label: "Noch keine Fotos", basis: "Fotografiere deine Getränke am Abend, dann wird sie errechnet.", avg: 0 };
+  var sum = 0; Object.keys(days).forEach(function (k) { sum += days[k] });
+  var avg = sum / n, lv = avg < 1.5 ? 1 : avg < 3 ? 2 : avg < 4.5 ? 3 : avg < 6 ? 4 : 5;
+  return { level: lv, label: LEVELS[lv - 1], avg: avg, basis: "Ø " + avg.toFixed(1).replace(".", ",") + " Getränke pro Abend aus " + photos + " Fotos an " + n + " Abend" + (n > 1 ? "en" : "") };
+}
+// Rangliste: gleiche Punktzahl = gleicher Rang, Nummer nur beim ersten
+function board() {
+  var L = D.profiles.map(function (p) { return { id: p.id, s: stats(p.id) } }).sort(function (a, b) { return b.s.points - a.s.points || nm(a.id).localeCompare(nm(b.id), "de") });
+  L.forEach(function (x, i) { x.place = i && L[i - 1].s.points == x.s.points ? L[i - 1].place : i + 1; x.showNo = !i || L[i - 1].place != x.place });
+  return L;
+}
+function segs(n, h) { var s = ""; for (var i = 1; i <= 5; i++) s += '<i class="' + (i <= n ? "on" : "") + '"' + (h ? ' style="height:' + h + 'px"' : "") + "></i>"; return '<div class="segs">' + s + "</div>" }
+
+// ═════════════ Abstimmungen (Spiegel der Datenbank-Regel, nur zur Anzeige) ═════════════
+function eligible(p) {
+  if (p.kind == "sacceri") return p.voters || D.trip_participants.filter(function (t) { return t.trip_id == p.trip_id }).map(function (t) { return t.member_id });
+  return D.profiles.filter(function (x) { return x.id != p.target_id }).map(function (x) { return x.id });
+}
+function tally(p) {
+  var V = eligible(p), B = D.ballots.filter(function (b) { return b.proposal_id == p.id }), tot = 0, yes = 0, no = 0, by = {};
+  B.forEach(function (b) { by[b.voter_id] = b.vote });
+  V.forEach(function (v) { var w = weight(v); tot += w; if (by[v] === true) yes += w; else if (by[v] === false) no += w });
+  return { voters: V, by: by, total: tot, yes: yes, no: no, open: tot - yes - no, need: Math.ceil(tot * 2 / 3) };
+}
+function voteChips(t) {
+  return '<div class="chips">' + t.voters.map(function (v) {
+    var b = t.by[v]; return '<span class="chip ' + (b === true ? "ja" : b === false ? "nein" : "") + '">' + esc(first(v)) + (weight(v) == 2 ? " ×2" : "") + (b === true ? " · Ja" : b === false ? " · Nein" : "") + "</span>";
+  }).join("") + "</div>";
+}
+
+// ═════════════ Fotos (privater Speicher, signierte Links) ═════════════
+function img(path, alt) {
+  if (!path) return "";
+  var u = URLS[path]; if (!u) WANT[path] = 1;
+  return '<img alt="' + esc(alt || "Foto") + '" data-p="' + esc(path) + '"' + (u ? ' src="' + esc(u) + '"' : "") + ' loading="lazy">';
+}
+function fetchUrls() {
+  var ps = Object.keys(WANT); WANT = {};
+  if (!ps.length || !sb) return;
+  sb.storage.from("photos").createSignedUrls(ps, 3600).then(function (r) {
+    (r.data || []).forEach(function (x) {
+      if (!x.signedUrl) return; URLS[x.path] = x.signedUrl;
+      document.querySelectorAll("img[data-p]").forEach(function (i) { if (i.getAttribute("data-p") == x.path) i.src = x.signedUrl });
+    });
+  });
+}
+// Bilder vor dem Hochladen verkleinern (max. 1600 px, JPEG) – spart Speicher und Datenvolumen
+function shrink(file) {
+  return new Promise(function (res) {
+    if (!window.createImageBitmap) return res(file);
+    createImageBitmap(file).then(function (bm) {
+      var k = Math.min(1, 1600 / Math.max(bm.width, bm.height)), c = document.createElement("canvas");
+      c.width = Math.round(bm.width * k); c.height = Math.round(bm.height * k);
+      c.getContext("2d").drawImage(bm, 0, 0, c.width, c.height);
+      c.toBlob(function (b) { res(b || file) }, "image/jpeg", 0.82);
+    }).catch(function () { res(file) });
+  });
+}
+function upload(area, file) {
+  if (!/^image\//.test(file.type || "")) return Promise.reject(new Error("Bitte ein Bild wählen."));
+  var path = area + "/" + uid() + "/" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + ".jpg";
+  return shrink(file).then(function (blob) {
+    return sb.storage.from("photos").upload(path, blob, { contentType: "image/jpeg", upsert: false });
+  }).then(function (r) { if (r.error) throw r.error; return path });
+}
+
+// ═════════════ Laden & Live-Sync ═════════════
+function loadAll() {
+  return Promise.all(TABLES.map(function (t) { return sb.from(t).select("*") })).then(function (rs) {
+    rs.forEach(function (r, i) { if (!r.error) D[TABLES[i]] = r.data || [] });
+    PRF = pr(uid());
+  });
+}
+var RT = null;
+function refresh() { clearTimeout(RT); RT = setTimeout(function () { loadAll().then(render) }, 300) }
+function after(p, msg) {
+  return Promise.resolve(p).then(function (r) {
+    if (r && r.error) throw r.error;
+    if (msg) toast(msg);
+    return loadAll().then(function () { render(); return r && r.data });
+  }).catch(function (e) { toast(errText(e)); render() });
+}
+function errText(e) {
+  var m = (e && (e.message || e.error_description)) || String(e || "Fehler");
+  if (/row-level security|permission denied/i.test(m)) return "Dafür fehlen dir die Rechte.";
+  if (/duplicate key/i.test(m)) return "Das gibt es schon.";
+  if (/JWT|not logged/i.test(m)) return "Bitte neu anmelden.";
+  return m;
+}
+function fnErr(r) {
+  if (!r.error) return Promise.resolve(null);
+  var c = r.error.context;
+  return (c && c.json ? c.json().then(function (j) { return j.error || r.error.message }).catch(function () { return r.error.message }) : Promise.resolve(r.error.message));
+}
+
+// ═════════════ Begrüssung ═════════════
+function pick(a, k) { var x = 0; for (var i = 0; i < k.length; i++) x = (x * 31 + k.charCodeAt(i)) % 9973; return a[x % a.length] }
+// Komm mal wieder: bei den letzten drei Anlässen weder dabei noch virtuell
+function fehlt(id) {
+  var L = pastEvents().slice(0, 3);
+  return L.length == 3 && L.every(function (e) { var s = rsvp(e.id, id); return s != "in" && s != "virtual" });
+}
+function hello() {
+  var n = PRF ? first(PRF.id) : "", sp = n ? " " + n : "", h = new Date().getHours(), k = today() + n;
+  var ev = upcoming().filter(function (e) { return localDay(e.starts_at) == today() })[0];
+  if (PREV && now() - new Date(PREV).getTime() > 30 * 864e5) return "Hallo" + sp + ", willkommen zurück im Club!";
+  if (ev && h >= 17) return pick(["Prost", "Zum Wohl", "Santé"], k) + sp + "! Heute ist " + ev.title + ".";
+  if (ev) return "Hallo" + sp + ", heute ist " + ev.title + "!";
+  if (h >= 23 || h < 4) return "Hallo Nachtschwärmer" + sp + "!";
+  // Am Tag nach dem Anlass: nur wer wirklich dabei war, nicht wer virtuell mitgetrunken hat
+  var gestern = localDay(new Date(now() - 864e5).toISOString());
+  if (PRF && pastEvents().some(function (e) { return localDay(e.starts_at) == gestern && rsvp(e.id, PRF.id) == "in" })) return pick(["Hast du Kopfweh" + (n ? ", " + n : "") + "?", "Hallo Brummschädel" + sp + "!"], k);
+  if (PRF && fehlt(PRF.id)) return pick(["Hallo" + sp + ", komm mal wieder an den Stamm!", "Hoi" + sp + ", wir vermissen dich im Club!", "Salü" + sp + ", dein Glas bleibt leer ohne dich!"], k);
+  if (new Date().getDay() == 5 && h >= 12) return "Happy Friday" + sp + "! Zeit für ein Glas.";
+  var s = PRF && stats(PRF.id);
+  if (s && s.streak >= 3) return "Hallo" + sp + "! " + s.streak + " Anlässe in Folge, stark!";
+  return pick(h < 11 ? ["Guten Morgen", "Hoi", "Salü"] : h < 18 ? ["Hallo", "Hoi", "Salü"] : ["Guten Abend", "Hoi", "Salü"], k) + sp + "!";
+}
+
+// ═════════════ Saison-Effekte ═════════════
+// An besonderen Tagen fliegt ab und zu ein Emoji durchs Bild, an Anlasstagen fliegen gefüllte Weingläser.
+// Mütze im Advent, Schnee an manchen Wintertagen. Bei "Bewegung reduzieren" bewegt sich nichts, die Mütze bleibt.
+var FX = { "01-01": ["🎆", "🥂"], "01-06": ["👑", "🐫"], "02-14": ["❤️", "💘"], "08-01": ["🇨🇭", "🎆"], "10-31": ["👻", "🎃"], "12-06": ["🎅", "🎁"], "12-24": ["🎄", "🎁"], "12-25": ["🎄", "🎁"], "12-26": ["🎄", "⭐"], "12-31": ["🎆", "🥂"] }, FXON = false;
+function easter(y) { var a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451), n = h + l - 7 * m + 114; return new Date(y, Math.floor(n / 31) - 1, n % 31 + 1) }
+function fxDay(d) { var x = new Date(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8)), t = Math.round((x - easter(x.getFullYear())) / 864e5); return t >= -2 && t <= 1 ? ["🐰", "🥚"] : FX[d.slice(5)] }
+function isAdvent(d) { var y = +d.slice(0, 4), a = new Date(y, 11, 24 - new Date(y, 11, 24).getDay() - 21); return new Date(y, +d.slice(5, 7) - 1, +d.slice(8)) >= a && d.slice(5) <= "12-24" }
+function isSnow(d) { return /^(12|01|02)/.test(d.slice(5)) && pick([1, 0, 0], d + "schnee") == 1 }
+function anlassHeute() { return upcoming().some(function (e) { return localDay(e.starts_at) == today() }) }
+function fly(inhalt, art) {
+  if (document.hidden) return;
+  var b = document.createElement("div"), e = document.createElement("span");
+  b.className = "fx" + (Math.random() < .5 ? " rv" : ""); b.setAttribute("aria-hidden", "true"); b.setAttribute("data-fx", art);
+  e.style.top = 12 + Math.random() * 60 + "%"; if (art == "glas") e.innerHTML = FULL; else e.textContent = inhalt;
+  b.append(e); document.body.append(b); e.addEventListener("animationend", function () { b.remove() });
+}
+function snow() {
+  var b = document.createElement("div"); b.id = "snow"; b.setAttribute("aria-hidden", "true");
+  for (var i = 0; i < 40; i++) { var f = document.createElement("i"), z = 3 + Math.random() * 5; f.style.cssText = "left:" + Math.random() * 100 + "%;width:" + z + "px;height:" + z + "px;animation-duration:" + (6 + Math.random() * 5) + "s;animation-delay:" + Math.random() * 9 + "s"; b.append(f) }
+  document.body.append(b); setTimeout(function () { b.remove() }, 21e3);
+}
+function fxStart() {
+  if (FXON) return; FXON = true;
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  var F = fxDay(today());
+  var go = function () {
+    if (F) fly(F[Math.random() < .5 ? 0 : 1], "tag");
+    if (anlassHeute()) [0, 700, 1500].forEach(function (t) { setTimeout(function () { fly("", "glas") }, t) });
+    setTimeout(go, 4e4 + Math.random() * 5e4);
+  };
+  setTimeout(go, 2500);
+  if (isSnow(today())) setTimeout(snow, 1500);
+}
+
+// ═════════════ Darstellung ═════════════
+var TABS = [["termine", "Termine", "Anlässe & Abend"], ["reisen", "Reisen", "Unterwegs"], ["club", "Club", "Rangliste & Mitglieder"], ["karten", "Karten", "Sammlung"], ["stats", "Statistik", "Zahlen & Beizen"]];
+var GLASS = '<svg width="30" height="40" viewBox="0 0 34 44" aria-hidden="true" fill="none" stroke="#E8B95A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2h8v8c0 3 7 6 7 13v17a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V23c0-7 7-10 7-13z"/><path d="M6 26h22M6 34h22"/></svg>';
+var HAT = '<svg class="hat" width="26" height="24" viewBox="0 0 26 24" aria-hidden="true"><path d="M3 19C5 8 12 2 19 5c2 1 3 4 3 7-2-2-4-3-5-2 1 3 2 6 2 9z" fill="#B3263A"/><rect x="1" y="18" width="20" height="5" rx="2.5" fill="#F4ECE0"/><circle cx="22.5" cy="13" r="2.5" fill="#F4ECE0"/></svg>';
+var FULL = '<svg width="40" height="62" viewBox="0 0 40 62" aria-hidden="true" fill="none" stroke="#F4ECE0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 18c0 11 5 17 12 17s12-6 12-17z" fill="#8E1F36" stroke="none"/><path d="M7 3c-2 16 3 32 13 32S35 19 33 3z"/><path d="M20 35v20M11 58h18"/></svg>';
+var BACK = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2L4 8l6 6"/></svg>';
+var CAM = '<svg width="20" height="18" viewBox="0 0 20 18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M2 5h4l2-3h4l2 3h4v11H2z"/><circle cx="10" cy="10" r="3.5"/></svg>';
+function star(on) { return '<svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3 6.5 7 .8-5.2 4.8 1.5 7L12 17.6 5.7 21.1l1.5-7L2 9.3l7-.8z" fill="' + (on ? "#E8B95A" : "transparent") + '" stroke="' + (on ? "#E8B95A" : "#6A585C") + '" stroke-width="1.5" stroke-linejoin="round"/></svg>' }
+function stars(key, val, label) {
+  var s = ""; for (var i = 1; i <= 5; i++) s += '<button type="button" class="star" data-a="star" data-k="' + key + '" data-v="' + i + '" aria-label="' + esc(label) + ": " + i + ' von 5" aria-pressed="' + (i <= val) + '">' + star(i <= val) + "</button>";
+  return '<div class="stars">' + s + "</div>";
+}
+function v(k, d) { return UI[k] != null ? UI[k] : (d == null ? "" : d) }
+function memberOptions(sel, filter, empty) {
+  return '<option value="">' + esc(empty || "– wählen –") + "</option>" + D.profiles.filter(filter || function () { return true }).sort(function (a, b) { return nm(a.id).localeCompare(nm(b.id), "de") })
+    .map(function (p) { return '<option value="' + p.id + '"' + (p.id == sel ? " selected" : "") + ">" + esc(nm(p.id)) + (p.nickname ? " «" + esc(p.nickname) + "»" : "") + "</option>" }).join("");
+}
+
+function render() {
+  CACHE = null;
+  var app = document.getElementById("app"), ov = document.getElementById("ov"), sh = document.querySelector("#sh section");
+  var keep = { main: window.scrollY, ov: ov ? ov.scrollTop : 0, sh: sh ? sh.scrollTop : 0 };
+  var f = document.activeElement, fk = f && f.getAttribute && f.getAttribute("data-k"), fs = f && f.selectionStart;
+  var html;
+  if (!sb) html = authShell('<div class="card"><b>Noch nicht eingerichtet</b><span class="mu sm">In <code>config.js</code> fehlen die Neon-Adressen (siehe README).</span></div>');
+  else if (MAINT) html = authShell('<div class="card"><span class="big">Update wird eingespielt</span><span class="mu">Gleich geht es weiter. Die App lädt danach von selbst neu.</span></div>');
+  else if (INVITE) html = joinView();
+  else if (AUTH.mode == "recovery") html = recoveryView();
+  else if (!ME) html = loginView();
+  else if (!READY) html = authShell('<div class="empty">Lade den Club …</div>');
+  else if (!PRF) html = authShell('<div class="card"><span class="mid">Kein Mitglied</span><span class="mu sm">Dieses Konto gehört nicht zum Magnum Club. Zugang gibt es nur mit einer Einladung.</span><button class="btn ghost" data-a="logout">Abmelden</button></div>');
+  else html = shell();
+  app.innerHTML = html;
+  document.body.classList.toggle("nonav", !(ME && PRF && READY && !MAINT && !INVITE));
+  var o2 = document.getElementById("ov"), s2 = document.querySelector("#sh section");
+  if (o2) { o2.scrollTop = keep.ov; document.body.style.overflow = "hidden" } else document.body.style.overflow = "";
+  if (s2) s2.scrollTop = keep.sh;
+  if (!o2 && !s2) window.scrollTo(0, keep.main);
+  if (fk) { var n = document.querySelector('[data-k="' + fk + '"]'); if (n && n.tagName != "BUTTON") { n.focus(); try { if (fs != null) n.setSelectionRange(fs, fs) } catch (e) {} } }
+  fetchUrls();
+  if (READY && PRF) fxStart();
+}
+function authShell(inner) { return '<div class="auth"><div class="row">' + GLASS + '<div><div class="lbl">Magnum Club</div><h1 style="margin:0;font:900 34px/1 var(--hf)">Magnum</h1></div></div>' + inner + "</div>" }
+
+function shell() {
+  var t = TABS.filter(function (x) { return x[0] == TAB })[0] || TABS[0];
+  var body = { termine: termine, reisen: reisen, club: club, karten: karten, stats: statistik }[t[0]]();
+  return '<header><div><div class="sub">' + esc(t[2]) + '</div><h1>Magnum</h1><div class="hello">' + esc(hello()) + '</div></div><span class="gl">' + GLASS + (isAdvent(today()) ? HAT : "") + "</span></header>" +
+    "<main>" + body + "</main>" +
+    '<nav aria-label="Bereiche">' + TABS.map(function (x) { return '<button type="button" data-a="tab" data-v="' + x[0] + '" class="' + (x[0] == TAB ? "on" : "") + '"' + (x[0] == TAB ? ' aria-current="page"' : "") + "><i></i><span>" + x[1] + "</span></button>" }).join("") + "</nav>" +
+    (OV ? overlay() : "") + (SH ? sheet() : "");
+}
+
+// ───────────── Login, Einladung, Passwort ─────────────
+function loginView() {
+  if (AUTH.mode == "reset") return authShell('<form class="card" data-s="reset"><span class="mid">Passwort vergessen</span><label class="f">Mail-Adresse<input class="t" type="email" name="email" autocomplete="email" required></label>' +
+    (AUTH.msg ? '<span class="ok sm">' + esc(AUTH.msg) + "</span>" : "") + '<button class="btn">Link schicken</button><button type="button" class="btn link" data-a="authmode" data-v="login">Zurück zur Anmeldung</button></form>');
+  return authShell('<span class="mu">Der Club für Wein, Reisen und gute Geschichten. Zugang nur für eingeladene Mitglieder.</span>' +
+    '<form class="card" data-s="login" id="login"><label class="f">Mail-Adresse<input class="t" type="email" name="email" autocomplete="email" required></label>' +
+    '<label class="f">Passwort<input class="t" type="password" name="pw" autocomplete="current-password" required></label>' +
+    (AUTH.err ? '<span class="err" role="alert">' + esc(AUTH.err) + "</span>" : "") +
+    '<button class="btn">Anmelden</button><button type="button" class="btn link" data-a="authmode" data-v="reset">Passwort vergessen?</button></form>' +
+    '<span class="mu sm">Noch kein Konto? Lass dir von einem Mitglied einen Einladungslink schicken.</span>');
+}
+function deviceGuess() { return /android/i.test(navigator.userAgent) ? "android" : "iphone" }
+function joinView() {
+  if (INVITE.state == "checking") return authShell('<div class="empty">Einladung wird geprüft …</div>');
+  if (INVITE.state == "bad") return authShell('<div class="card"><span class="mid">Einladung ungültig</span><span class="err">' + esc(INVITE.err) + '</span><button class="btn ghost" data-a="noinvite">Zur Anmeldung</button></div>');
+  var dv = deviceGuess();
+  return authShell('<div class="col"><span class="big">Du bist eingeladen!</span><span class="mu">' + (INVITE.from ? "Eingeladen von " + esc(INVITE.from) + ". " : "") + "Lege dein Konto an, dann bist du im Club.</span></div>" +
+    '<form class="card" data-s="join" id="join"><label class="f">Dein Name im Club<input class="t" name="name" autocomplete="name" maxlength="40" required></label>' +
+    '<label class="f">Mail-Adresse<input class="t" type="email" name="email" autocomplete="email" required></label>' +
+    '<label class="f">Passwort (mind. 8 Zeichen)<input class="t" type="password" name="pw" autocomplete="new-password" minlength="8" required></label>' +
+    '<div class="tile"><span>Dein Gerät (automatisch erkannt)</span><b data-device="' + dv + '">' + (dv == "android" ? "Android" : "iPhone") + '</b><span>' + (dv == "android" ? "Deine Stimme zählt doppelt, sobald der Administrator das Gerät bestätigt hat." : "Ändern kann den Gerätetyp nur der Administrator.") + "</span></div>" +
+    (INVITE.err ? '<span class="err" role="alert">' + esc(INVITE.err) + "</span>" : "") +
+    '<button class="btn"' + (BUSY ? " disabled" : "") + ">Konto anlegen</button></form>");
+}
+function recoveryView() {
+  return authShell('<form class="card" data-s="newpw"><span class="mid">Neues Passwort</span><label class="f">Neues Passwort (mind. 8 Zeichen)<input class="t" type="password" name="pw" minlength="8" autocomplete="new-password" required></label>' +
+    (AUTH.err ? '<span class="err">' + esc(AUTH.err) + "</span>" : "") + '<button class="btn">Speichern</button></form>');
+}
+
+// ═════════════ Tab: Termine ═════════════
+// Duell des Monats: Anwesenheit in Prozent, weil die beiden Lager nicht gleich gross sind. Zählt nur, wer wirklich dabei war.
+function duellMonat(m) {
+  var E = pastEvents().filter(function (e) { return localDay(e.starts_at).slice(0, 7) == m });
+  if (!E.length) return null;
+  var quote = function (g) {
+    var L = D.profiles.filter(function (p) { return p.device == g }), n = 0;
+    L.forEach(function (p) { E.forEach(function (e) { if (rsvp(e.id, p.id) == "in") n++ }) });
+    return Math.round(100 * n / (L.length * E.length));
+  };
+  return { android: quote("android"), iphone: quote("iphone") };
+}
+function duell() {
+  if (!D.profiles.some(function (p) { return p.device == "android" }) || !D.profiles.some(function (p) { return p.device == "iphone" })) return "";
+  var d = new Date(), jetzt = duellMonat(today().slice(0, 7)), vor = duellMonat(localDay(new Date(d.getFullYear(), d.getMonth() - 1, 15).toISOString()).slice(0, 7));
+  var zeile = function (n, q) { return '<div class="col" style="gap:4px"><div class="row sb sm"><span class="b">' + n + '</span><span data-test="duell-' + n.toLowerCase() + '">' + q + ' %</span></div><div class="bar"><i style="width:' + q + '%"></i></div></div>' };
+  var h = '<section class="card" aria-label="Duell des Monats"><span class="lbl">Duell des Monats · Android gegen iPhone</span>';
+  h += jetzt ? zeile("Android", jetzt.android) + zeile("iPhone", jetzt.iphone) + '<span class="sm mu">' + (jetzt.android == jetzt.iphone ? "Unentschieden." : (jetzt.android > jetzt.iphone ? "Android" : "iPhone") + " führt.") + "</span>"
+    : '<span class="sm mu">Diesen Monat gab es noch keinen Anlass. Das nächste Treffen eröffnet das Duell.</span>';
+  if (vor) h += '<span class="sm b" data-test="duell-vormonat">Letzten Monat: ' + (vor.android == vor.iphone ? "unentschieden." : (vor.android > vor.iphone ? "Android gewinnt, iPhone" : "iPhone gewinnt, Android") + " bringt die nächste Magnum.") + "</span>";
+  return h + "</section>";
+}
+function termine() {
+  var me = uid(), s = stats(me), b = board(), place = (b.find(function (x) { return x.id == me }) || {}).place;
+  var h = spruch();
+  h += '<section class="card gold" aria-label="Dein Rang"><div class="row sb"><div class="col" style="gap:2px"><span class="lbl">Dein Rang</span><span class="big" style="font-size:22px;color:var(--ac)">' + esc(s.rank.name) + '</span></div>' +
+    '<div class="col" style="gap:0;align-items:flex-end"><span class="big" data-test="punkte">' + s.points + '</span><span class="xs mu">Punkte</span></div></div>' +
+    '<div class="col"><div class="bar"><i style="width:' + s.pct + '%"></i></div><span class="sm mu">' + (s.next ? "Noch " + (s.next.min - s.points) + " Punkte bis «" + esc(s.next.name) + "»" : "Höchster Rang erreicht") + "</span></div>" +
+    '<div class="g3"><div class="tile"><b data-test="streak">' + s.streak + '</b><span>Streak · Rekord <span data-test="rekord">' + s.rekord + '</span></span></div><div class="tile"><b>' + place + '.</b><span>Rangliste</span></div><div class="tile"><b>' + s.virt + "</b><span>Magnums spendiert</span></div></div>" +
+    '<div class="col"><div class="row sb xs mu b" style="letter-spacing:1px;text-transform:uppercase"><span>Trinkfestigkeit · errechnet</span><span style="color:var(--ac)">' + esc(s.drink.label) + "</span></div>" + segs(s.drink.level, 8) + '<span class="sm mu">' + esc(s.drink.basis) + "</span></div>" +
+    '<span class="sm mu">Dabei +50 · Virtuell mit Magnum +20 (Streak bleibt) · Organisieren +40 · Abmelden: Streak weg. Punkte für Anlässe gibt es nach dem Anlass.</span></section>';
+  h += goal() + duell();
+  h += '<h2>Nächste Anlässe</h2>';
+  var up = upcoming();
+  h += up.length ? up.map(eventCard).join("") : '<div class="card empty">Noch kein Anlass geplant. Organisiere den nächsten!</div>';
+  h += UI.newEv ? eventForm() : '<button class="btn dash" data-a="ui" data-k="newEv" data-v="1">+ Anlass erfassen</button>';
+  h += kasse() + meinAbend() + schwein() + wand();
+  var past = pastEvents().slice(0, 6);
+  if (past.length) h += '<details class="card"><summary>Vergangene Anlässe (' + past.length + ")</summary><div class=\"lst\" style=\"margin-top:10px\">" + past.map(function (e) {
+    return '<button type="button" class="row sb" style="background:none;border:0;border-top:1px solid var(--ln);text-align:left;width:100%;color:var(--tx)" data-a="ov" data-t="event" data-id="' + e.id + '"><span class="grow"><b>' + esc(e.title) + '</b><br><span class="sm mu">' + esc(fDate(e.starts_at)) + '</span></span><span class="sm mu">' + D.rsvps.filter(function (r) { return r.event_id == e.id && r.status == "in" }).length + " dabei</span></button>";
+  }).join("") + "</div></details>";
+  return h;
+}
+function spruch() {
+  var L = D.sayings.slice().map(function (x) { return { x: x, n: D.saying_prosts.filter(function (p) { return p.saying_id == x.id }).length } })
+    .sort(function (a, b) { return b.n - a.n || (a.x.created_at < b.x.created_at ? -1 : 1) });
+  var h = '<section class="card wine" aria-label="Spruch des Tages"><span class="lbl" style="color:#F6D9DE">Spruch des Tages</span>';
+  if (L.length) {
+    var day = Math.floor(now() / 864e5), it = L[(day + (UI.spOff || 0)) % L.length], on = D.saying_prosts.some(function (p) { return p.saying_id == it.x.id && p.member_id == uid() });
+    h += '<span style="font:italic 700 22px/1.25 var(--hf);color:#FFF8EE">«' + esc(it.x.text) + '»</span><span class="sm" style="color:#F6D9DE">eingereicht von ' + esc(nm(it.x.author_id)) + "</span>" +
+      '<div class="row wrap"><button class="pill" style="border-color:#F6D9DE;' + (on ? "background:#FFF8EE;color:#8E2A3A" : "color:#FFF8EE") + '" data-a="sprost" data-id="' + it.x.id + '" aria-pressed="' + on + '">Prost ' + it.n + "</button>" +
+      (L.length > 1 ? '<button class="pill" style="border-color:#F6D9DE;color:#FFF8EE" data-a="spnext">Nächster</button>' : "");
+  } else h += '<span style="color:#FFF8EE">Noch kein Spruch. Reich den ersten ein!</span><div class="row wrap">';
+  h += '<button class="pill" style="border-color:#F6D9DE;color:#FFF8EE" data-a="ui" data-k="spForm" data-v="' + (UI.spForm ? "" : "1") + '">+ Einreichen</button></div>';
+  if (UI.spForm) h += '<form class="row" data-s="saying"><input class="t" style="background:#FFF8EE;color:#1B1416;border:0" data-k="spText" value="' + esc(v("spText")) + '" placeholder="Dein Spruch" maxlength="280" aria-label="Neuer Spruch"><button class="btn" style="background:#1B1416;color:#FFF8EE"' + (v("spText").trim() ? "" : " disabled") + ">Senden</button></form>";
+  return h + "</section>";
+}
+function goal() {
+  var st = S(), up = upcoming(), ids = up.map(function (e) { return e.id });
+  var n = D.rsvps.filter(function (r) { return ids.indexOf(r.event_id) >= 0 && (r.status == "in" || r.status == "virtual") }).length;
+  var mIds = D.magnums.filter(function (m) { return ids.indexOf(m.event_id) >= 0 }).map(function (m) { return m.id });
+  n += D.magnum_guests.filter(function (g) { return mIds.indexOf(g.magnum_id) >= 0 }).length;
+  var pct = Math.min(100, Math.round(100 * n / Math.max(1, st.goal_target)));
+  return '<section class="card" aria-label="Club-Ziel"><span class="lbl">Gemeinsames Club-Ziel</span><span class="mid">' + esc(st.goal_title) + '</span><div class="bar teal" style="height:12px"><i style="width:' + pct + '%"></i></div><span class="sm mu" data-test="ziel">' +
+    (n >= st.goal_target ? "Geschafft! Der Apéro geht auf den Club." : n + " / " + st.goal_target + " Zusagen · jede Anmeldung und jeder Gasttrinker zählt für alle") + "</span></section>";
+}
+function eventCard(e) {
+  var me = uid(), s = rsvp(e.id, me), d = new Date(e.starts_at);
+  var nIn = D.rsvps.filter(function (r) { return r.event_id == e.id && r.status == "in" }).length;
+  var nV = D.rsvps.filter(function (r) { return r.event_id == e.id && r.status == "virtual" }).length;
+  var mIds = D.magnums.filter(function (m) { return m.event_id == e.id }).map(function (m) { return m.id });
+  var g = D.magnum_guests.filter(function (x) { return mIds.indexOf(x.magnum_id) >= 0 }).length;
+  return '<article class="card ev" data-ev="' + e.id + '"><div class="dt"><b>' + d.getDate() + "</b><span>" + MON[d.getMonth()] + '</span></div><div class="col grow">' +
+    '<span class="b" style="font-size:16px">' + esc(e.title) + '</span><span class="sm mu">' + esc(fDate(e.starts_at, true)) + (e.location ? " · " + esc(e.location) : "") + "</span>" +
+    '<span class="sm mu" data-test="anzahl">' + nIn + " von " + D.profiles.length + " dabei" + (nV ? " · " + nV + " virtuell" : "") + (g ? " · " + g + " Gasttrinker" : "") + (s == "in" ? " · du bist dabei" : s == "out" ? " · du bist abgemeldet" : s ? "" : " · noch offen") + "</span>" +
+    (e.organizer_id ? '<span class="sm b">Organisation: ' + esc(nm(e.organizer_id)) + (e.organizer_id == me ? " (du)" : "") + "</span>"
+      : '<span class="sm b" style="color:var(--orange)">Organisator gesucht</span><button class="btn dash" style="align-self:flex-start;min-height:40px" data-a="organize" data-id="' + e.id + '">Ich organisiere den Abend · +40</button>') +
+    (s == "virtual" ? '<span class="chip v" style="align-self:flex-start">Virtuell dabei · 1 Magnum spendiert</span>' : "") +
+    '<div class="row wrap"><button class="pill ' + (s == "in" ? "on" : "") + '" data-a="rsvp" data-id="' + e.id + '" data-v="in" aria-pressed="' + (s == "in") + '">Bin dabei</button>' +
+    '<button class="pill ' + (s == "out" ? "out" : "") + '" data-a="abmelden" data-id="' + e.id + '">Abmelden</button>' +
+    '<button class="pill" style="border-color:var(--ac)" data-a="ov" data-t="event" data-id="' + e.id + '">Details</button></div></div></article>';
+}
+function eventForm() {
+  var dflt = (function () { var d = new Date(now() + 7 * 864e5); d.setHours(19, 0, 0, 0); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0") + "T19:00" })();
+  return '<form class="card" data-s="event"><span class="mid">Neuer Anlass</span><label class="f">Titel<input class="t" data-k="evTitle" value="' + esc(v("evTitle")) + '" maxlength="80" required placeholder="z.B. Herbst-Stamm"></label>' +
+    '<label class="f">Datum und Zeit<input class="t" type="datetime-local" data-k="evAt" value="' + esc(v("evAt", dflt)) + '" required></label>' +
+    '<label class="f">Ort<input class="t" data-k="evLoc" value="' + esc(v("evLoc")) + '" maxlength="120" placeholder="Restaurant, Adresse"></label>' +
+    '<label class="row sm"><input type="checkbox" data-k="evOrg"' + (UI.evOrg ? " checked" : "") + "> Ich organisiere ihn (+40)</label>" +
+    '<div class="row"><button class="btn grow">Anlass erfassen</button><button type="button" class="btn ghost" data-a="ui" data-k="newEv" data-v="">Abbrechen</button></div></form>';
+}
+function kasse() {
+  var n = D.rsvps.filter(function (r) { return r.status == "virtual" && !r.redeemed }).length, b = "";
+  for (var i = 0; i < Math.min(n, 40); i++) b += "<i></i>";
+  return '<section class="card" aria-label="Magnum-Kasse"><div class="row"><div class="tile" style="width:56px;height:56px;align-items:center;justify-content:center;padding:0">' + GLASS.replace('stroke="#E8B95A"', 'stroke="#7FC4B8"') + '</div>' +
+    '<div class="col grow" style="gap:2px"><span class="lbl">Magnum-Kasse</span><span class="mid" data-test="kasse">' + n + " Magnum" + (n == 1 ? "" : "s") + '</span><span class="sm mu">von Abwesenden spendiert, warten aufs gemeinsame Öffnen</span></div></div>' +
+    (n ? '<div class="kasse">' + b + "</div>" : "") +
+    '<button class="btn" data-a="party">Magnum-Abend starten</button>' + (isAdmin() && n ? '<button class="btn ghost" data-a="kasseauf">Kasse öffnen (Admin)</button>' : "") + "</section>";
+}
+function meinAbend() {
+  var mine = D.drinks.filter(function (d) { return d.member_id == uid() && d.drunk_on == today() }).sort(function (a, b) { return a.created_at < b.created_at ? -1 : 1 });
+  var u = 0; mine.forEach(function (d) { u += UNITS[d.kind] || 0 });
+  var last = mine[mine.length - 1];
+  var h = '<section class="card" aria-label="Mein Abend"><div class="row sb"><span class="b" style="font-size:15px">Mein Abend</span><span class="sm mu">' + (mine.length ? mine.length + " Fotos · " + String(u).replace(".", ",") + " Einheiten" : "noch nichts fotografiert") + "</span></div>";
+  if (mine.length) h += '<div class="ph" style="grid-template-columns:repeat(4,minmax(0,1fr))">' + mine.map(function (d) { return '<span title="' + esc(d.kind) + '">' + (d.photo_path ? img(d.photo_path, "Getränk") : "") + "</span>" }).join("") + "</div>" +
+    '<span class="sm mu">Letztes Getränk: <b style="color:var(--tx)">' + esc((KINDS.filter(function (k) { return k[0] == last.kind })[0] || [])[1]) + "</b> – stimmt's? Sonst antippen:</span>" +
+    '<div class="chips">' + KINDS.map(function (k) { return '<button class="pill sm ' + (last.kind == k[0] ? "on" : "") + '" data-a="drinkkind" data-id="' + last.id + '" data-v="' + k[0] + '">' + k[1] + "</button>" }).join("") + "</div>";
+  return h + '<label class="btn line file">' + CAM + 'Getränk fotografieren<input type="file" accept="image/*" capture="environment" data-c="drink" aria-label="Getränk fotografieren"></label></section>';
+}
+var PHRASES = ["Am Ende des Tages …", "Das ist ein No-Go", "Wir sind auf einem guten Weg", "Das nehmen wir mal so mit", "Grundsätzlich ja, aber …"];
+function schwein() {
+  var st = S(), tot = 0, cnt = {};
+  D.phrases.forEach(function (p) { tot += Number(p.fee_chf); cnt[p.speaker_id] = (cnt[p.speaker_id] || 0) + 1 });
+  var king = Object.keys(cnt).sort(function (a, b) { return cnt[b] - cnt[a] })[0];
+  var rec = D.phrases.slice().sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1 }).slice(0, 3);
+  return '<section class="card" aria-label="Phrasenschwein"><div class="row"><svg width="56" height="42" viewBox="0 0 56 42" aria-hidden="true" fill="none" stroke="#E79AA8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"><ellipse cx="26" cy="22" rx="19" ry="13" fill="#E79AA8" fill-opacity="0.18"/><path d="M14 11l-2-6 7 4"/><rect x="44" y="17" width="8" height="9" rx="3"/><circle cx="38" cy="17" r="1.2" fill="#E79AA8"/><path d="M20 34v5M33 34v5"/><path d="M22 9h8" stroke="#E8B95A" stroke-width="3"/></svg>' +
+    '<div class="col grow" style="gap:2px"><span class="lbl">Phrasenschwein</span><span class="mid" data-test="schwein">' + chf(tot) + '</span><span class="sm mu">Reicht für ' + Math.floor(tot / st.magnum_price) + " Magnum" + (Math.floor(tot / st.magnum_price) == 1 ? "" : "s") + "</span></div></div>" +
+    (king ? '<span class="sm"><span class="mu">Phrasenkönig: </span><b>' + esc(nm(king)) + "</b> (" + cnt[king] + ")</span>" : "") +
+    (rec.length ? '<div class="lst">' + rec.map(function (p) { return '<div class="row sb sm"><span class="grow"><b>' + esc(first(p.speaker_id)) + '</b> <span class="mu">«' + esc(p.phrase) + '»</span></span><span style="color:var(--pink);font-weight:700">' + chf(p.fee_chf) + "</span></div>" }).join("") + "</div>" : "") +
+    '<form class="col tile" data-s="phrase" style="gap:10px;padding:12px"><span class="b">Phrase melden</span><label class="f">Wer hat sie gedroschen?<select class="t" data-k="phWho">' + memberOptions(v("phWho")) + "</select></label>" +
+    '<div class="chips">' + PHRASES.map(function (p) { return '<button type="button" class="pill sm ' + (v("phText") == p ? "on" : "") + '" data-a="setui" data-k="phText" data-v="' + esc(p) + '">' + esc(p) + "</button>" }).join("") + "</div>" +
+    '<input class="t" data-k="phText" value="' + esc(v("phText")) + '" placeholder="…oder Phrase eintippen" maxlength="200" aria-label="Phrase">' +
+    '<button class="btn pink"' + (v("phWho") && v("phText").trim() ? "" : " disabled") + ">Ab ins Schwein · " + chf(st.phrase_fee) + "</button></form></section>";
+}
+function wand() {
+  var L = D.posts.slice().sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1 }).slice(0, UI.wandAll ? 30 : 6);
+  return '<section class="card" aria-label="Prost-Wand"><span class="b" style="font-size:15px">Prost-Wand</span>' +
+    (L.length ? '<div class="lst">' + L.map(function (p) {
+      var n = D.post_prosts.filter(function (x) { return x.post_id == p.id }).length, on = D.post_prosts.some(function (x) { return x.post_id == p.id && x.member_id == uid() });
+      return '<div class="row"><span class="av s">' + esc(ini(p.author_id)) + '</span><span class="grow sm"><b>' + esc(nm(p.author_id)) + "</b> " + esc(p.text) + '</span><button class="pill sm ' + (on ? "on" : "") + '" data-a="pprost" data-id="' + p.id + '" aria-pressed="' + on + '">Prost ' + n + "</button></div>";
+    }).join("") + "</div>" : '<span class="empty">Hier erscheint, was im Club läuft.</span>') +
+    (D.posts.length > 6 && !UI.wandAll ? '<button class="btn link" data-a="ui" data-k="wandAll" data-v="1">Alle anzeigen</button>' : "") +
+    '<form class="row" data-s="post"><input class="t" data-k="postText" value="' + esc(v("postText")) + '" placeholder="Was gibt\'s zu feiern?" maxlength="300" aria-label="Beitrag"><button class="btn"' + (v("postText").trim() ? "" : " disabled") + ">Posten</button></form></section>";
+}
+
+// ═════════════ Tab: Reisen ═════════════
+var COLORS = ["#6E2433", "#3D4A2E", "#4A3424", "#2C4A5A", "#5A3E5E", "#7A2E2E"];
+function reisen() {
+  var t = today(), L = D.trips.slice().sort(function (a, b) { var pa = (a.ends_on || a.starts_on) < t, pb = (b.ends_on || b.starts_on) < t; return pa - pb || (pa ? (a.starts_on < b.starts_on ? 1 : -1) : (a.starts_on < b.starts_on ? -1 : 1)) });
+  var h = "<h2>Club-Reisen</h2>";
+  h += L.length ? L.map(function (tr) {
+    var n = D.trip_participants.filter(function (x) { return x.trip_id == tr.id }).length, me = D.trip_participants.some(function (x) { return x.trip_id == tr.id && x.member_id == uid() });
+    var past = (tr.ends_on || tr.starts_on) < t;
+    return '<button type="button" class="trip" data-a="ov" data-t="trip" data-id="' + tr.id + '"><div class="band" style="background:' + esc(tr.color) + '"><b>' + esc(tr.title) + "</b><span>" + esc(fMonYear(tr.starts_on)) + "</span></div>" +
+      '<div class="col" style="padding:14px 16px">' + (tr.program ? '<span class="sm mu">' + esc(tr.program) + "</span>" : "") +
+      '<span class="xs mu">OK: ' + esc(tr.ok_id ? nm(tr.ok_id) : "offen") + " · Kassier: " + esc(tr.kassier_id ? nm(tr.kassier_id) : "offen") + " · Sacceri: " + esc(tr.sacceri_id ? nm(tr.sacceri_id) : "offen") + "</span>" +
+      '<div class="row sb"><span class="sm b">' + (past ? "Abgeschlossen · " : "") + n + " / " + tr.seats + ' Plätze</span><span class="chip' + (me ? " v" : "") + '">' + (me ? (past ? "warst dabei" : "angemeldet") : "Details") + "</span></div></div></button>";
+  }).join("") : '<div class="card empty">Noch keine Reise geplant.</div>';
+  h += UI.newTrip ? tripForm() : '<button class="btn dash" data-a="ui" data-k="newTrip" data-v="1">+ Reise erfassen</button>';
+  return h;
+}
+function tripForm() {
+  return '<form class="card" data-s="trip"><span class="mid">Neue Reise</span><label class="f">Ziel<input class="t" data-k="trTitle" value="' + esc(v("trTitle")) + '" required maxlength="60" placeholder="z.B. Wallis"></label>' +
+    '<div class="g2"><label class="f">Von<input class="t" type="date" data-k="trFrom" value="' + esc(v("trFrom")) + '" required></label><label class="f">Bis<input class="t" type="date" data-k="trTo" value="' + esc(v("trTo")) + '"></label></div>' +
+    '<label class="f">Programm<input class="t" data-k="trProg" value="' + esc(v("trProg")) + '" maxlength="300" placeholder="Weinwanderung, Degustation …"></label>' +
+    '<label class="f">Plätze<input class="t" type="number" min="1" max="50" data-k="trSeats" value="' + esc(v("trSeats", "12")) + '"></label>' +
+    '<div class="row">' + COLORS.map(function (c) { return '<button type="button" data-a="setui" data-k="trColor" data-v="' + c + '" aria-label="Farbe ' + c + '" aria-pressed="' + (v("trColor", COLORS[0]) == c) + '" style="width:40px;height:40px;border-radius:50%;background:' + c + ";border:3px solid " + (v("trColor", COLORS[0]) == c ? "var(--ac)" : "transparent") + '"></button>' }).join("") + "</div>" +
+    '<div class="row"><button class="btn grow">Reise erfassen</button><button type="button" class="btn ghost" data-a="ui" data-k="newTrip" data-v="">Abbrechen</button></div></form>';
+}
+function tripView(tr) {
+  var me = uid(), part = D.trip_participants.filter(function (x) { return x.trip_id == tr.id }).map(function (x) { return x.member_id });
+  var joined = part.indexOf(me) >= 0, past = (tr.ends_on || tr.starts_on) < today();
+  var photos = D.trip_photos.filter(function (p) { return p.trip_id == tr.id }).sort(function (a, b) { return a.created_at < b.created_at ? -1 : 1 });
+  var h = '<div class="top" style="background:' + esc(tr.color) + '"><button class="back" data-a="close" aria-label="Zurück">' + BACK + '</button><span style="font:900 32px/1 var(--hf);color:#FFF8EE">' + esc(tr.title) + '</span><span class="sm" style="color:#FFF8EE">' + esc(fDay(tr.starts_on)) + (tr.ends_on ? " – " + esc(fDay(tr.ends_on)) : "") + (tr.program ? " · " + esc(tr.program) : "") + "</span></div><main>";
+  h += '<div class="row sb"><span class="sm b">' + part.length + " / " + tr.seats + " Plätze" + (past ? " · abgeschlossen" : "") + "</span>" +
+    (past ? (joined ? '<span class="chip v">Warst dabei</span>' : "") : '<button class="pill ' + (joined ? "on" : "") + '" data-a="tripjoin" data-id="' + tr.id + '" aria-pressed="' + joined + '"' + (!joined && (part.length >= tr.seats || tr.starts_on < today()) ? " disabled" : "") + ">" + (joined ? "Angemeldet" : "Mitreisen · +30") + "</button>") + "</div>";
+  if (part.length) h += '<div class="chips">' + part.map(function (p) { return '<span class="chip">' + esc(nm(p)) + "</span>" }).join("") + "</div>";
+  h += '<section class="card"><span class="b" style="font-size:15px">Ämtli</span><label class="f">OK (Organisation)<select class="t" data-c="tripset" data-id="' + tr.id + '" data-f="ok_id">' + memberOptions(tr.ok_id) + "</select></label>" +
+    '<label class="f">Kassier<select class="t" data-c="tripset" data-id="' + tr.id + '" data-f="kassier_id">' + memberOptions(tr.kassier_id) + "</select></label></section>";
+  h += sacceri(tr, part);
+  var top = photos.slice(0, 3), rest = photos.length - 3;
+  h += '<section class="card"><div class="row sb"><span class="b" style="font-size:15px">Die besten Bilder</span><span class="sm mu">' + photos.length + " hochgeladen" + (photos.length > 3 ? " · 3 sichtbar" : "") + "</span></div>" +
+    '<div class="ph">' + [0, 1, 2].map(function (i) { return "<span>" + (top[i] ? img(top[i].path, "Reisefoto") : "") + "</span>" }).join("") + "</div>" +
+    '<span class="sm mu">' + (rest > 0 ? "Die übrigen " + rest + " Bilder liegen als Collage-Karte unter «Legendär» in den Sammelkarten." : "Die ersten 3 Bilder erscheinen hier, alle weiteren werden zur Collage-Karte unter «Legendär».") + "</span>" +
+    '<label class="btn line file">Bilder hochladen<input type="file" accept="image/*" multiple data-c="tripphotos" data-id="' + tr.id + '" aria-label="Bilder hochladen"></label></section>';
+  if (tr.created_by == me || isAdmin()) h += '<button class="btn ghost" data-a="deltrip" data-id="' + tr.id + '">Reise löschen</button>';
+  return h + "</main>";
+}
+function sacceri(tr, part) {
+  var me = uid(), p = D.proposals.filter(function (x) { return x.kind == "sacceri" && x.trip_id == tr.id }).sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1 });
+  var open = p.filter(function (x) { return x.status == "open" })[0], last = p.filter(function (x) { return x.status == "rejected" })[0];
+  var tot = 0; part.forEach(function (x) { tot += weight(x) });
+  var h = '<section class="card gold" aria-label="Auszeichnung De Sacceri"><div class="row"><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true" fill="none" stroke="#E8B95A" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M7 3h12v6a6 6 0 0 1-12 0z"/><path d="M7 5H3c0 4 2 6 4 6M19 5h4c0 4-2 6-4 6M13 15v4M8 23h10M10 19h6"/></svg>' +
+    '<div class="col" style="gap:1px"><span class="b" style="font-size:15px">Auszeichnung «De Sacceri»</span><span class="sm mu">Antrag durch ein Mitglied · ⅔ der Anwesenden: ' + Math.ceil(tot * 2 / 3) + " von " + tot + " Stimmen · Android zählt doppelt</span></div></div>";
+  if (tr.sacceri_id) {
+    var w = p.filter(function (x) { return x.status == "passed" })[0];
+    return h + '<div class="tile" style="align-items:center;text-align:center;padding:16px"><span class="lbl">Ausgezeichnet</span><b style="font-size:28px;color:var(--ac)" data-test="sacceri">' + esc(nm(tr.sacceri_id)) + "</b>" + (w ? "<span>mit " + w.yes_weight + " von " + w.total_weight + " Stimmen</span>" : "") + "</div></section>";
+  }
+  if (open) {
+    var t = tally(open), mine = t.by[me];
+    h += '<div class="tile" style="padding:12px"><span class="lbl">Abstimmung läuft</span><b style="font-size:22px">' + esc(nm(open.target_id)) + "</b><span>beantragt von " + esc(nm(open.proposed_by)) + "</span></div>" +
+      '<div class="bar teal" style="height:10px"><i style="width:' + Math.min(100, Math.round(100 * t.yes / Math.max(1, t.need))) + '%"></i></div><span class="sm b" data-test="tally">Ja ' + t.yes + " · Nein " + t.no + " · offen " + t.open + " · nötig " + t.need + "</span>" + voteChips(t);
+    if (t.voters.indexOf(me) >= 0 && mine == null) h += '<div class="g2"><button class="btn teal" data-a="vote" data-id="' + open.id + '" data-v="1">Ja, verdient</button><button class="btn ghost" data-a="vote" data-id="' + open.id + '" data-v="0">Nein</button></div>';
+    else h += '<span class="sm mu">' + (t.voters.indexOf(me) < 0 ? "Nur Mitreisende stimmen ab." : "Deine Stimme ist abgegeben. Warten auf die anderen.") + "</span>";
+    return h + "</section>";
+  }
+  if (last) h += '<span class="sm" style="color:var(--orange)">Letzter Antrag für ' + esc(nm(last.target_id)) + " abgelehnt (" + last.yes_weight + " von " + last.total_weight + " Stimmen).</span>";
+  var cand = part.filter(function (x) { return x != me });
+  if (!cand.length) return h + '<span class="sm mu">Sobald jemand mitreist, kann die Auszeichnung beantragt werden.</span></section>';
+  return h + '<form class="col" data-s="sacceri" data-id="' + tr.id + '" style="gap:10px"><label class="f">Wen schlägst du vor?<select class="t" data-k="sacPick">' + memberOptions(v("sacPick"), function (x) { return cand.indexOf(x.id) >= 0 }, "– Mitreisende wählen –") + "</select></label>" +
+    '<button class="btn"' + (v("sacPick") ? "" : " disabled") + ">Auszeichnung beantragen</button></form></section>";
+}
+
+// ═════════════ Tab: Club ═════════════
+// App installieren: Android/Chrome über den Installations-Dialog, iPhone mit Anleitung (Safari erlaubt keinen Dialog)
+var INST = null;
+window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); INST = e; if (document.querySelector(".inst")) render() });
+function isApp() { return (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true }
+function installCard() {
+  if (isApp()) return "";
+  return '<section class="card col inst" style="gap:8px" aria-label="App installieren"><span class="b" style="font-size:15px">App installieren</span><span class="sm mu">Auf dem Startbildschirm startet Magnum wie eine richtige App: schneller und im Vollbild.</span>' +
+    (INST ? '<button class="btn" data-a="install">Jetzt installieren</button>' : '<span class="sm">' + (PRF.device == "android" ? "In Chrome: Menü ⋮ → «App installieren»" : "In Safari: Teilen → «Zum Home-Bildschirm»") + "</span>") + "</section>";
+}
+function club() {
+  var me = uid(), B = board(), st = S();
+  var h = "<h2>Saison-Rangliste</h2><ol class=\"card lst\" aria-label=\"Rangliste\">" + B.map(function (x) {
+    return '<li class="row' + (x.id == me ? " me" : "") + '"><span class="rk' + (x.place <= 3 ? " g" + x.place : "") + '">' + (x.showNo ? x.place : "") + '</span><span class="grow col" style="gap:1px"><b class="sm">' + esc(nm(x.id)) + (pr(x.id).nickname ? ' <span class="nick">«' + esc(pr(x.id).nickname) + "»</span>" : "") + '</b><span class="xs mu">' + esc(x.s.rank.name) + " · Streak " + x.s.streak + '</span></span><b class="sm">' + x.s.points + "</b></li>";
+  }).join("") + "</ol>";
+  h += '<details class="card"><summary>So gibt es Punkte</summary><div class="lst" style="margin-top:10px">' + POINTS.map(function (p) { return '<div class="row sb sm"><span>' + esc(p[0]) + '</span><b>+' + p[1] + "</b></div>" }).join("") +
+    '<div class="sm mu">Ränge: ' + RANKS.map(function (r) { return esc(r.name) + " ab " + r.min }).join(" · ") + "</div></div></details>";
+  h += '<h2>Die Mitglieder <span class="sm mu" style="font-family:Inter">' + D.profiles.length + " / " + st.max_members + "</span></h2><div class=\"g2\">" + D.profiles.slice().sort(function (a, b) { return nm(a.id).localeCompare(nm(b.id), "de") }).map(function (p) {
+    var s = stats(p.id);
+    return '<button type="button" class="mem" data-a="ov" data-t="member" data-id="' + p.id + '"><span class="av">' + esc(ini(p.id)) + '</span><b>' + esc(nm(p.id)) + "</b>" + (p.nickname ? '<span class="nick">«' + esc(p.nickname) + "»</span>" : "") +
+      '<span class="sm mu">' + esc(p.role_title) + '</span><span class="xs mu b" style="letter-spacing:1px;text-transform:uppercase">Trinkfestigkeit</span><div style="width:100%">' + segs(s.drink.level) + "</div></button>";
+  }).join("") + "</div>";
+  h += invites() + feedback();
+  if (isAdmin()) h += '<section class="card" style="border-color:var(--lila)"><span class="b" style="color:var(--lila)">Administration</span><span class="sm mu">Gerätetyp und Funktion passt du im Profil des Mitglieds an. Jede Änderung wird hier protokolliert.</span>' +
+    (D.admin_log.length ? '<div class="lst">' + D.admin_log.slice().sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1 }).slice(0, 10).map(function (l) { return '<span class="sm mu">' + esc(nm(l.member_id)) + ": " + esc(l.action) + " · durch " + esc(nm(l.admin_id)) + " · " + esc(fDate(l.created_at)) + "</span>" }).join("") + "</div>" : '<span class="empty">Noch keine Änderungen.</span>') + "</section>";
+  h += '<section class="card"><span class="b" style="font-size:15px">Mein Profil</span><form class="col" data-s="profile" style="gap:10px"><label class="f">Name<input class="t" data-k="pfName" value="' + esc(v("pfName", PRF.display_name)) + '" maxlength="40" required></label>' +
+    '<label class="f">Lieblingswein<input class="t" data-k="pfWine" value="' + esc(v("pfWine", PRF.fav_wine || "")) + '" maxlength="60"></label>' +
+    '<label class="f">Spezialität<input class="t" data-k="pfSpec" value="' + esc(v("pfSpec", PRF.specialty || "")) + '" maxlength="80"></label><button class="btn">Speichern</button></form>' +
+    '<span class="sm mu">Gerät: ' + deviceText(PRF) + " · ändern kann es nur der Administrator.</span>" +
+    '<button class="btn ghost" data-a="logout">Abmelden</button></section>';
+  h += installCard();
+  return h;
+}
+function invites() {
+  var st = S(), full = D.profiles.length >= st.max_members;
+  var h = '<section class="card" aria-label="Einladungen"><div class="row sb"><span class="b" style="font-size:15px">Einladungen</span><span class="sm mu">' + D.profiles.length + " / " + st.max_members + ' Mitglieder</span></div><span class="sm mu">Ohne Einladung kein Login. Jeder Link gilt einmal und 7 Tage lang.</span>';
+  if (NEWLINK) {
+    var text = "Du bist in den Magnum Club eingeladen! Hier dein persönlicher Link (7 Tage gültig):";
+    h += '<div class="tile" style="padding:12px;gap:8px"><span class="lbl">Neuer Einladungslink</span><span class="mono xs" style="word-break:break-all" data-test="link">' + esc(NEWLINK) + '</span><div class="row wrap">' +
+      '<a class="btn teal" style="display:inline-flex;align-items:center;text-decoration:none" href="https://wa.me/?text=' + encodeURIComponent(text + " " + NEWLINK) + '" target="_blank" rel="noopener">Per WhatsApp schicken</a>' +
+      '<button class="btn ghost" data-a="copylink">Kopieren</button></div></div>';
+  }
+  if (INVLIST && INVLIST.length) h += '<div class="lst">' + INVLIST.map(function (i) { return '<div class="row sb sm"><span>Offen · von ' + esc(nm(i.from)) + " · bis " + esc(fDate(i.expires_at)) + "</span>" + (i.mine || isAdmin() ? '<button class="pill sm" data-a="revoke" data-id="' + i.id + '">Zurückziehen</button>' : "") + "</div>" }).join("") + "</div>";
+  return h + (full ? '<span class="sm" style="color:var(--orange)">Der Club ist voll (' + st.max_members + " Mitglieder).</span>" : '<button class="btn line" data-a="invite"' + (BUSY ? " disabled" : "") + ">Einladungslink erstellen</button>") + "</section>";
+}
+var FKINDS = [["idee", "Idee"], ["fehler", "Fehler"], ["wunsch", "Wunsch"]], FSTATE = { neu: "wird erfasst", erfasst: "offen", fehler: "Fehler", umgesetzt: "umgesetzt", geschlossen: "geschlossen" };
+function feedback() {
+  var L = D.feedback.slice().sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1 }).slice(0, 8);
+  var h = '<section class="card" aria-label="Verbesserungsvorschläge"><div class="col" style="gap:1px"><span class="b" style="font-size:15px">Verbesserungsvorschläge</span><span class="sm mu">Jeder Vorschlag wird als öffentliches GitHub-Issue erfasst, ohne deinen Namen · +10 Punkte</span></div>';
+  if (L.length) h += '<div class="lst">' + L.map(function (f) {
+    return '<div class="row"><span class="mono xs mu" style="min-width:34px">' + (f.issue_number ? "#" + f.issue_number : "…") + '</span><span class="grow col" style="gap:2px"><b class="sm">' + esc(f.title) + '</b><span class="xs mu">von ' + esc(nm(f.user_id)) + "</span></span>" +
+      (f.issue_url && /^https:\/\/github\.com\//.test(f.issue_url) ? '<a class="chip" href="' + esc(f.issue_url) + '" target="_blank" rel="noopener">' + esc(FSTATE[f.status] || f.status) + "</a>" : '<span class="chip">' + esc(FSTATE[f.status] || f.status) + "</span>") + "</div>";
+  }).join("") + "</div>";
+  if (!UI.fbOpen) return h + '<button class="btn line" data-a="ui" data-k="fbOpen" data-v="1">+ Vorschlag machen</button></section>';
+  return h + '<form class="col tile" data-s="feedback" style="gap:10px;padding:12px"><div class="chips">' + FKINDS.map(function (k) { return '<button type="button" class="pill sm ' + (v("fbKind", "idee") == k[0] ? "on" : "") + '" data-a="setui" data-k="fbKind" data-v="' + k[0] + '">' + k[1] + "</button>" }).join("") + "</div>" +
+    '<label class="f">Titel<input class="t" data-k="fbTitle" value="' + esc(v("fbTitle")) + '" maxlength="100" placeholder="z.B. Weinkarte pro Magnum"></label>' +
+    '<label class="f">Beschreibung<textarea class="t" data-k="fbText" maxlength="4000" placeholder="Was soll besser werden und warum?">' + esc(v("fbText")) + "</textarea></label>" +
+    '<div class="row"><button class="btn grow"' + (v("fbTitle").trim().length >= 3 && !BUSY ? "" : " disabled") + '>Als Issue erfassen</button><button type="button" class="btn ghost" data-a="ui" data-k="fbOpen" data-v="">Abbrechen</button></div></form></section>';
+}
+function memberView(p) {
+  var me = uid(), s = stats(p.id), self = p.id == me;
+  var h = '<div class="top"><button class="back" data-a="close" aria-label="Zurück">' + BACK + '</button><div class="row"><span class="av l">' + esc(ini(p.id)) + '</span><div class="col" style="gap:2px"><span style="font:900 26px/1.1 var(--hf)">' + esc(nm(p.id)) + "</span>" +
+    (p.nickname ? '<span class="nick" style="font-size:16px" data-test="nickname">«' + esc(p.nickname) + "»</span>" : "") + '<span class="sm mu">' + esc(p.role_title) + (p.since_year ? " · seit " + p.since_year : "") + "</span></div></div></div><main>";
+  h += '<section class="card"><div class="row sb xs mu b" style="letter-spacing:1px;text-transform:uppercase"><span>Trinkfestigkeit · errechnet</span><span style="color:var(--ac)">' + esc(s.drink.label) + "</span></div>" + segs(s.drink.level, 12) + '<span class="sm mu">' + esc(s.drink.basis) + "</span>" +
+    '<div class="g3"><div class="tile"><b>' + s.points + '</b><span>Punkte</span></div><div class="tile"><b>' + s.streak + '</b><span>Streak · Rekord ' + s.rekord + '</span></div><div class="tile"><b>' + s.trips + '</b><span>Reisen</span></div>' +
+    '<div class="tile"><b>' + s.magnums + '</b><span>Magnums mitgebracht</span></div><div class="tile"><b>' + s.virt + '</b><span>Magnums spendiert</span></div><div class="tile"><b>' + s.cards + "</b><span>Karten</span></div></div>" +
+    '<div class="col sm">' + (p.fav_wine ? '<span><span class="mu">Lieblingswein: </span>' + esc(p.fav_wine) + "</span>" : "") + (p.specialty ? '<span><span class="mu">Spezialität: </span>' + esc(p.specialty) + "</span>" : "") +
+    '<span><span class="mu">Gerät: </span><span data-test="geraet">' + deviceText(p) + "</span>" + (p.device_set_by_admin ? " · vom Admin bestätigt" : "") + "</span>" +
+    (p.invited_by ? '<span><span class="mu">Eingeladen von: </span>' + esc(nm(p.invited_by)) + "</span>" : "") + "</div></section>";
+  if (isAdmin()) h += '<section class="card" style="border-color:var(--lila)" aria-label="Admin"><span class="lbl" style="color:var(--lila)">Admin · Gerätetyp anpassen</span><div class="g2">' +
+    [["iphone", "iPhone"], ["android", "Android ×2"]].map(function (d) { var on = p.device == d[0] && (d[0] != "android" || p.device_set_by_admin); return '<button class="pill' + (on ? " on" : "") + '" style="' + (on ? "background:var(--lila);border-color:var(--lila)" : "") + '" data-a="setdevice" data-id="' + p.id + '" data-v="' + d[0] + '" aria-pressed="' + on + '">' + d[1] + "</button>" }).join("") +
+    '</div><span class="xs mu">Android zählt doppelt, sobald du es hier bestätigst. Wirkt sofort und wird protokolliert.</span><form class="row" data-s="role" data-id="' + p.id + '"><input class="t" data-k="role' + p.id + '" value="' + esc(v("role" + p.id, p.role_title)) + '" maxlength="40" aria-label="Funktion"><button class="btn lila">Funktion</button></form></section>';
+  h += nickname(p);
+  return h + "</main>";
+}
+function nickname(p) {
+  var me = uid(), self = p.id == me, open = D.proposals.filter(function (x) { return x.kind == "nickname" && x.target_id == p.id && x.status == "open" })[0];
+  var t0 = { kind: "nickname", target_id: p.id, id: "_" }, tt = tally(t0);
+  var h = '<section class="card" aria-label="Spitzname"><div class="row sb"><span class="lbl">Spitzname</span><span class="mid" style="color:var(--ac)">' + (p.nickname ? "«" + esc(p.nickname) + "»" : "noch keiner") + "</span></div>" +
+    '<span class="xs mu">Vorschlag + zweite Unterstützung, dann ⅔ der Stimmen: ' + tt.need + " von " + tt.total + " (Android ×2). Die Person selbst stimmt nicht mit.</span>";
+  if (!open) {
+    if (self) return h + '<span class="sm mu">Deinen Spitznamen vergeben die anderen.</span></section>';
+    return h + '<form class="row" data-s="nick" data-id="' + p.id + '"><input class="t" data-k="nick' + p.id + '" value="' + esc(v("nick" + p.id)) + '" placeholder="Spitzname vorschlagen" maxlength="40" aria-label="Spitzname vorschlagen"><button class="btn"' + (v("nick" + p.id).trim() ? "" : " disabled") + ">Vorschlagen</button></form></section>";
+  }
+  if (!open.seconded_by) {
+    h += '<span class="sm" data-test="nickstatus">«' + esc(open.value) + "» vorgeschlagen von " + esc(nm(open.proposed_by)) + ". Braucht eine zweite Person, die den Vorschlag unterstützt.</span>";
+    if (!self && open.proposed_by != me) h += '<button class="btn teal" data-a="second" data-id="' + open.id + '">Ich unterstütze den Vorschlag</button>';
+    return h + "</section>";
+  }
+  var t = tally(open);
+  h += '<span class="sm" data-test="nickstatus">Abstimmung über «' + esc(open.value) + "» · vorgeschlagen von " + esc(nm(open.proposed_by)) + ", unterstützt von " + esc(nm(open.seconded_by)) + "</span>" +
+    '<div class="bar teal"><i style="width:' + Math.min(100, Math.round(100 * t.yes / Math.max(1, t.need))) + '%"></i></div><span class="sm b">Ja ' + t.yes + " · Nein " + t.no + " · offen " + t.open + " · nötig " + t.need + "</span>" + voteChips(t);
+  if (!self && t.by[me] == null) h += '<div class="g2"><button class="btn teal" data-a="vote" data-id="' + open.id + '" data-v="1">Ja, passt</button><button class="btn ghost" data-a="vote" data-id="' + open.id + '" data-v="0">Nein</button></div>';
+  return h + "</section>";
+}
+
+// ═════════════ Tab: Sammelkarten ═════════════
+var RAR = { magic: ["Magic Moment", "#7FC4B8"], legend: ["Legendär", "#E8B95A"], geil: ["Klug war’s nicht, aber geil", "#F08A5D"], secret: ["Geheim", "#B79CE0"] };
+function allCards() {
+  var me = uid(), s = stats(me), L = D.cards.map(function (c) { return { id: c.id, r: c.rarity, title: c.title, sub: c.happened_on ? fDay(c.happened_on) : "", place: c.place, who: c.who, story: c.story, photo: c.photo_path, own: c.created_by == me || isAdmin() } });
+  D.trips.forEach(function (t) {
+    if (t.sacceri_id) L.push({ id: "sac-" + t.id, r: "legend", tag: "Legendär · Sacceri", title: "De Sacceri " + t.title + ": " + nm(t.sacceri_id), sub: fMonYear(t.starts_on), place: t.title, who: nm(t.sacceri_id), story: "Vom Club ausgezeichnet, mit Zweidrittelmehrheit der Mitreisenden." });
+    var ph = D.trip_photos.filter(function (p) { return p.trip_id == t.id }).sort(function (a, b) { return a.created_at < b.created_at ? -1 : 1 }).slice(3);
+    if (ph.length) L.push({ id: "col-" + t.id, r: "legend", tag: "Legendär · Collage", title: "Collage " + t.title + " " + t.starts_on.slice(0, 4), sub: ph.length + " Bilder", place: t.title, who: "Alle Mitreisenden", story: "Alle Bilder der Reise, die es nicht in die Top 3 geschafft haben.", collage: ph.map(function (p) { return p.path }) });
+  });
+  [["s1", "Trophäe", "Goldene Magnum", "7 Anlässe in Folge", s.streak >= 7, "Streak " + s.streak + " / 7", "Sieben Anlässe in Folge dabei. Der Club verneigt sich."],
+   ["s2", "Location", "Weltenbummler", "3 Club-Reisen", s.trips >= 3, "Reisen " + s.trips + " / 3", "Drei Club-Reisen mitgemacht. Die geheime Location-Karte gehört dir."],
+   ["s3", "Club", "Gönner des Clubs", "1 Magnum gespendet", s.virt >= 1, "Spenden " + s.virt + " / 1", "Selbst abwesend für Stimmung gesorgt. Der Club dankt."]].forEach(function (x) {
+    L.push({ id: x[0], r: "secret", tag: "Geheim · " + x[1], title: x[4] ? x[2] : "Gesperrt", sub: x[4] ? "Freigeschaltet" : x[5], place: x[3], who: nm(me), story: x[6], locked: !x[4], need: x[3], kind: x[1] });
+  });
+  return L;
+}
+function karten() {
+  var all = allCards(), f = UI.kf || "alle", L = all.filter(function (c) { return f == "alle" || c.r == f });
+  var h = '<div class="row sb"><h2>Sammelkarten</h2><span class="sm mu">' + L.length + " von " + all.length + " Karten</span></div>";
+  h += '<div class="chips">' + [["alle", "Alle", "#F3EBDD"]].concat(Object.keys(RAR).map(function (k) { return [k, RAR[k][0], RAR[k][1]] })).map(function (x) {
+    var on = f == x[0]; return '<button class="pill sm" style="border-color:' + (on ? x[2] : "var(--ln2)") + ";background:" + (on ? x[2] : "transparent") + ";color:" + (on ? "#1B1416" : x[2]) + '" data-a="setui" data-k="kf" data-v="' + x[0] + '" aria-pressed="' + on + '">' + esc(x[1]) + "</button>";
+  }).join("") + "</div>";
+  h += '<div class="kgrid">' + L.map(function (c) {
+    var col = RAR[c.r][1];
+    if (c.locked) return '<button class="kc lock" data-a="lockinfo" data-v="' + esc(c.kind + ": " + c.need) + '"><span class="r" style="color:var(--mu2)">' + esc(c.tag) + '</span><span class="cimg"><b style="color:var(--mu2)">?</b></span><b>Gesperrt</b><span class="xs">' + esc(c.sub) + "</span></button>";
+    var pic = c.collage ? '<span class="coll">' + c.collage.slice(0, 4).map(function (p) { return "<span>" + img(p, "Reisefoto") + "</span>" }).join("") + "</span>" : c.photo ? img(c.photo, c.title) : "<b>" + esc(c.r == "secret" ? "★" : (c.title.charAt(0) || "?")) + "</b>";
+    return '<button class="kc" style="--c:' + col + '" data-a="ov" data-t="card" data-id="' + esc(c.id) + '"><span class="r">' + esc(c.tag || RAR[c.r][0]) + '</span><span class="cimg">' + pic + '</span><b style="font-size:14px;line-height:1.25">' + esc(c.title) + '</b><span class="xs mu">' + esc(c.sub) + "</span></button>";
+  }).join("") + "</div>";
+  h += UI.newCard ? cardForm() : '<button class="btn dash" data-a="ui" data-k="newCard" data-v="1">+ Sammelkarte erstellen · +10</button>';
+  return h;
+}
+function cardForm() {
+  return '<form class="card" data-s="card"><span class="mid">Neue Sammelkarte</span><div class="chips">' + ["magic", "legend", "geil"].map(function (k) { return '<button type="button" class="pill sm ' + (v("cdR", "magic") == k ? "on" : "") + '" data-a="setui" data-k="cdR" data-v="' + k + '">' + esc(RAR[k][0]) + "</button>" }).join("") + "</div>" +
+    '<label class="f">Titel<input class="t" data-k="cdTitle" value="' + esc(v("cdTitle")) + '" maxlength="80" required placeholder="z.B. Die 6-Liter-Nacht"></label>' +
+    '<div class="g2"><label class="f">Wann<input class="t" type="date" data-k="cdDate" value="' + esc(v("cdDate")) + '"></label><label class="f">Wo<input class="t" data-k="cdPlace" value="' + esc(v("cdPlace")) + '" maxlength="80"></label></div>' +
+    '<label class="f">Wer war dabei<input class="t" data-k="cdWho" value="' + esc(v("cdWho")) + '" maxlength="120"></label>' +
+    '<label class="f">Die Geschichte<textarea class="t" data-k="cdStory" maxlength="1000">' + esc(v("cdStory")) + "</textarea></label>" +
+    '<label class="btn ghost file">' + CAM + (UI.cdFile ? "Foto gewählt ✓" : "Foto dazu") + '<input type="file" accept="image/*" data-c="cardphoto" aria-label="Foto zur Karte"></label>' +
+    '<div class="row"><button class="btn grow"' + (BUSY ? " disabled" : "") + '>Karte erstellen</button><button type="button" class="btn ghost" data-a="ui" data-k="newCard" data-v="">Abbrechen</button></div></form>';
+}
+function cardView(c) {
+  var col = RAR[c.r][1];
+  var pic = c.collage ? '<div class="ph">' + c.collage.map(function (p) { return "<span>" + img(p, "Reisefoto") + "</span>" }).join("") + "</div>"
+    : '<div class="cimg" style="height:190px;flex:none;border:1px dashed var(--ln2)">' + (c.photo ? img(c.photo, c.title) : '<span class="sm mu">Kein Foto</span>') + "</div>";
+  return '<div class="top"><button class="back" data-a="close" aria-label="Zurück">' + BACK + '</button></div><main><article class="kc" style="--c:' + col + ';min-height:0;box-shadow:0 0 0 6px var(--bg),0 0 0 7px ' + col + '"><span class="r">' + esc(c.tag || RAR[c.r][0]) + "</span>" + pic +
+    '<span style="font:900 24px/1.15 var(--hf)">' + esc(c.title) + '</span><span class="sm mu">' + esc([c.sub, c.place].filter(Boolean).join(" · ")) + "</span>" + (c.story ? '<p style="margin:0;line-height:1.5">' + esc(c.story) + "</p>" : "") +
+    (c.who ? '<span class="sm mu" style="border-top:1px solid var(--ln);padding-top:10px">Beteiligt: ' + esc(c.who) + "</span>" : "") + "</article>" +
+    (c.own ? '<button class="btn ghost" data-a="delcard" data-id="' + c.id + '">Karte löschen</button>' : "") + "</main>";
+}
+
+// ═════════════ Tab: Statistik ═════════════
+function rScore(id) {
+  var R = D.restaurant_ratings.filter(function (r) { return r.restaurant_id == id });
+  if (!R.length) return null;
+  var a = function (k) { var s = 0; R.forEach(function (r) { s += r[k] }); return s / R.length };
+  return { preis: a("preis"), gesellig: a("gesellig"), willkommen: a("willkommen"), n: R.length, all: (a("preis") + a("gesellig") + a("willkommen")) / 3 };
+}
+function mapsUrl(r) { var q = r.lat != null && r.lng != null ? r.lat + "," + r.lng : r.name + " " + (r.place || ""); return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q) }
+function statistik() {
+  var yr = String(new Date().getFullYear()), past = pastEvents(), py = past.filter(function (e) { return e.starts_at.slice(0, 4) == yr });
+  var att = py.map(function (e) { return D.rsvps.filter(function (r) { return r.event_id == e.id && r.status == "in" }).length });
+  var avg = att.length ? att.reduce(function (a, b) { return a + b }, 0) / att.length : 0;
+  var tot = 0, ppl = 0; D.restaurant_visits.forEach(function (x) { tot += Number(x.total_chf); ppl += x.people });
+  var h = "<h2>Club-Statistik " + yr + '</h2><div class="g2">' + [[py.length, "Anlässe " + yr], [avg.toFixed(1).replace(".", ","), "Ø Teilnehmende"], [D.magnums.length, "Magnums erfasst"], [ppl ? chf(Math.round(tot / ppl)) : "–", "Ø pro Kopf im Restaurant"]]
+    .map(function (k) { return '<div class="card" style="padding:12px;gap:2px"><span class="big" style="font-size:24px">' + esc(k[0]) + '</span><span class="sm mu">' + esc(k[1]) + "</span></div>" }).join("") + "</div>";
+  var last = past.slice(0, 6).reverse();
+  if (last.length) {
+    var mx = Math.max.apply(null, [1].concat(last.map(function (e) { return D.rsvps.filter(function (r) { return r.event_id == e.id && r.status == "in" }).length })));
+    h += '<section class="card"><span class="b" style="font-size:15px">Teilnahme pro Anlass</span><div class="bars">' + last.map(function (e, i) {
+      var n = D.rsvps.filter(function (r) { return r.event_id == e.id && r.status == "in" }).length, d = new Date(e.starts_at);
+      return '<div class="' + (i == last.length - 1 ? "last" : "") + '"><span class="xs b">' + n + '</span><i style="height:' + Math.round(n / mx * 90) + 'px"></i><span class="xs mu">' + MON[d.getMonth()] + "</span></div>";
+    }).join("") + "</div></section>";
+  }
+  var R = D.restaurants.map(function (r) { return { r: r, s: rScore(r.id), v: D.restaurant_visits.filter(function (x) { return x.restaurant_id == r.id }) } }).sort(function (a, b) { return ((b.s || {}).all || 0) - ((a.s || {}).all || 0) });
+  h += '<section class="card" aria-label="Unsere Beizen"><div class="row sb"><span class="b" style="font-size:15px">Unsere Beizen</span><span class="sm mu">' + D.restaurants.length + " Beizen · " + D.restaurant_visits.length + " Besuche</span></div>" +
+    (R.length ? '<div class="lst">' + R.map(function (x) {
+      return '<button type="button" class="row" style="background:none;border:0;border-top:1px solid var(--ln);width:100%;text-align:left;color:var(--tx)" data-a="ov" data-t="resto" data-id="' + x.r.id + '"><span class="grow col" style="gap:2px"><b class="sm">' + esc(x.r.name) + '</b><span class="xs mu">' + esc(x.r.place || "") + (x.v.length ? " · " + x.v.length + " Besuch" + (x.v.length > 1 ? "e" : "") : "") + '</span></span><span class="col" style="gap:0;align-items:flex-end"><b style="font:900 20px var(--hf);color:var(--ac)">' + (x.s ? x.s.all.toFixed(1).replace(".", ",") : "–") + '</b><span class="xs mu">' + (x.s ? x.s.n + " Bew." : "neu") + "</span></span></button>";
+    }).join("") + "</div>" : '<span class="empty">Noch keine Beiz erfasst.</span>') +
+    (UI.newResto ? restoForm() : '<button class="btn file" data-a="ui" data-k="newResto" data-v="1">' + CAM + "Quittung fotografieren / Beiz erfassen</button>") + "</section>";
+  h += '<section class="card row"><span class="grow sm">Dein Gerät: <b>' + (PRF.device == "android" ? "Android" : "iPhone") + "</b></span></section>";
+  return h;
+}
+function restoForm() {
+  var sel = v("rsId");
+  return '<form class="col tile" data-s="visit" style="gap:10px;padding:12px"><span class="b">Besuch erfassen</span><label class="f">Beiz<select class="t" data-k="rsId"><option value="">+ Neue Beiz</option>' + D.restaurants.slice().sort(function (a, b) { return a.name.localeCompare(b.name, "de") }).map(function (r) { return '<option value="' + r.id + '"' + (sel == r.id ? " selected" : "") + ">" + esc(r.name) + "</option>" }).join("") + "</select></label>" +
+    (sel ? "" : '<div class="g2"><label class="f">Name<input class="t" data-k="rsName" value="' + esc(v("rsName")) + '" maxlength="80"></label><label class="f">Ort<input class="t" data-k="rsPlace" value="' + esc(v("rsPlace")) + '" maxlength="80"></label></div>' +
+      '<button type="button" class="btn ghost" data-a="geo">' + (UI.rsLat ? "Standort übernommen ✓" : "Aktuellen Standort für die Karte verwenden") + "</button>") +
+    '<div class="g3"><label class="f">Datum<input class="t" type="date" data-k="rsDate" value="' + esc(v("rsDate", today())) + '"></label><label class="f">Personen<input class="t" type="number" min="1" max="100" data-k="rsPeople" value="' + esc(v("rsPeople", "8")) + '"></label><label class="f">Total CHF<input class="t" type="number" min="0" step="0.05" data-k="rsTotal" value="' + esc(v("rsTotal")) + '"></label></div>' +
+    '<label class="btn ghost file">' + CAM + (UI.rsFile ? "Quittung gewählt ✓" : "Quittung fotografieren") + '<input type="file" accept="image/*" capture="environment" data-c="receipt" aria-label="Quittung fotografieren"></label>' +
+    '<div class="row"><button class="btn grow"' + (BUSY ? " disabled" : "") + '>Speichern</button><button type="button" class="btn ghost" data-a="ui" data-k="newResto" data-v="">Abbrechen</button></div></form>';
+}
+var CRIT = [["preis", "Preis-Leistung"], ["gesellig", "Geselligkeit"], ["willkommen", "Willkommen, auch wenn du betrunken bist"]];
+function restoView(r) {
+  var s = rScore(r.id), mine = Object.assign({}, D.restaurant_ratings.find(function (x) { return x.restaurant_id == r.id && x.member_id == uid() }) || {}, UI["rs" + r.id] || {});
+  var V = D.restaurant_visits.filter(function (x) { return x.restaurant_id == r.id }).sort(function (a, b) { return a.visited_on < b.visited_on ? 1 : -1 });
+  var h = '<div class="top"><button class="back" data-a="close" aria-label="Zurück">' + BACK + '</button><div class="row sb"><div class="col" style="gap:2px"><span style="font:900 28px/1.05 var(--hf)">' + esc(r.name) + '</span><span class="sm mu">' + esc(r.place || "") + "</span></div>" +
+    '<div class="col" style="gap:0;align-items:flex-end"><span style="font:900 34px/1 var(--hf);color:var(--ac)" data-test="score">' + (s ? s.all.toFixed(1).replace(".", ",") : "–") + '</span><span class="xs mu">Club-Wertung</span></div></div></div><main>';
+  h += '<section class="card"><span class="b" style="font-size:15px">Deine Bewertung</span>' + CRIT.map(function (c) {
+    return '<div class="col"><div class="row sb"><span class="sm b">' + esc(c[1]) + '</span><span class="xs mu">Club Ø ' + (s ? s[c[0]].toFixed(1).replace(".", ",") : "–") + "</span></div>" + stars("r:" + r.id + ":" + c[0], mine[c[0]] || 0, c[1]) + "</div>";
+  }).join("") + (mine.preis ? "" : '<span class="xs mu">Alle drei Kriterien bewerten, dann wird gespeichert · +5 Punkte</span>') + "</section>";
+  h += '<a class="btn" style="display:flex;align-items:center;justify-content:center;text-decoration:none" href="' + esc(mapsUrl(r)) + '" target="_blank" rel="noopener">In Google Maps öffnen</a>';
+  h += '<section class="card"><span class="b" style="font-size:15px">Besuche</span>' + (V.length ? '<div class="lst">' + V.map(function (x) {
+    return '<div class="row"><span style="width:52px;height:64px;flex:0 0 52px;border-radius:8px;overflow:hidden;background:var(--bg);border:1px dashed var(--ln2);display:flex;align-items:center;justify-content:center">' + (x.receipt_path ? img(x.receipt_path, "Quittung") : '<span class="xs mu">–</span>') + "</span>" +
+      '<span class="grow col" style="gap:2px"><b class="sm">' + esc(fDay(x.visited_on)) + '</b><span class="xs mu">' + x.people + " Personen · " + esc(nm(x.created_by)) + '</span></span><span class="col" style="gap:0;align-items:flex-end"><b class="sm">' + chf(x.total_chf) + '</b><span class="xs mu">' + chf(Math.round(x.total_chf / x.people)) + " p.P.</span></span></div>";
+  }).join("") + "</div>" : '<span class="empty">Noch kein Besuch erfasst.</span>') + "</section>";
+  return h + "</main>";
+}
+
+// ═════════════ Anlass-Details ═════════════
+function eventView(e) {
+  var me = uid(), s = rsvp(e.id, me), past = new Date(e.starts_at).getTime() < now();
+  var R = D.rsvps.filter(function (r) { return r.event_id == e.id });
+  var h = '<div class="top"><button class="back" data-a="close" aria-label="Zurück">' + BACK + '</button><span style="font:900 28px/1.1 var(--hf)">' + esc(e.title) + '</span><span class="sm mu">' + esc(fDate(e.starts_at, true)) + (e.location ? " · " + esc(e.location) : "") + "</span>" +
+    '<span class="sm b">' + (e.organizer_id ? "Organisation: " + esc(nm(e.organizer_id)) : '<span style="color:var(--orange)">Organisator gesucht</span>') + "</span></div><main>";
+  h += '<div class="row wrap"><button class="pill ' + (s == "in" ? "on" : "") + '" data-a="rsvp" data-id="' + e.id + '" data-v="in">Bin dabei</button><button class="pill ' + (s == "out" ? "out" : "") + '" data-a="abmelden" data-id="' + e.id + '">Abmelden</button>' +
+    (s == "virtual" ? '<span class="chip v">Virtuell dabei · Magnum spendiert</span>' : "") + "</div>";
+  var grp = [["in", "Dabei"], ["virtual", "Virtuell dabei"], ["out", "Abgemeldet"]];
+  h += '<section class="card">' + grp.map(function (g) { var L = R.filter(function (r) { return r.status == g[0] }); return L.length ? '<div class="col"><span class="lbl">' + g[1] + " (" + L.length + ')</span><div class="chips">' + L.map(function (r) { return '<span class="chip' + (g[0] == "virtual" ? " v" : "") + '">' + esc(nm(r.member_id)) + "</span>" }).join("") + "</div></div>" : "" }).join("") +
+    (R.length ? "" : '<span class="empty">Noch niemand angemeldet.</span>') + "</section>";
+  // Magnums des Abends mit Gasttrinkern pro Magnum
+  var M = D.magnums.filter(function (m) { return m.event_id == e.id }).sort(function (a, b) { return a.created_at < b.created_at ? -1 : 1 });
+  var gAll = D.magnum_guests.filter(function (g) { return M.some(function (m) { return m.id == g.magnum_id }) });
+  h += '<section class="card" aria-label="Magnums des Abends"><div class="row sb"><span class="b" style="font-size:15px">Magnums des Abends</span><span class="sm mu" data-test="magnums">' + M.length + " Flaschen · " + gAll.length + " Gasttrinker</span></div>" +
+    (M.length ? '<div class="lst">' + M.map(function (m) {
+      var G = D.magnum_guests.filter(function (g) { return g.magnum_id == m.id });
+      return '<div class="col"><div class="row sb"><span class="sm grow"><b>' + esc(m.wine) + '</b> <span class="mu">· ' + esc(nm(m.brought_by)) + '</span></span><button class="pill sm" style="border-color:#5A4430;color:#E9C9A0" data-a="ui" data-k="gOpen" data-v="' + (UI.gOpen == m.id ? "" : m.id) + '">+ Gast</button></div>' +
+        (G.length ? '<div class="chips">' + G.map(function (g) { return '<span class="chip guest">Gast: ' + esc(g.name) + "</span>" }).join("") + "</div>" : "") +
+        (UI.gOpen == m.id ? '<form class="row" data-s="guest" data-id="' + m.id + '"><input class="t" data-k="gName" value="' + esc(v("gName")) + '" placeholder="Gasttrinker an dieser Magnum" maxlength="60" aria-label="Name des Gasttrinkers"><button class="btn"' + (v("gName").trim() ? "" : " disabled") + ">Dazu · +15</button></form>" : "") + "</div>";
+    }).join("") + "</div>" : '<span class="empty">Noch keine Magnum erfasst.</span>') +
+    '<form class="row" data-s="magnum" data-id="' + e.id + '"><input class="t" data-k="mWine" value="' + esc(v("mWine")) + '" placeholder="Wein, z.B. Cornalin 2019" maxlength="80" aria-label="Welche Magnum"><button class="btn"' + (v("mWine").trim() ? "" : " disabled") + ">Erfassen</button></form></section>";
+  h += rides(e);
+  if (e.created_by == me || isAdmin()) h += '<button class="btn ghost" data-a="delevent" data-id="' + e.id + '">Anlass löschen</button>';
+  return h + "</main>";
+}
+var RCRIT = [["stars_safe", "Sicher & nüchtern gefahren"], ["stars_punctual", "Pünktlich & zuverlässig"], ["stars_mood", "Stimmung im Auto"]];
+function rides(e) {
+  var me = uid(), RD = D.rides.filter(function (r) { return r.event_id == e.id });
+  var mineDrive = RD.filter(function (r) { return r.driver_id == me })[0];
+  var myRide = D.ride_passengers.filter(function (p) { return p.passenger_id == me && RD.some(function (r) { return r.id == p.ride_id }) })[0];
+  var h = '<section class="card" aria-label="Heimweg · Fahrservice"><div class="col" style="gap:1px"><span class="b" style="font-size:15px">Heimweg · Fahrservice</span><span class="sm mu">Mitfahrer bewerten den Fahrer und verteilen Punkte</span></div>';
+  h += RD.length ? '<div class="lst">' + RD.map(function (r) {
+    var P = D.ride_passengers.filter(function (p) { return p.ride_id == r.id }), got = 0, rated = P.filter(function (p) { return p.rated_at });
+    P.forEach(function (p) { got += p.points_given || 0 });
+    var avg = rated.length ? rated.reduce(function (a, p) { return a + (p.stars_safe + p.stars_punctual + p.stars_mood) / 3 }, 0) / rated.length : null;
+    var mine = myRide && myRide.ride_id == r.id;
+    return '<div class="col"><div class="row"><span class="av s drv">' + esc(ini(r.driver_id)) + '</span><span class="grow col" style="gap:1px"><b class="sm">' + esc(nm(r.driver_id)) + (r.driver_id == me ? " (du)" : "") + '</b><span class="xs mu">' + esc(r.direction || "Richtung offen") + " · " + (r.seats - P.length) + " freie Plätze" + (avg ? " · " + avg.toFixed(1).replace(".", ",") + " Sterne" : "") + (got ? " · +" + got + " Punkte erhalten" : "") + "</span></span>" +
+      (r.driver_id != me && !myRide && P.length < r.seats ? '<button class="pill sm" style="border-color:var(--teal);color:var(--teal)" data-a="ridejoin" data-id="' + r.id + '">Mitfahren</button>' : "") +
+      (r.driver_id == me ? '<button class="pill sm" data-a="ridedel" data-id="' + r.id + '">Zurückziehen</button>' : "") + "</div>" +
+      (P.length ? '<div class="chips">' + P.map(function (p) { return '<span class="chip' + (p.rated_at ? " ja" : "") + '">' + esc(first(p.passenger_id)) + (p.rated_at ? " · +" + p.points_given : "") + "</span>" }).join("") + "</div>" : "") +
+      (mine ? rideRate(myRide, r, e) : "") + "</div>";
+  }).join("") + "</div>" : '<span class="empty">Noch niemand fährt. Biete Plätze an!</span>';
+  if (!mineDrive && !myRide) h += UI.rideForm ? '<form class="col tile" data-s="ride" data-id="' + e.id + '" style="gap:8px;padding:12px"><div class="g2"><label class="f">Richtung<input class="t" data-k="rdDir" value="' + esc(v("rdDir")) + '" maxlength="60" placeholder="z.B. Wil"></label><label class="f">Plätze<input class="t" type="number" min="1" max="8" data-k="rdSeats" value="' + esc(v("rdSeats", "3")) + '"></label></div><div class="row"><button class="btn grow">Plätze anbieten</button><button type="button" class="btn ghost" data-a="ui" data-k="rideForm" data-v="">Abbrechen</button></div></form>'
+    : '<button class="btn dash" data-a="ui" data-k="rideForm" data-v="1">Ich fahre · Plätze anbieten</button>';
+  return h + "</section>";
+}
+function rideRate(p, r, e) {
+  if (new Date(e.starts_at).getTime() > now()) return '<div class="tile" style="padding:12px;gap:8px"><span class="sm mu">Bewerten kannst du nach dem Anlass.</span><button class="btn link" data-a="rideleave" data-id="' + r.id + '">Mitfahrt absagen</button></div>';
+  if (p.rated_at) return '<span class="sm ok">Du hast ' + esc(first(r.driver_id)) + " +" + p.points_given + " Punkte gegeben. Danke!</span>";
+  var k = "rr" + r.id, cur = UI[k] || {};
+  return '<div class="tile" style="padding:12px;gap:8px"><span class="b">Gut angekommen? Wie war die Fahrt mit ' + esc(first(r.driver_id)) + "?</span>" +
+    RCRIT.map(function (c) { return '<span class="sm b">' + c[1] + "</span>" + stars("ride:" + r.id + ":" + c[0], cur[c[0]] || 0, c[1]) }).join("") +
+    '<span class="sm b">Punkte für den Fahrer</span><div class="g3" style="grid-template-columns:repeat(4,minmax(0,1fr))">' + [10, 20, 30, 50].map(function (n) { return '<button class="pill ' + (cur.points == n ? "on" : "") + '" style="' + (cur.points == n ? "background:var(--teal);border-color:var(--teal)" : "") + '" data-a="ridepts" data-id="' + r.id + '" data-v="' + n + '">+' + n + "</button>" }).join("") + "</div>" +
+    '<button class="btn" data-a="riderate" data-id="' + r.id + '"' + (cur.points && cur.stars_safe && cur.stars_punctual && cur.stars_mood ? "" : " disabled") + ">Bewertung senden · +5</button>" +
+    '<button class="btn link" data-a="rideleave" data-id="' + r.id + '">Mitfahrt absagen</button></div>';
+}
+
+// ═════════════ Overlays & Sheets ═════════════
+function overlay() {
+  var o = OV, x;
+  if (o.t == "event") x = D.events.find(function (e) { return e.id == o.id }), x = x && eventView(x);
+  else if (o.t == "trip") x = D.trips.find(function (e) { return e.id == o.id }), x = x && tripView(x);
+  else if (o.t == "member") x = pr(o.id), x = x && memberView(x);
+  else if (o.t == "resto") x = D.restaurants.find(function (e) { return e.id == o.id }), x = x && restoView(x);
+  else if (o.t == "card") x = allCards().find(function (c) { return c.id == o.id }), x = x && cardView(x);
+  if (!x) { OV = null; return "" }
+  return '<div id="ov" role="dialog" aria-modal="true">' + x + "</div>";
+}
+function sheet() {
+  if (SH.t == "party") {
+    var g = "";
+    for (var i = 0; i < 10; i++) g += '<span class="gx" style="top:' + (120 + (i * 53) % 420) + "px;--dx:" + (3.2 + (i % 4) * 0.9) + "s;--d:" + (-i * 0.7) + 's"><span class="gy" style="--dy:' + (0.9 + (i % 3) * 0.25) + "s;--d2:" + (-i * 0.3) + 's"><svg width="44" height="70" viewBox="0 0 44 70" aria-hidden="true" fill="none"><path d="M6 4h32c0 16-5 26-16 26S6 20 6 4z" fill="#F3EBDD" fill-opacity="0.18" stroke="#F3EBDD" stroke-width="2.5" stroke-linejoin="round"/><path d="M8.5 13h27c-1.5 9-6 15-13.5 15S10 22 8.5 13z" fill="#B3243A"/><path d="M22 30v28M12 66h20" stroke="#F3EBDD" stroke-width="2.5" stroke-linecap="round"/></svg></span></span>';
+    var n = D.rsvps.filter(function (r) { return r.status == "virtual" && !r.redeemed }).length;
+    return '<div id="party" role="dialog" aria-label="Magnum-Abend">' + g + '<div class="pf"><span class="prost">Prost!</span><span>Magnum-Abend läuft' + (n ? " · " + n + " Magnum" + (n == 1 ? " wartet" : "s warten") + " aus der Kasse" : "") + '</span><button class="btn ghost" style="border-color:#F3EBDD" data-a="close">Abend beenden</button></div></div>';
+  }
+  if (SH.t == "abmelden") {
+    var e = D.events.find(function (x) { return x.id == SH.id }); if (!e) { SH = null; return "" }
+    var s = stats(uid());
+    return '<div id="sh"><section role="dialog" aria-modal="true" aria-label="Abmelden"><span class="lbl">' + esc(e.title) + " · " + esc(fDate(e.starts_at)) + '</span><span class="big">Schade, du fehlst!</span>' +
+      '<span class="sm mu" style="line-height:1.45">' + (s.streak > 0 ? "Du hast eine Streak von " + s.streak + " Anlässen. Wenn du dich einfach abmeldest, ist sie weg. Mit einer spendierten Magnum bist du virtuell dabei und sie bleibt." : "Mit einer spendierten Magnum bist du virtuell dabei und sammelst trotzdem Punkte.") + "</span>" +
+      '<button class="virt" data-a="virtual" data-id="' + e.id + '"><span>Ich kann nicht, möchte aber virtuell dabei sein und bezahle eine Magnum</span><span style="font-size:12px;font-weight:600">+20 Punkte · Streak bleibt · Magnum geht in die Kasse</span></button>' +
+      '<button class="btn ghost" data-a="rsvp" data-id="' + e.id + '" data-v="out">Nur abmelden</button><button class="btn link" data-a="close">Doch dabei sein</button></section></div>';
+  }
+  return "";
+}
+
+// ═════════════ Aktionen ═════════════
+function post(text) { return sb.from("posts").insert({ author_id: uid(), text: text }) }
+var ACT = {
+  tab: function (d) { TAB = d.v; lsSet("mg_tab", TAB); OV = null; SH = null; render(); window.scrollTo(0, 0) },
+  install: function () { var p = INST; INST = null; if (p) p.prompt(); render() },
+  ui: function (d) { UI[d.k] = d.v || null; render() },
+  setui: function (d) { UI[d.k] = UI[d.k] == d.v && d.k == "phText" ? "" : d.v; render() },
+  ov: function (d) { OV = { t: d.t, id: d.id }; UI.gOpen = null; UI.rideForm = null; render(); var o = document.getElementById("ov"); if (o) o.scrollTop = 0 },
+  close: function () { if (SH) SH = null; else OV = null; render() },
+  authmode: function (d) { AUTH = { mode: d.v }; render() },
+  noinvite: function () { INVITE = null; history.replaceState(null, "", location.pathname + location.search); render() },
+  logout: function () { sb.auth.signOut() },
+  rsvp: function (d) {
+    var was = rsvp(d.id, uid()); SH = null;
+    after(sb.from("rsvps").upsert({ event_id: d.id, member_id: uid(), status: d.v, updated_at: new Date().toISOString() }),
+      d.v == "in" ? (was == "in" ? null : "Angemeldet · +50 Punkte nach dem Anlass")
+        : stats(uid()).streak ? "Abgemeldet · Streak zurück auf 0" : pick(["Abgemeldet · Schade, das Glas bleibt leer", "Abgemeldet · Beim nächsten Mal wieder!", "Abgemeldet · Wir trinken einen auf dich"], today() + d.id));
+  },
+  abmelden: function (d) { SH = { t: "abmelden", id: d.id }; render() },
+  virtual: function (d) {
+    var e = D.events.find(function (x) { return x.id == d.id }); SH = null;
+    after(sb.from("rsvps").upsert({ event_id: d.id, member_id: uid(), status: "virtual", updated_at: new Date().toISOString() }).then(function (r) {
+      if (r.error) return r; return post("kann nicht an «" + e.title + "», spendiert aber eine Magnum für die Kasse.");
+    }), "Prost! Deine Magnum ist in der Kasse · +20 Punkte");
+  },
+  organize: function (d) {
+    var e = D.events.find(function (x) { return x.id == d.id });
+    after(sb.rpc("claim_organizer", { p_event: d.id }).then(function (r) { if (r.error) return r; return post("organisiert «" + e.title + "». Danke!") }), "Danke! Du organisierst den Abend · +40 Punkte");
+  },
+  party: function () { SH = { t: "party" }; render() },
+  kasseauf: function () { after(sb.rpc("open_magnum_kasse"), "Kasse geöffnet. Prost!") },
+  sprost: function (d) {
+    var on = D.saying_prosts.some(function (p) { return p.saying_id == d.id && p.member_id == uid() });
+    after(on ? sb.from("saying_prosts").delete().eq("saying_id", d.id).eq("member_id", uid()) : sb.from("saying_prosts").insert({ saying_id: d.id, member_id: uid() }));
+  },
+  spnext: function () { UI.spOff = (UI.spOff || 0) + 1; render() },
+  pprost: function (d) {
+    var on = D.post_prosts.some(function (p) { return p.post_id == d.id && p.member_id == uid() });
+    after(on ? sb.from("post_prosts").delete().eq("post_id", d.id).eq("member_id", uid()) : sb.from("post_prosts").insert({ post_id: d.id, member_id: uid() }), on ? null : "Prost!");
+  },
+  drinkkind: function (d) { after(sb.from("drinks").update({ kind: d.v }).eq("id", d.id).eq("member_id", uid())) },
+  tripjoin: function (d) {
+    var on = D.trip_participants.some(function (p) { return p.trip_id == d.id && p.member_id == uid() }), t = D.trips.find(function (x) { return x.id == d.id });
+    after(on ? sb.from("trip_participants").delete().eq("trip_id", d.id).eq("member_id", uid())
+      : sb.from("trip_participants").insert({ trip_id: d.id, member_id: uid() }).then(function (r) { if (r.error) return r; return post("reist mit nach " + t.title + "!") }),
+      on ? "Von " + t.title + " abgemeldet" : "Dabei in " + t.title + " · +30 Punkte nach der Reise");
+  },
+  deltrip: function (d) { if (!confirm("Reise wirklich löschen?")) return; OV = null; after(sb.from("trips").delete().eq("id", d.id), "Reise gelöscht") },
+  delevent: function (d) { if (!confirm("Anlass wirklich löschen?")) return; OV = null; after(sb.from("events").delete().eq("id", d.id), "Anlass gelöscht") },
+  delcard: function (d) { if (!confirm("Karte wirklich löschen?")) return; OV = null; after(sb.from("cards").delete().eq("id", d.id), "Karte gelöscht") },
+  vote: function (d) {
+    after(sb.rpc("cast_ballot", { p_proposal: d.id, p_yes: d.v == "1" }).then(function (r) {
+      if (!r.error) toast(r.data == "passed" ? "Angenommen mit Zweidrittelmehrheit!" : r.data == "rejected" ? "Abgelehnt · ⅔-Mehrheit nicht erreicht" : "Stimme abgegeben"); return r;
+    }));
+  },
+  second: function (d) { after(sb.rpc("second_proposal", { p_proposal: d.id }).then(function (r) { if (!r.error) toast(r.data == "passed" ? "Bestätigt!" : "Unterstützt · Abstimmung offen"); return r })) },
+  setdevice: function (d) { after(sb.rpc("admin_set_device", { p_member: d.id, p_device: d.v }), "Gerätetyp von " + nm(d.id) + " angepasst") },
+  star: function (d) {
+    var p = d.k.split(":"), n = +d.v;
+    if (p[0] == "r") {
+      var mine = D.restaurant_ratings.find(function (x) { return x.restaurant_id == p[1] && x.member_id == uid() }), k = "rs" + p[1];
+      var cur = Object.assign({}, mine ? { preis: mine.preis, gesellig: mine.gesellig, willkommen: mine.willkommen } : {}, UI[k] || {}); cur[p[2]] = n; UI[k] = cur;
+      // Gespeichert wird erst, wenn alle drei Kriterien bewertet sind; bis dahin nur der Zwischenstand in UI
+      if (cur.preis && cur.gesellig && cur.willkommen) {
+        after(sb.from("restaurant_ratings").upsert({ restaurant_id: p[1], member_id: uid(), preis: cur.preis, gesellig: cur.gesellig, willkommen: cur.willkommen, updated_at: new Date().toISOString() }), mine ? "Bewertung angepasst" : "Danke für die Bewertung · +5 Punkte")
+          .then(function () { UI[k] = null; render() });
+      } else render();
+    } else if (p[0] == "ride") { var kk = "rr" + p[1]; UI[kk] = Object.assign({}, UI[kk]); UI[kk][p[2]] = n; render() }
+  },
+  ridepts: function (d) { var k = "rr" + d.id; UI[k] = Object.assign({}, UI[k], { points: +d.v }); render() },
+  riderate: function (d) {
+    var c = UI["rr" + d.id] || {}, r = D.rides.find(function (x) { return x.id == d.id });
+    UI["rr" + d.id] = null;
+    after(sb.from("ride_passengers").update({ stars_safe: c.stars_safe, stars_punctual: c.stars_punctual, stars_mood: c.stars_mood, points_given: c.points, rated_at: new Date().toISOString() }).eq("ride_id", d.id).eq("passenger_id", uid()),
+      first(r.driver_id) + " erhält +" + c.points + " Punkte · du +5 fürs Bewerten");
+  },
+  ridejoin: function (d) { var r = D.rides.find(function (x) { return x.id == d.id }); after(sb.from("ride_passengers").insert({ ride_id: d.id, passenger_id: uid() }), "Du fährst mit " + first(r.driver_id)) },
+  rideleave: function (d) { after(sb.from("ride_passengers").delete().eq("ride_id", d.id).eq("passenger_id", uid()), "Mitfahrt abgesagt") },
+  ridedel: function (d) { after(sb.from("rides").delete().eq("id", d.id), "Angebot zurückgezogen") },
+  lockinfo: function (d) { toast("Geheime Karte · " + d.v + " zum Freischalten") },
+  invite: function () {
+    BUSY = true; render();
+    sb.functions.invoke("invite", { body: { action: "create" } }).then(function (r) {
+      return fnErr(r).then(function (e) {
+        BUSY = false; if (e) { toast(e); render(); return }
+        NEWLINK = location.origin + location.pathname + "#einladung=" + r.data.token; loadInvites(); render();
+        if (navigator.share) navigator.share({ title: "Magnum", text: "Du bist in den Magnum Club eingeladen!", url: NEWLINK }).catch(function () {});
+      });
+    });
+  },
+  copylink: function () { if (navigator.clipboard) navigator.clipboard.writeText(NEWLINK).then(function () { toast("Link kopiert") }, function () { toast("Kopieren nicht möglich") }) },
+  revoke: function (d) { sb.functions.invoke("invite", { body: { action: "revoke", id: +d.id } }).then(function (r) { fnErr(r).then(function (e) { toast(e || "Einladung zurückgezogen"); loadInvites() }) }) },
+  geo: function () {
+    if (!navigator.geolocation) return toast("Standort nicht verfügbar");
+    navigator.geolocation.getCurrentPosition(function (p) { UI.rsLat = p.coords.latitude; UI.rsLng = p.coords.longitude; render() }, function () { toast("Standort nicht freigegeben") }, { timeout: 10000 });
+  }
+};
+function loadInvites() {
+  if (!sb || !ME) return;
+  sb.functions.invoke("invite", { body: { action: "list" } }).then(function (r) { if (!r.error && r.data) { INVLIST = r.data.items || []; render() } });
+}
+
+var SUBMIT = {
+  login: function (f) {
+    AUTH.err = null;
+    sb.auth.signInWithPassword({ email: f.email.value.trim(), password: f.pw.value }).then(function (r) {
+      if (r.error) { AUTH.err = /Invalid login/i.test(r.error.message) ? "Mail-Adresse oder Passwort stimmt nicht." : r.error.message; render() }
+    });
+  },
+  reset: function (f) {
+    sb.auth.resetPasswordForEmail(f.email.value.trim(), { redirectTo: location.origin + location.pathname }).then(function (r) {
+      AUTH.msg = r.error ? r.error.message : "Falls die Adresse bekannt ist, kommt gleich eine Mail."; render();
+    });
+  },
+  newpw: function (f) {
+    sb.auth.updateUser({ password: f.pw.value }).then(function (r) { if (r.error) { AUTH.err = r.error.message; render() } else { AUTH = { mode: "login" }; toast("Passwort gespeichert"); render() } });
+  },
+  join: function (f) {
+    var b = { action: "join", token: INVITE.token, name: f.name.value, email: f.email.value, password: f.pw.value, device: deviceGuess() };
+    BUSY = true; INVITE.err = null; render();
+    sb.functions.invoke("invite", { body: b }).then(function (r) {
+      return fnErr(r).then(function (e) {
+        if (e) { BUSY = false; INVITE.err = e; render(); return }
+        INVITE = null; history.replaceState(null, "", location.pathname + location.search);
+        return sb.auth.signInWithPassword({ email: b.email.trim().toLowerCase(), password: b.password }).then(function () { BUSY = false; toast("Willkommen im Magnum Club!") });
+      });
+    });
+  },
+  event: function () {
+    var at = new Date(v("evAt")); if (!v("evTitle").trim() || isNaN(at)) return toast("Bitte Titel und Datum angeben");
+    var org = !!UI.evOrg;
+    after(sb.from("events").insert({ title: v("evTitle").trim(), starts_at: at.toISOString(), location: v("evLoc").trim() || null, created_by: uid() }).select().single().then(function (r) {
+      if (r.error || !org) return r;
+      return sb.rpc("claim_organizer", { p_event: r.data.id });
+    }), "Anlass erfasst" + (org ? " · du organisierst ihn" : "")).then(function () { UI.newEv = UI.evTitle = UI.evAt = UI.evLoc = UI.evOrg = null; render() });
+  },
+  saying: function () { var t = v("spText").trim(); if (!t) return; after(sb.from("sayings").insert({ text: t, author_id: uid() }), "Spruch eingereicht · die meisten Prosts machen ihn zum Spruch des Tages").then(function () { UI.spText = null; UI.spForm = null; render() }) },
+  phrase: function () {
+    var w = v("phWho"), t = v("phText").trim(); if (!w || !t) return;
+    after(sb.from("phrases").insert({ speaker_id: w, phrase: t, fee_chf: S().phrase_fee, reported_by: uid() }), "Oink! " + first(w) + " zahlt " + chf(S().phrase_fee) + " ins Phrasenschwein").then(function () { UI.phWho = UI.phText = null; render() });
+  },
+  post: function () { var t = v("postText").trim(); if (!t) return; after(post(t)).then(function () { UI.postText = null; render() }) },
+  trip: function () {
+    if (!v("trTitle").trim() || !v("trFrom")) return toast("Bitte Ziel und Datum angeben");
+    var title = v("trTitle").trim();
+    after(sb.from("trips").insert({ title: title, starts_on: v("trFrom"), ends_on: v("trTo") || null, program: v("trProg").trim() || null, seats: Math.max(1, Math.min(50, +v("trSeats", 12) || 12)), color: v("trColor", COLORS[0]), created_by: uid() })
+      .then(function (r) { if (r.error) return r; return post("hat die Reise nach " + title + " eröffnet. Wer kommt mit?") }), "Reise erfasst").then(function () { ["newTrip", "trTitle", "trFrom", "trTo", "trProg", "trSeats", "trColor"].forEach(function (k) { UI[k] = null }); render() });
+  },
+  sacceri: function (f) { var t = v("sacPick"); if (!t) return; after(sb.rpc("propose_sacceri", { p_trip: f.getAttribute("data-id"), p_target: t }), "Antrag gestellt: " + nm(t) + " als De Sacceri").then(function () { UI.sacPick = null; render() }) },
+  nick: function (f) {
+    var id = f.getAttribute("data-id"), n = v("nick" + id).trim(); if (!n) return;
+    after(sb.rpc("propose_nickname", { p_target: id, p_nick: n }), "«" + n + "» vorgeschlagen · wartet auf eine zweite Unterstützung").then(function () { UI["nick" + id] = null; render() });
+  },
+  role: function (f) { var id = f.getAttribute("data-id"); after(sb.rpc("admin_set_role", { p_member: id, p_role: v("role" + id, pr(id).role_title) }), "Funktion gespeichert") },
+  profile: function () {
+    after(sb.from("profiles").update({ display_name: v("pfName", PRF.display_name).trim().slice(0, 40) || PRF.display_name, fav_wine: v("pfWine", PRF.fav_wine || "").trim() || null, specialty: v("pfSpec", PRF.specialty || "").trim() || null }).eq("id", uid()), "Profil gespeichert")
+      .then(function () { UI.pfName = UI.pfWine = UI.pfSpec = null; render() });
+  },
+  feedback: function () {
+    BUSY = true; render();
+    sb.functions.invoke("feedback", { body: { kind: v("fbKind", "idee"), title: v("fbTitle"), text: v("fbText") } }).then(function (r) {
+      return fnErr(r).then(function (e) {
+        BUSY = false;
+        if (e) { toast(e); render(); return }
+        UI.fbOpen = UI.fbTitle = UI.fbText = UI.fbKind = null; toast("Danke! Dein Vorschlag wird als GitHub-Issue erfasst · +10 Punkte");
+        return loadAll().then(render);
+      });
+    });
+  },
+  magnum: function (f) {
+    var w = v("mWine").trim(), id = f.getAttribute("data-id"); if (!w) return;
+    after(sb.from("magnums").insert({ event_id: id, wine: w, brought_by: uid() }).select().single().then(function (r) { if (!r.error) UI.gOpen = r.data.id; return r }), "Magnum " + w + " erfasst · jetzt Gasttrinker dazu?").then(function () { UI.mWine = null; render() });
+  },
+  guest: function (f) {
+    var n = v("gName").trim(), m = f.getAttribute("data-id"), mg = D.magnums.find(function (x) { return x.id == m }); if (!n) return;
+    after(sb.from("magnum_guests").insert({ magnum_id: m, name: n, added_by: uid() }), n + " trinkt an der " + (mg ? mg.wine : "Magnum") + " mit · +15 Punkte").then(function () { UI.gName = null; UI.gOpen = null; render() });
+  },
+  ride: function (f) { after(sb.from("rides").insert({ event_id: f.getAttribute("data-id"), driver_id: uid(), direction: v("rdDir").trim(), seats: Math.max(1, Math.min(8, +v("rdSeats", 3) || 3)) }), "Danke! Du bist als Fahrer eingetragen").then(function () { UI.rideForm = UI.rdDir = UI.rdSeats = null; render() }) },
+  card: function () {
+    if (!v("cdTitle").trim()) return toast("Bitte einen Titel angeben");
+    BUSY = true; render();
+    var file = UI.cdFile;
+    (file ? upload("cards", file) : Promise.resolve(null)).then(function (path) {
+      return sb.from("cards").insert({ title: v("cdTitle").trim(), rarity: v("cdR", "magic"), happened_on: v("cdDate") || null, place: v("cdPlace").trim() || null, who: v("cdWho").trim() || null, story: v("cdStory").trim() || null, photo_path: path, created_by: uid() })
+        .then(function (r) { if (r.error) return r; return post("hat die Sammelkarte «" + v("cdTitle").trim() + "» erstellt.") });
+    }).then(function (r) { BUSY = false; return after(r, "Karte erstellt · +10 Punkte") }).catch(function (e) { BUSY = false; toast(errText(e)); render() })
+      .then(function () { ["newCard", "cdTitle", "cdR", "cdDate", "cdPlace", "cdWho", "cdStory", "cdFile"].forEach(function (k) { UI[k] = null }); render() });
+  },
+  visit: function () {
+    var rid = v("rsId"), file = UI.rsFile;
+    if (!rid && !v("rsName").trim()) return toast("Bitte die Beiz wählen oder einen Namen angeben");
+    BUSY = true; render();
+    var mk = rid ? Promise.resolve(rid) : sb.from("restaurants").insert({ name: v("rsName").trim(), place: v("rsPlace").trim() || null, lat: UI.rsLat || null, lng: UI.rsLng || null, created_by: uid() }).select().single().then(function (r) { if (r.error) throw r.error; return r.data.id });
+    mk.then(function (id) {
+      return (file ? upload("receipts", file) : Promise.resolve(null)).then(function (path) {
+        return sb.from("restaurant_visits").insert({ restaurant_id: id, visited_on: v("rsDate", today()), people: Math.max(1, +v("rsPeople", 8) || 1), total_chf: Math.max(0, +v("rsTotal") || 0), receipt_path: path, created_by: uid() }).then(function (r) { if (r.error) throw r.error; return id });
+      });
+    }).then(function (id) {
+      BUSY = false; ["newResto", "rsId", "rsName", "rsPlace", "rsDate", "rsPeople", "rsTotal", "rsFile", "rsLat", "rsLng"].forEach(function (k) { UI[k] = null });
+      toast("Besuch gespeichert · jetzt bewerten!"); OV = { t: "resto", id: id }; return loadAll().then(render);
+    }).catch(function (e) { BUSY = false; toast(errText(e)); render() });
+  }
+};
+var CHANGE = {
+  drink: function (el) {
+    var f = el.files && el.files[0]; if (!f) return;
+    toast("Foto wird hochgeladen …");
+    upload("drinks", f).then(function (path) {
+      return after(sb.from("drinks").insert({ member_id: uid(), drunk_on: today(), kind: "wein", photo_path: path }), "Gespeichert · tippe an, falls es kein Wein war");
+    }).catch(function (e) { toast(errText(e)) });
+  },
+  tripphotos: function (el) {
+    var fs = Array.prototype.slice.call(el.files || []), id = el.getAttribute("data-id"); if (!fs.length) return;
+    toast(fs.length + " Bild" + (fs.length > 1 ? "er werden" : " wird") + " hochgeladen …");
+    fs.reduce(function (p, f) { return p.then(function () { return upload("trips", f).then(function (path) { return sb.from("trip_photos").insert({ trip_id: id, path: path, uploaded_by: uid() }) }) }) }, Promise.resolve())
+      .then(function () { return after(null, fs.length + " Bild" + (fs.length > 1 ? "er" : "") + " hochgeladen") }).catch(function (e) { toast(errText(e)) });
+  },
+  cardphoto: function (el) { UI.cdFile = el.files && el.files[0] || null; render() },
+  receipt: function (el) { UI.rsFile = el.files && el.files[0] || null; render() },
+  tripset: function (el) { var o = {}; o[el.getAttribute("data-f")] = el.value || null; after(sb.from("trips").update(o).eq("id", el.getAttribute("data-id")), "Gespeichert") }
+};
+
+document.addEventListener("click", function (e) {
+  var el = e.target.closest("[data-a]"); if (!el || el.disabled) return;
+  var f = ACT[el.getAttribute("data-a")]; if (!f) return;
+  e.preventDefault(); f(el.dataset, el);
+});
+document.addEventListener("submit", function (e) {
+  var f = e.target, s = SUBMIT[f.getAttribute("data-s")]; if (!s) return;
+  e.preventDefault(); s(f);
+});
+document.addEventListener("input", function (e) {
+  var k = e.target.getAttribute && e.target.getAttribute("data-k"); if (!k) return;
+  var before = !!String(UI[k] || "").trim();
+  UI[k] = e.target.type == "checkbox" ? e.target.checked : e.target.value;
+  // Knöpfe freischalten, sobald etwas eingegeben ist (ohne bei jedem Zeichen neu zu zeichnen)
+  if (before != !!String(UI[k] || "").trim() || e.target.tagName == "SELECT") render();
+});
+document.addEventListener("change", function (e) {
+  var el = e.target, c = el.getAttribute && el.getAttribute("data-c");
+  if (c && CHANGE[c]) { CHANGE[c](el); return }
+  var k = el.getAttribute && el.getAttribute("data-k");
+  if (k && (el.tagName == "SELECT" || el.type == "checkbox" || el.type == "date")) { UI[k] = el.type == "checkbox" ? el.checked : el.value; render() }
+});
+document.addEventListener("keydown", function (e) { if (e.key == "Escape" && (SH || OV)) { ACT.close() } });
+
+// ═════════════ Start ═════════════
+function readInvite() {
+  var m = location.hash.match(/einladung=([A-Za-z0-9_-]+)/);
+  if (!m) return;
+  INVITE = { token: m[1], state: "checking" };
+  sb.functions.invoke("invite", { body: { action: "check", token: m[1] } }).then(function (r) {
+    fnErr(r).then(function (e) { if (e) INVITE = { state: "bad", err: e }; else INVITE = { token: m[1], state: "ok", from: r.data.from }; render() });
+  });
+}
+function start() {
+  if (!C.data || !C.api || !window.magnumDb) { render(); return }
+  sb = window.magnumDb.createClient(C);
+  sb.from("app_status").select("maintenance").eq("id", "main").maybeSingle().then(function (r) { if (r.data && r.data.maintenance) { MAINT = true; render() } });
+  readInvite();
+  sb.auth.onAuthStateChange(function (ev, s) {
+    if (ev == "PASSWORD_RECOVERY") { AUTH = { mode: "recovery" }; render(); return }
+    var was = ME && ME.id; ME = s ? s.user : null;
+    if (!ME) { READY = false; PRF = null; render(); return }
+    if (was == ME.id && READY) return;
+    if (INVITE && INVITE.state != "bad") { INVITE = null; history.replaceState(null, "", location.pathname + location.search) }
+    READY = false; render();
+    setTimeout(function () {
+      sb.rpc("me").then(function (r) { PREV = r.data && r.data.prev_seen; return loadAll() }).then(function () { READY = true; render(); loadInvites() });
+      if (CH) return;
+      CH = sb.channel("club").on("postgres_changes", { event: "*", schema: "public" }, function (p) {
+        if (p && p.table == "app_status") { var mt = !!(p.new && p.new.maintenance); if (MAINT && !mt) location.reload(); MAINT = mt; render(); return }
+        refresh();
+      }).subscribe();
+    }, 0);
+  });
+  render();
+}
+// Einladungslink in einem schon offenen Tab: nur der #-Teil ändert sich
+addEventListener("hashchange", function () { if (sb && !ME && /einladung=/.test(location.hash)) { readInvite(); render() } });
+if ("serviceWorker" in navigator && location.protocol == "https:") navigator.serviceWorker.register("sw.js").catch(function () {});
+start();
+</script>
+</body></html>

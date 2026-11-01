@@ -1,0 +1,32 @@
+# Legt Verbesserungsvorschläge aus der App als GitHub-Issues an (alle 10 Minuten).
+# Nutzt den eingebauten GITHUB_TOKEN – es muss kein persönliches Token erstellt oder erneuert werden.
+# Schlägt ein Lauf fehl, schickt GitHub dem Repository-Besitzer eine Mail.
+name: Vorschläge → Issues
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: feedback-issues
+  cancel-in-progress: false
+
+jobs:
+  issues:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22
+      - run: node scripts/feedback-to-issues.mjs
+        env:
+          MAGNUM_API_URL: ${{ vars.MAGNUM_API_URL }}
+          CRON_SECRET: ${{ secrets.MAGNUM_CRON_SECRET }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
