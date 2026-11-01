@@ -209,3 +209,46 @@ test.describe("Rollen", () => {
     await expect(page.locator("#ov")).not.toContainText("Magnums mitgebracht");
   });
 });
+
+test.describe("Rollen", () => {
+  const profil = async (page, name) => { await tab(page, "Club"); await page.locator(".mem", { hasText: name }).click(); return card(page, "Rolle") };
+
+  test("Gerät steht bei der Person", async ({ page }) => {
+    await login(page);
+    await tab(page, "Club");
+    await expect(page.locator(".mem", { hasText: "Beat" }).locator("[data-test=mem-geraet]")).toHaveText("Android");
+    await expect(page.locator(".mem", { hasText: "Dani" }).locator("[data-test=mem-geraet]")).toHaveText("iPhone");
+  });
+
+  test("Admin macht jemanden zum Administrator, neu ist man Mitglied", async ({ page }) => {
+    await login(page);
+    const r = await profil(page, "Beat");
+    await expect(r.getByRole("button", { name: "Mitglied" })).toHaveAttribute("aria-pressed", "true");
+    await r.getByRole("button", { name: "Administrator" }).click();
+    await expect(toast(page)).toContainText("Beat ist jetzt Administrator");
+    await expect(r.getByRole("button", { name: "Administrator" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  test("Der letzte Administrator bleibt", async ({ page }) => {
+    await login(page);
+    const r = await profil(page, "Ot");
+    await r.getByRole("button", { name: "Mitglied" }).click();
+    await expect(toast(page)).toContainText("mindestens einen Administrator");
+  });
+
+  test("Mitglieder vergeben keine Rollen", async ({ page }) => {
+    await login(page, BEAT);
+    await tab(page, "Club");
+    await page.locator(".mem", { hasText: "Dani" }).click();
+    await expect(card(page, "Rolle")).toHaveCount(0);
+    const r = await page.evaluate(() => window.magnumDb.createClient().rpc("admin_set_admin", { p_member: "u-beat", p_admin: true }));
+    expect(r.error.message).toContain("Nur der Administrator");
+  });
+
+  test("Magnums mitgebracht ist weg", async ({ page }) => {
+    await login(page);
+    await tab(page, "Club");
+    await page.locator(".mem", { hasText: "Beat" }).click();
+    await expect(page.locator("#ov")).not.toContainText("Magnums mitgebracht");
+  });
+});
