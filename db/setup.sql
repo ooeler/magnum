@@ -171,6 +171,20 @@ begin
   values (public.uid(), p_member, 'Gerätetyp ' || v_old || ' → ' || p_device);
 end $$;
 
+-- Administrator-Rolle vergeben und entziehen. Neue Konten sind Mitglieder, einer muss Administrator bleiben.
+create or replace function public.admin_set_admin(p_member uuid, p_admin boolean) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_admin() then raise exception 'Nur der Administrator vergibt diese Rolle'; end if;
+  if not p_admin and not exists (select 1 from public.profiles where is_admin and id <> p_member) then
+    raise exception 'Es braucht mindestens einen Administrator';
+  end if;
+  update public.profiles set is_admin = p_admin where id = p_member;
+  if not found then raise exception 'Mitglied nicht gefunden'; end if;
+  insert into public.admin_log (admin_id, member_id, action)
+  values (public.uid(), p_member, case when p_admin then 'Rolle → Administrator' else 'Rolle → Mitglied' end);
+end $$;
+
 create or replace function public.admin_set_role(p_member uuid, p_role text) returns void
 language plpgsql security definer set search_path = public as $$
 begin
@@ -270,6 +284,66 @@ end $$;
 drop trigger if exists rsvp_check on public.rsvps;
 create trigger rsvp_check before insert or update or delete on public.rsvps
   for each row execute function public.check_rsvp();
+
+-- Ämtli pro Anlass: OK und Verpflegung, jeweils mehrere Personen. Alle Mitglieder tragen ein, wie bei den Reisen.
+create table if not exists public.event_aemtli (
+  event_id  uuid not null references public.events(id) on delete cascade,
+  member_id uuid not null references public.profiles(id) on delete cascade,
+  amt       text not null check (amt in ('ok', 'verpflegung')),
+  added_by  uuid default public.uid() references public.profiles(id) on delete set null,
+  primary key (event_id, member_id, amt)
+);
+alter table public.event_aemtli enable row level security;
+
+-- ───────────── Magnum-Serie: immer am letzten Freitag im Monat, die nächsten drei stehen im Kalender ─────────────
+create or replace function public.letzter_freitag(p_monat date) returns date
+language sql immutable set search_path = public as $$
+  select l - ((extract(dow from l)::int + 2) % 7)
+    from (select (date_trunc('month', p_monat) + interval '1 month - 1 day')::date l) x
+$$;
+create or replace function public.magnum_titel(p_tag date) returns text
+language sql immutable set search_path = public as $$
+  select (array['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'])[extract(month from p_tag)::int] || '-Magnum'
+$$;
+-- Welche Monate schon angelegt wurden. So kommt ein gelöschter oder verschobener Abend nicht zurück.
+create table if not exists public.magnum_serie (
+  monat date primary key
+);
+alter table public.magnum_serie enable row level security;
+create or replace function public.magnum_termine() returns int
+language plpgsql security definer set search_path = public as $$
+declare v_monat date := date_trunc('month', public.heute())::date; v_tag date; v_neu int := 0; v_gefunden int := 0;
+begin
+  if public.uid() is not null and not public.is_member() then raise exception 'Nur Mitglieder'; end if;
+  while v_gefunden < 3 loop
+    v_tag := public.letzter_freitag(v_monat);
+    if v_tag >= public.heute() then
+      v_gefunden := v_gefunden + 1;
+      insert into public.magnum_serie (monat) values (v_monat) on conflict do nothing;
+      if found and not exists (select 1 from public.events where (starts_at at time zone 'Europe/Zurich')::date = v_tag) then
+        insert into public.events (title, starts_at, created_by)
+        values (public.magnum_titel(v_tag), (v_tag + time '19:00') at time zone 'Europe/Zurich', null);
+        v_neu := v_neu + 1;
+      end if;
+    end if;
+    v_monat := (v_monat + interval '1 month')::date;
+  end loop;
+  return v_neu;
+end $$;
+
+-- Anwesenheit eines vergangenen Anlasses nachtragen, nur der Admin. Ohne Status wird der Eintrag entfernt.
+create or replace function public.admin_set_rsvp(p_event uuid, p_member uuid, p_status text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_admin() then raise exception 'Nur der Administrator trägt Anwesenheit nach'; end if;
+  if p_status is null then delete from public.rsvps where event_id = p_event and member_id = p_member;
+  else
+    insert into public.rsvps (event_id, member_id, status) values (p_event, p_member, p_status)
+    on conflict (event_id, member_id) do update set status = excluded.status, updated_at = now();
+  end if;
+  insert into public.admin_log (admin_id, member_id, action)
+  values (public.uid(), p_member, 'Anwesenheit ' || coalesce(p_status, 'entfernt') || ' · ' || (select title from public.events where id = p_event));
+end $$;
 
 -- "Ich organisiere den Abend": Einen künftigen Abend kann jedes Mitglied jederzeit übernehmen, auch von jemand anderem
 create or replace function public.claim_organizer(p_event uuid) returns void
@@ -691,7 +765,7 @@ end $$;
 -- Die Data API läuft als Rolle "authenticated". Was sie darf, regeln danach Spalten-Rechte und Policies.
 grant usage on schema public to anonymous, authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
-revoke all on table public.invites from anonymous, authenticated;
+revoke all on table public.invites, public.magnum_serie from anonymous, authenticated;
 grant select on public.app_status to anonymous;
 
 -- Lesen: alle Mitglieder (Einladungen nie direkt, nur über die Edge Function)
@@ -701,7 +775,7 @@ begin
   foreach t in array array['settings', 'profiles', 'admin_log', 'restaurants', 'restaurant_visits',
     'restaurant_ratings', 'events', 'rsvps', 'magnums', 'magnum_guests', 'rides', 'ride_passengers', 'trips',
     'trip_participants', 'trip_photos', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
-    'sayings', 'saying_prosts', 'feedback', 'sync_stand']
+    'sayings', 'saying_prosts', 'feedback', 'sync_stand', 'event_aemtli']
   loop
     execute format('drop policy if exists "Mitglieder lesen" on public.%I', t);
     execute format('create policy "Mitglieder lesen" on public.%I for select to authenticated using (public.is_member())', t);
@@ -745,6 +819,18 @@ begin
     execute format('create policy "Ersteller löschen" on public.%I for delete to authenticated using (%I = public.uid() or public.is_admin())', r.tbl, r.col);
   end loop;
 end $$;
+
+-- Ämtli: Alle Mitglieder tragen ein und aus
+drop policy if exists "Ämtli eintragen" on public.event_aemtli;
+drop policy if exists "Ämtli austragen" on public.event_aemtli;
+create policy "Ämtli eintragen" on public.event_aemtli for insert to authenticated with check (public.is_member() and added_by = public.uid());
+create policy "Ämtli austragen" on public.event_aemtli for delete to authenticated using (public.is_member());
+revoke update on public.event_aemtli from authenticated;
+
+-- Anlässe: Auch wer organisiert, passt Name, Datum und Ort an
+drop policy if exists "Ersteller ändern" on public.events;
+create policy "Ersteller ändern" on public.events for update to authenticated
+  using (created_by = public.uid() or organizer_id = public.uid() or public.is_admin());
 
 -- Reisen: alle Mitglieder legen an und tragen OK/Kassier ein (Rest siehe check_trip). Der Sacceri kommt nur per Abstimmung.
 drop policy if exists "Reisen anlegen" on public.trips;
@@ -791,6 +877,7 @@ revoke execute on function public.is_admin() from public, anonymous;
 revoke execute on function public.me() from public, anonymous;
 revoke execute on function public.admin_set_device(uuid, text) from public, anonymous;
 revoke execute on function public.admin_set_role(uuid, text) from public, anonymous;
+revoke execute on function public.admin_set_admin(uuid, boolean) from public, anonymous;
 revoke execute on function public.claim_organizer(uuid) from public, anonymous;
 revoke execute on function public.open_magnum_kasse() from public, anonymous;
 revoke execute on function public.eligible_voters(uuid) from public, anonymous;
@@ -801,6 +888,10 @@ revoke execute on function public.second_proposal(uuid) from public, anonymous;
 revoke execute on function public.cast_ballot(uuid, boolean) from public, anonymous;
 revoke execute on function public.handle_new_user() from public, anonymous, authenticated;
 revoke execute on function public.gate_new_user() from public, anonymous, authenticated;
+revoke execute on function public.letzter_freitag(date) from public, anonymous, authenticated;
+revoke execute on function public.magnum_titel(date) from public, anonymous, authenticated;
+revoke execute on function public.magnum_termine() from public, anonymous;
+revoke execute on function public.admin_set_rsvp(uuid, uuid, text) from public, anonymous;
 revoke execute on function public.sync_bump() from public, anonymous, authenticated;
 revoke execute on function public.check_ride_passenger() from public, anonymous, authenticated;
 revoke execute on function public.heute() from public, anonymous, authenticated;
@@ -810,8 +901,8 @@ revoke execute on function public.check_rsvp() from public, anonymous, authentic
 revoke execute on function public.check_trip() from public, anonymous, authenticated;
 revoke execute on function public.check_trip_participant() from public, anonymous, authenticated;
 revoke execute on function public.set_created_at() from public, anonymous, authenticated;
-grant execute on function public.is_member(), public.is_admin(), public.me(),
-  public.admin_set_device(uuid, text), public.admin_set_role(uuid, text), public.claim_organizer(uuid),
+grant execute on function public.is_member(), public.is_admin(), public.me(), public.magnum_termine(), public.admin_set_rsvp(uuid, uuid, text),
+  public.admin_set_device(uuid, text), public.admin_set_role(uuid, text), public.admin_set_admin(uuid, boolean), public.claim_organizer(uuid),
   public.open_magnum_kasse(), public.eligible_voters(uuid), public.propose_sacceri(uuid, uuid),
   public.propose_nickname(uuid, text), public.second_proposal(uuid), public.cast_ballot(uuid, boolean)
   to authenticated;
@@ -822,7 +913,7 @@ declare t text;
 begin
   foreach t in array array['profiles', 'events', 'rsvps', 'magnums', 'magnum_guests', 'rides', 'ride_passengers',
     'trips', 'trip_participants', 'trip_photos', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
-    'sayings', 'saying_prosts', 'restaurants', 'restaurant_visits', 'restaurant_ratings', 'feedback', 'admin_log']
+    'sayings', 'saying_prosts', 'event_aemtli', 'restaurants', 'restaurant_visits', 'restaurant_ratings', 'feedback', 'admin_log']
   loop
     execute format('drop trigger if exists sync_bump on public.%I', t);
     execute format('create trigger sync_bump after insert or update or delete on public.%I for each statement execute function public.sync_bump()', t);
@@ -902,4 +993,4 @@ begin
 end $$;
 revoke execute on function public.restore_club(bigint) from public, anonymous, authenticated;
 
--- Die tägliche Sicherung startet ein Function Trigger (neon.ts): pg_cron läuft nicht, solange die Datenbank schläft.
+-- Sicherung und Magnum-Serie startet täglich ein Function Trigger (neon.ts): pg_cron läuft nicht, solange die Datenbank schläft.

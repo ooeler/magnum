@@ -151,7 +151,7 @@ details summary{cursor:pointer;font-weight:700;list-style:none}details summary::
 // ═══════════════════════════════════════════════════════════════════════
 var C = window.MG_CONFIG || {}, sb = null, ME = null, PRF = null, PREV = null, MAINT = false, READY = false;
 var TABLES = ["settings", "profiles", "events", "rsvps", "magnums", "magnum_guests", "rides", "ride_passengers", "trips",
-  "trip_participants", "trip_photos", "proposals", "ballots", "posts", "post_prosts", "cards", "drinks", "sayings",
+  "trip_participants", "trip_photos", "proposals", "ballots", "posts", "post_prosts", "cards", "drinks", "sayings", "event_aemtli",
   "saying_prosts", "restaurants", "restaurant_visits", "restaurant_ratings", "feedback", "admin_log"];
 var D = {}; TABLES.forEach(function (t) { D[t] = [] });
 var TAB = lsGet("mg_tab") || "termine", OV = null, SH = null, UI = {}, AUTH = { mode: "login" }, INVITE = null, INVLIST = null, NEWLINK = null, BUSY = false;
@@ -178,6 +178,9 @@ function fDate(iso, time) {
   var s = d.toLocaleDateString("de-CH", { weekday: "short", day: "numeric", month: "short" });
   return time ? s + " · " + d.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" }) : s;
 }
+var MONATE = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+function magnumName(iso) { return MONATE[new Date(iso).getMonth()] + "-Magnum" }
+function lokalZeit(iso) { var d = new Date(iso); return localDay(iso) + "T" + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0") }
 function fDay(isoDate) { if (!isoDate) return ""; var d = new Date(isoDate + "T12:00:00"); return d.getDate() + ". " + MON[d.getMonth()] + " " + d.getFullYear() }
 function fMonYear(isoDate) { if (!isoDate) return ""; var d = new Date(isoDate + "T12:00:00"); return MON[d.getMonth()] + " " + d.getFullYear() }
 function chf(n) { return "CHF " + (Math.round(Number(n) * 100) / 100).toLocaleString("de-CH", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) }
@@ -228,7 +231,6 @@ function stats(id) {
   var rank = rankOf(pts), next = RANKS.filter(function (r) { return r.min > pts })[0];
   var res = { points: pts, parts: parts, streak: streak, rekord: rekord, attended: attended, virt: virtAll, trips: trips, rank: rank, next: next,
     pct: next ? Math.round(100 * (pts - rank.min) / (next.min - rank.min)) : 100, drink: drinkLevel(id),
-    magnums: D.magnums.filter(function (m) { return m.brought_by == id }).length,
     cards: D.cards.filter(function (c) { return c.created_by == id }).length };
   CACHE[id] = res;
   return res;
@@ -405,6 +407,17 @@ function fxStart() {
 // ═════════════ Darstellung ═════════════
 var TABS = [["termine", "Termine", "Anlässe & Abend"], ["reisen", "Reisen", "Unterwegs"], ["club", "Club", "Rangliste & Mitglieder"], ["karten", "Karten", "Sammlung"], ["stats", "Statistik", "Zahlen & Beizen"]];
 var GLASS = '<svg width="30" height="40" viewBox="0 0 34 44" aria-hidden="true" fill="none" stroke="#E8B95A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2h8v8c0 3 7 6 7 13v17a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V23c0-7 7-10 7-13z"/><path d="M6 26h22M6 34h22"/></svg>';
+// Flasche oben rechts: leer nach dem letzten Anlass, voll zum nächsten Termin
+function fuellung() {
+  var t = now(), n = D.events.map(function (e) { return new Date(e.starts_at).getTime() }).filter(function (x) { return x >= t }).sort(function (a, b) { return a - b })[0];
+  if (!n) return 1;
+  var p = pastEvents()[0], a = p ? new Date(p.starts_at).getTime() : n - 30 * 864e5;
+  return Math.max(0, Math.min(1, (t - a) / (n - a)));
+}
+function flasche() {
+  var p = fuellung(), h = 40 * p, proz = Math.round(p * 100);
+  return '<svg class="flasche" data-fuellung="' + proz + '" width="30" height="40" viewBox="0 0 34 44" role="img" aria-label="Flasche zu ' + proz + ' Prozent gefüllt bis zum nächsten Termin" fill="none" stroke="#E8B95A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><defs><clipPath id="flaschenform"><path d="M13 2h8v8c0 3 7 6 7 13v17a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V23c0-7 7-10 7-13z"/></clipPath></defs><rect clip-path="url(#flaschenform)" x="0" y="' + (42 - h) + '" width="34" height="' + h + '" fill="#8E1F36" stroke="none"/><path d="M13 2h8v8c0 3 7 6 7 13v17a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V23c0-7 7-10 7-13z"/></svg>';
+}
 var HAT = '<svg class="hat" width="26" height="24" viewBox="0 0 26 24" aria-hidden="true"><path d="M3 19C5 8 12 2 19 5c2 1 3 4 3 7-2-2-4-3-5-2 1 3 2 6 2 9z" fill="#B3263A"/><rect x="1" y="18" width="20" height="5" rx="2.5" fill="#F4ECE0"/><circle cx="22.5" cy="13" r="2.5" fill="#F4ECE0"/></svg>';
 var FULL = '<svg width="40" height="62" viewBox="0 0 40 62" aria-hidden="true" fill="none" stroke="#F4ECE0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 18c0 11 5 17 12 17s12-6 12-17z" fill="#8E1F36" stroke="none"/><path d="M7 3c-2 16 3 32 13 32S35 19 33 3z"/><path d="M20 35v20M11 58h18"/></svg>';
 var LADEN = '<svg class="ladeglas" width="64" height="96" viewBox="0 0 64 96" role="img" aria-label="Lädt"><defs><clipPath id="kelch"><path d="M14 6C10 34 20 50 32 50S54 34 50 6Z"/></clipPath></defs><g clip-path="url(#kelch)"><rect class="wein" x="0" y="6" width="64" height="46"/></g><path class="rand" d="M14 6C10 34 20 50 32 50S54 34 50 6ZM32 50V86M20 88H44"/></svg>';
@@ -451,7 +464,7 @@ function authShell(inner) { return '<div class="auth"><div class="row">' + GLASS
 function shell() {
   var t = TABS.filter(function (x) { return x[0] == TAB })[0] || TABS[0];
   var body = { termine: termine, reisen: reisen, club: club, karten: karten, stats: statistik }[t[0]]();
-  return '<header><div><div class="sub">' + esc(t[2]) + '</div><h1>Magnum</h1><div class="hello">' + esc(hello()) + '</div></div><span class="gl">' + GLASS + (isAdvent(today()) ? HAT : "") + "</span></header>" +
+  return '<header><div><div class="sub">' + esc(t[2]) + '</div><h1>Magnum</h1><div class="hello">' + esc(hello()) + '</div></div><span class="gl">' + flasche() + (isAdvent(today()) ? HAT : "") + "</span></header>" +
     "<main>" + body + "</main>" +
     '<nav aria-label="Bereiche">' + TABS.map(function (x) { return '<button type="button" data-a="tab" data-v="' + x[0] + '" class="' + (x[0] == TAB ? "on" : "") + '"' + (x[0] == TAB ? ' aria-current="page"' : "") + "><i></i><span>" + x[1] + "</span></button>" }).join("") + "</nav>" +
     (OV ? overlay() : "") + (SH ? sheet() : "");
@@ -523,10 +536,10 @@ function termine() {
   h += up.length ? up.map(eventCard).join("") : '<div class="card empty">Noch kein Anlass geplant. Organisiere den nächsten!</div>';
   h += UI.newEv ? eventForm() : '<button class="btn dash" data-a="ui" data-k="newEv" data-v="1">+ Anlass erfassen</button>';
   h += kasse() + meinAbend() + wand();
-  var past = pastEvents().slice(0, 6);
-  if (past.length) h += '<details class="card"><summary>Vergangene Anlässe (' + past.length + ")</summary><div class=\"lst\" style=\"margin-top:10px\">" + past.map(function (e) {
+  var past = pastEvents().slice(0, 24);
+  if (past.length || isAdmin()) h += '<details class="card" data-offen="pastOpen"' + (UI.newPast || UI.pastOpen ? " open" : "") + '><summary>Vergangene Anlässe (' + past.length + ")</summary><div class=\"lst\" style=\"margin-top:10px\">" + past.map(function (e) {
     return '<button type="button" class="row sb" style="background:none;border:0;border-top:1px solid var(--ln);text-align:left;width:100%;color:var(--tx)" data-a="ov" data-t="event" data-id="' + e.id + '"><span class="grow"><b>' + esc(e.title) + '</b><br><span class="sm mu">' + esc(fDate(e.starts_at)) + '</span></span><span class="sm mu">' + D.rsvps.filter(function (r) { return r.event_id == e.id && r.status == "in" }).length + " dabei</span></button>";
-  }).join("") + "</div></details>";
+  }).join("") + "</div>" + (isAdmin() ? (UI.newPast ? pastForm() : '<button class="btn dash" data-a="ui" data-k="newPast" data-v="1">+ Vergangenen Anlass erfassen</button>') : "") + "</details>";
   return h;
 }
 function spruch() {
@@ -567,6 +580,39 @@ function eventCard(e) {
     '<div class="row wrap"><button class="pill ' + (s == "in" ? "on" : "") + '" data-a="rsvp" data-id="' + e.id + '" data-v="in" aria-pressed="' + (s == "in") + '">Bin dabei</button>' +
     '<button class="pill ' + (s == "out" ? "out" : "") + '" data-a="abmelden" data-id="' + e.id + '">Abmelden</button>' +
     '<button class="pill" style="border-color:var(--ac)" data-a="ov" data-t="event" data-id="' + e.id + '">Details</button></div></div></article>';
+}
+function pastForm() {
+  return '<form class="col" data-s="pastevent" style="gap:10px;margin-top:10px"><label class="f">Titel<input class="t" data-k="paTitle" value="' + esc(v("paTitle")) + '" maxlength="80" required></label>' +
+    '<label class="f">Datum und Zeit<input class="t" type="datetime-local" data-k="paAt" value="' + esc(v("paAt")) + '" required></label>' +
+    '<label class="f">Ort<input class="t" data-k="paLoc" value="' + esc(v("paLoc")) + '" maxlength="120"></label>' +
+    '<div class="row"><button class="btn grow">Erfassen</button><button type="button" class="btn ghost" data-a="ui" data-k="newPast" data-v="">Abbrechen</button></div></form>';
+}
+var AEMTLI = [["ok", "OK"], ["verpflegung", "Verpflegung"]];
+function aemtliVon(e, amt) { return D.event_aemtli.filter(function (x) { return x.event_id == e.id && x.amt == amt }) }
+function aemtli(e) {
+  return '<section class="card" aria-label="Ämtli"><span class="b" style="font-size:15px">Ämtli</span>' + AEMTLI.map(function (a) {
+    var L = aemtliVon(e, a[0]), ids = L.map(function (x) { return x.member_id });
+    return '<div class="col" style="gap:6px"><span class="lbl">' + a[1] + '</span><div class="chips">' + L.map(function (x) {
+      return '<button class="chip" data-a="aemtliweg" data-id="' + e.id + '" data-m="' + x.member_id + '" data-v="' + a[0] + '" aria-label="' + esc(nm(x.member_id)) + " aus " + a[1] + ' austragen">' + esc(nm(x.member_id)) + " ×</button>";
+    }).join("") + (L.length ? "" : '<span class="sm mu">Noch niemand</span>') + "</div>" +
+      '<select class="t" data-c="aemtli" data-id="' + e.id + '" data-f="' + a[0] + '" aria-label="' + a[1] + ' eintragen">' + memberOptions("", function (p) { return ids.indexOf(p.id) < 0 }, "+ Person eintragen") + "</select></div>";
+  }).join("") + "</section>";
+}
+function darfAendern(e) { var me = uid(); return isAdmin() || e.created_by == me || e.organizer_id == me }
+function eventEdit(e) {
+  return '<form class="card" data-s="evedit" data-id="' + e.id + '"><span class="mid">Anlass anpassen</span><label class="f">Name<input class="t" data-k="edTitle" value="' + esc(v("edTitle", e.title)) + '" maxlength="80" required></label>' +
+    '<label class="f">Datum und Zeit<input class="t" type="datetime-local" data-k="edAt" value="' + esc(v("edAt", lokalZeit(e.starts_at))) + '" required></label>' +
+    '<label class="f">Ort<input class="t" data-k="edLoc" value="' + esc(v("edLoc", e.location || "")) + '" maxlength="120"></label>' +
+    '<div class="row"><button class="btn grow">Speichern</button><button type="button" class="btn ghost" data-a="ui" data-k="evEdit" data-v="">Abbrechen</button></div></form>';
+}
+// Anwesenheit nachtragen: nur der Admin, nur vergangene Anlässe
+function anwesenheit(e) {
+  return '<section class="card" aria-label="Anwesenheit nachtragen"><span class="b" style="font-size:15px">Anwesenheit nachtragen</span><div class="lst">' + D.profiles.map(function (p) {
+    var s = rsvp(e.id, p.id);
+    return '<div class="row sb sm"><span>' + esc(nm(p.id)) + '</span><span class="row" style="gap:6px">' + [["in", "Dabei"], ["virtual", "Virtuell"], ["", "–"]].map(function (x) {
+      var on = (s || "") == x[0]; return '<button class="pill sm' + (on ? " on" : "") + '" data-a="anw" data-id="' + e.id + '" data-m="' + p.id + '" data-v="' + x[0] + '" aria-pressed="' + on + '">' + x[1] + "</button>";
+    }).join("") + "</span></div>";
+  }).join("") + "</div></section>";
 }
 function eventForm() {
   var dflt = (function () { var d = new Date(now() + 7 * 864e5); d.setHours(19, 0, 0, 0); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0") + "T19:00" })();
@@ -692,7 +738,7 @@ function club() {
     '<div class="sm mu">Ränge: ' + RANKS.map(function (r) { return esc(r.name) + " ab " + r.min }).join(" · ") + "</div></div></details>";
   h += '<h2>Die Mitglieder <span class="sm mu" style="font-family:Inter">' + D.profiles.length + " / " + st.max_members + "</span></h2><div class=\"g2\">" + D.profiles.slice().sort(function (a, b) { return nm(a.id).localeCompare(nm(b.id), "de") }).map(function (p) {
     var s = stats(p.id);
-    return '<button type="button" class="mem" data-a="ov" data-t="member" data-id="' + p.id + '"><span class="av">' + esc(ini(p.id)) + '</span><b>' + esc(nm(p.id)) + "</b>" + (p.nickname ? '<span class="nick">«' + esc(p.nickname) + "»</span>" : "") +
+    return '<button type="button" class="mem" data-a="ov" data-t="member" data-id="' + p.id + '"><span class="av">' + esc(ini(p.id)) + '</span><b>' + esc(nm(p.id)) + "</b>" + (p.nickname ? '<span class="nick">«' + esc(p.nickname) + "»</span>" : "") + '<span class="xs mu" data-test="mem-geraet">' + deviceText(p) + "</span>" +
       '<span class="sm mu">' + esc(p.role_title) + '</span><span class="xs mu b" style="letter-spacing:1px;text-transform:uppercase">Trinkfestigkeit</span><div style="width:100%">' + segs(s.drink.level) + "</div></button>";
   }).join("") + "</div>";
   h += invites() + feedback();
@@ -738,10 +784,12 @@ function memberView(p) {
     (p.nickname ? '<span class="nick" style="font-size:16px" data-test="nickname">«' + esc(p.nickname) + "»</span>" : "") + '<span class="sm mu">' + esc(p.role_title) + (p.since_year ? " · seit " + p.since_year : "") + "</span></div></div></div><main>";
   h += '<section class="card"><div class="row sb xs mu b" style="letter-spacing:1px;text-transform:uppercase"><span>Trinkfestigkeit · errechnet</span><span style="color:var(--ac)">' + esc(s.drink.label) + "</span></div>" + segs(s.drink.level, 12) + '<span class="sm mu">' + esc(s.drink.basis) + "</span>" +
     '<div class="g3"><div class="tile"><b>' + s.points + '</b><span>Punkte</span></div><div class="tile"><b>' + s.streak + '</b><span>Streak · Rekord ' + s.rekord + '</span></div><div class="tile"><b>' + s.trips + '</b><span>Reisen</span></div>' +
-    '<div class="tile"><b>' + s.magnums + '</b><span>Magnums mitgebracht</span></div><div class="tile"><b>' + s.virt + '</b><span>Magnums spendiert</span></div><div class="tile"><b>' + s.cards + "</b><span>Karten</span></div></div>" +
+    '<div class="tile"><b>' + s.virt + '</b><span>Magnums spendiert</span></div><div class="tile"><b>' + s.cards + "</b><span>Karten</span></div></div>" +
     '<div class="col sm">' + (p.fav_wine ? '<span><span class="mu">Lieblingswein: </span>' + esc(p.fav_wine) + "</span>" : "") + (p.specialty ? '<span><span class="mu">Spezialität: </span>' + esc(p.specialty) + "</span>" : "") +
     '<span><span class="mu">Gerät: </span><span data-test="geraet">' + deviceText(p) + "</span></span>" +
     (p.invited_by ? '<span><span class="mu">Eingeladen von: </span>' + esc(nm(p.invited_by)) + "</span>" : "") + "</div></section>";
+  if (isAdmin()) h += '<section class="card" style="border-color:var(--lila)" aria-label="Rolle"><span class="lbl" style="color:var(--lila)">Rolle</span><div class="g2">' +
+    [["0", "Mitglied"], ["1", "Administrator"]].map(function (r) { var on = !!p.is_admin == (r[0] == "1"); return '<button class="pill' + (on ? " on" : "") + '" data-a="setadmin" data-id="' + p.id + '" data-v="' + r[0] + '" aria-pressed="' + on + '">' + r[1] + "</button>" }).join("") + "</div></section>";
   if (isAdmin()) h += '<section class="card" style="border-color:var(--lila)" aria-label="Admin"><span class="lbl" style="color:var(--lila)">Admin · Gerätetyp anpassen</span><div class="g2">' +
     [["iphone", "iPhone"], ["android", "Android"]].map(function (d) { var on = p.device == d[0]; return '<button class="pill' + (on ? " on" : "") + '" style="' + (on ? "background:var(--lila);border-color:var(--lila)" : "") + '" data-a="setdevice" data-id="' + p.id + '" data-v="' + d[0] + '" aria-pressed="' + on + '">' + d[1] + "</button>" }).join("") +
     '</div><span class="xs mu">Zählt nur fürs Duell des Monats. Änderungen werden protokolliert.</span><form class="row" data-s="role" data-id="' + p.id + '"><input class="t" data-k="role' + p.id + '" value="' + esc(v("role" + p.id, p.role_title)) + '" maxlength="40" aria-label="Funktion"><button class="btn lila">Funktion</button></form></section>';
@@ -885,6 +933,7 @@ function eventView(e) {
     '<span class="sm b">' + (e.organizer_id ? "Organisation: " + esc(nm(e.organizer_id)) : '<span style="color:var(--orange)">Organisator gesucht</span>') + "</span></div><main>";
   h += '<div class="row wrap"><button class="pill ' + (s == "in" ? "on" : "") + '" data-a="rsvp" data-id="' + e.id + '" data-v="in">Bin dabei</button><button class="pill ' + (s == "out" ? "out" : "") + '" data-a="abmelden" data-id="' + e.id + '">Abmelden</button>' +
     (s == "virtual" ? '<span class="chip v">Virtuell dabei · Magnum spendiert</span>' : "") + "</div>";
+  h += aemtli(e);
   var grp = [["in", "Dabei"], ["virtual", "Virtuell dabei"], ["out", "Abgemeldet"]];
   h += '<section class="card">' + grp.map(function (g) { var L = R.filter(function (r) { return r.status == g[0] }); return L.length ? '<div class="col"><span class="lbl">' + g[1] + " (" + L.length + ')</span><div class="chips">' + L.map(function (r) { return '<span class="chip' + (g[0] == "virtual" ? " v" : "") + '">' + esc(nm(r.member_id)) + "</span>" }).join("") + "</div></div>" : "" }).join("") +
     (R.length ? "" : '<span class="empty">Noch niemand angemeldet.</span>') + "</section>";
@@ -900,6 +949,8 @@ function eventView(e) {
     }).join("") + "</div>" : '<span class="empty">Noch keine Magnum erfasst.</span>') +
     '<form class="row" data-s="magnum" data-id="' + e.id + '"><input class="t" data-k="mWine" value="' + esc(v("mWine")) + '" placeholder="Wein, z.B. Cornalin 2019" maxlength="80" aria-label="Welche Magnum"><button class="btn"' + (v("mWine").trim() ? "" : " disabled") + ">Erfassen</button></form></section>";
   h += rides(e);
+  if (isAdmin() && new Date(e.starts_at).getTime() < now()) h += anwesenheit(e);
+  if (darfAendern(e)) h += UI.evEdit == e.id ? eventEdit(e) : '<button class="btn ghost" data-a="ui" data-k="evEdit" data-v="' + e.id + '">Name und Datum anpassen</button>';
   if (e.created_by == me || isAdmin()) h += '<button class="btn ghost" data-a="delevent" data-id="' + e.id + '">Anlass löschen</button>';
   return h + "</main>";
 }
@@ -1017,6 +1068,8 @@ var ACT = {
       on ? "Von " + t.title + " abgemeldet" : "Dabei in " + t.title + " · +30 Punkte nach der Reise");
   },
   deltrip: function (d) { if (!confirm("Reise wirklich löschen?")) return; OV = null; after(sb.from("trips").delete().eq("id", d.id), "Reise gelöscht") },
+  aemtliweg: function (d) { after(sb.from("event_aemtli").delete().eq("event_id", d.id).eq("member_id", d.m).eq("amt", d.v), "Ausgetragen") },
+  anw: function (d) { after(sb.rpc("admin_set_rsvp", { p_event: d.id, p_member: d.m, p_status: d.v || null }), "Anwesenheit von " + nm(d.m) + " gespeichert") },
   delevent: function (d) { if (!confirm("Anlass wirklich löschen?")) return; OV = null; after(sb.from("events").delete().eq("id", d.id), "Anlass gelöscht") },
   delcard: function (d) { if (!confirm("Karte wirklich löschen?")) return; OV = null; after(sb.from("cards").delete().eq("id", d.id), "Karte gelöscht") },
   vote: function (d) {
@@ -1025,6 +1078,11 @@ var ACT = {
     }));
   },
   second: function (d) { after(sb.rpc("second_proposal", { p_proposal: d.id }).then(function (r) { if (!r.error) toast(r.data == "passed" ? "Bestätigt!" : "Unterstützt · Abstimmung offen"); return r })) },
+  setadmin: function (d) {
+    var neu = d.v == "1", p = pr(d.id); if (!!p.is_admin == neu) return;
+    if (neu && !confirm(nm(d.id) + " zum Administrator machen?")) return;
+    after(sb.rpc("admin_set_admin", { p_member: d.id, p_admin: neu }), nm(d.id) + (neu ? " ist jetzt Administrator" : " ist jetzt Mitglied"));
+  },
   setdevice: function (d) { after(sb.rpc("admin_set_device", { p_member: d.id, p_device: d.v }), "Gerätetyp von " + nm(d.id) + " angepasst") },
   star: function (d) {
     var p = d.k.split(":"), n = +d.v;
@@ -1068,7 +1126,7 @@ var ACT = {
 };
 function loadInvites() {
   if (!sb || !ME) return;
-  sb.functions.invoke("invite", { body: { action: "list" } }).then(function (r) { if (!r.error && r.data) { INVLIST = r.data.items || []; render() } });
+  sb.functions.invoke("invite", { body: { action: "list" } }).then(function (r) { if (!r.error && r.data) { INVLIST = r.data.items || []; if (TAB == "club") render() } });
 }
 
 var SUBMIT = {
@@ -1096,6 +1154,18 @@ var SUBMIT = {
         return sb.auth.signInWithPassword({ email: b.email.trim().toLowerCase(), password: b.password }).then(function () { BUSY = false; toast("Willkommen im Magnum Club!") });
       });
     });
+  },
+  pastevent: function () {
+    var at = new Date(v("paAt")); if (!v("paTitle").trim() || isNaN(at)) return toast("Bitte Titel und Datum angeben");
+    if (at.getTime() >= now()) return toast("Das Datum muss in der Vergangenheit liegen");
+    after(sb.from("events").insert({ title: v("paTitle").trim(), starts_at: at.toISOString(), location: v("paLoc").trim() || null, created_by: uid() }), "Anlass erfasst · Anwesenheit trägst du in den Details nach").then(function () { UI.newPast = UI.paTitle = UI.paAt = UI.paLoc = null; render() });
+  },
+  evedit: function (f) {
+    var id = f.getAttribute("data-id"), e = D.events.find(function (x) { return x.id == id }), at = new Date(v("edAt", lokalZeit(e.starts_at))), t = v("edTitle", e.title).trim();
+    if (!t || isNaN(at)) return toast("Bitte Name und Datum angeben");
+    // Trägt der Abend noch den automatischen Namen, wandert er mit dem Datum mit
+    if (t == magnumName(e.starts_at)) t = magnumName(at.toISOString());
+    after(sb.from("events").update({ title: t, starts_at: at.toISOString(), location: v("edLoc", e.location || "").trim() || null }).eq("id", id), "Anlass angepasst").then(function () { UI.evEdit = UI.edTitle = UI.edAt = UI.edLoc = null; render() });
   },
   event: function () {
     var at = new Date(v("evAt")); if (!v("evTitle").trim() || isNaN(at)) return toast("Bitte Titel und Datum angeben");
@@ -1184,6 +1254,10 @@ var CHANGE = {
   },
   cardphoto: function (el) { UI.cdFile = el.files && el.files[0] || null; render() },
   receipt: function (el) { UI.rsFile = el.files && el.files[0] || null; render() },
+  aemtli: function (el) {
+    if (!el.value) return;
+    after(sb.from("event_aemtli").insert({ event_id: el.getAttribute("data-id"), member_id: el.value, amt: el.getAttribute("data-f"), added_by: uid() }), "Eingetragen");
+  },
   tripset: function (el) { var o = {}; o[el.getAttribute("data-f")] = el.value || null; after(sb.from("trips").update(o).eq("id", el.getAttribute("data-id")), "Gespeichert") }
 };
 
@@ -1209,6 +1283,8 @@ document.addEventListener("change", function (e) {
   var k = el.getAttribute && el.getAttribute("data-k");
   if (k && (el.tagName == "SELECT" || el.type == "checkbox" || el.type == "date")) { UI[k] = el.type == "checkbox" ? el.checked : el.value; render() }
 });
+// Aufgeklappte Bereiche bleiben beim Neuzeichnen offen
+document.addEventListener("toggle", function (e) { var k = e.target.getAttribute && e.target.getAttribute("data-offen"); if (k) UI[k] = e.target.open }, true);
 document.addEventListener("keydown", function (e) { if (e.key == "Escape" && (SH || OV)) { ACT.close() } });
 
 // ═════════════ Start ═════════════
@@ -1238,7 +1314,7 @@ function start() {
     if (INVITE && INVITE.state != "bad") { INVITE = null; history.replaceState(null, "", location.pathname + location.search) }
     READY = false; render();
     setTimeout(function () {
-      sb.rpc("me").then(function (r) { PREV = r.data && r.data.prev_seen; return loadAll() }).then(function () { READY = true; render(); loadInvites() });
+      sb.rpc("me").then(function (r) { PREV = r.data && r.data.prev_seen; return sb.rpc("magnum_termine") }).then(function () { return loadAll() }).then(function () { READY = true; render(); loadInvites() });
     }, 0);
   });
   render();

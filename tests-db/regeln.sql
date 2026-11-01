@@ -393,7 +393,68 @@ select pg_temp.check((select created_at < now() + interval '1 minute' from publi
 reset role;
 select pg_temp.als('');
 
--- Club voll: ab settings.max_members wird das Konto abgelehnt
+-- 19) Administrator: Mitglied ist Standard, Rolle nur durch Admins, einer bleibt
+set role authenticated;
+select pg_temp.als('C');
+select pg_temp.verboten($q$select public.admin_set_admin(public.uid(), true)$q$, 'Mitglied macht sich nicht zum Admin');
+select pg_temp.als('A');
+select public.admin_set_admin('00000000-0000-0000-0000-00000000000c', true);
+select pg_temp.check((select is_admin from public.profiles where id = '00000000-0000-0000-0000-00000000000c'), 'Admin vergibt die Rolle');
+select pg_temp.check((select count(*) from public.admin_log where action = 'Rolle → Administrator') = 1, 'Rolle im Protokoll');
+select public.admin_set_admin('00000000-0000-0000-0000-00000000000c', false);
+select pg_temp.verboten($q$select public.admin_set_admin(public.uid(), false)$q$, 'Letzter Admin bleibt');
+reset role;
+select pg_temp.als('');
+
+-- 18) Ämtli beim Anlass: mehrere pro Amt, nur bekannte Ämter, nicht doppelt
+set role authenticated;
+select pg_temp.als('C');
+insert into public.event_aemtli (event_id, member_id, amt) values
+  ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000c', 'ok'),
+  ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000d', 'ok'),
+  ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000b', 'verpflegung');
+select pg_temp.check((select count(*) from public.event_aemtli where amt = 'ok') = 2, 'Mehrere im OK');
+do $$ begin
+  insert into public.event_aemtli (event_id, member_id, amt) values ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000c', 'kasse');
+  raise exception 'FEHLER: unbekanntes Amt';
+exception when check_violation then raise notice 'ok – nur OK und Verpflegung'; end $$;
+with x as (delete from public.event_aemtli where member_id = '00000000-0000-0000-0000-00000000000d' returning 1)
+select pg_temp.check((select count(*) from x) = 1, 'Austragen geht');
+select pg_temp.als('X');
+select pg_temp.check((select count(*) from public.event_aemtli) = 0, 'Nicht-Mitglied sieht keine Ämtli');
+reset role;
+select pg_temp.als('');
+
+-- 17) Magnum-Serie: letzter Freitag im Monat, die nächsten drei, gelöschte kommen nicht zurück
+select pg_temp.check(public.letzter_freitag('2026-11-10') = '2026-11-27', 'Letzter Freitag im November 2026');
+select pg_temp.check(public.letzter_freitag('2026-12-01') = '2026-12-25', 'Letzter Freitag im Dezember 2026');
+select pg_temp.check(public.letzter_freitag('2027-01-31') = '2027-01-29', 'Letzter Freitag im Januar 2027');
+select pg_temp.check(public.letzter_freitag('2027-05-01') = '2027-05-28', 'Letzter Freitag im Mai 2027');
+select pg_temp.check(public.letzter_freitag('2027-07-15') = '2027-07-30', 'Der letzte Freitag kann der 30. sein');
+select pg_temp.check(public.magnum_titel('2027-03-26') = 'März-Magnum', 'Name aus dem Datum');
+set role authenticated;
+select pg_temp.als('C');
+select pg_temp.check(public.magnum_termine() = 3, 'Drei Magnum-Abende angelegt');
+select pg_temp.check(public.magnum_termine() = 0, 'Zweiter Aufruf legt nichts doppelt an');
+select pg_temp.check((select count(*) from public.events where title like '%-Magnum' and extract(dow from (starts_at at time zone 'Europe/Zurich')) = 5 and (starts_at at time zone 'Europe/Zurich')::time = '19:00') = 3, 'Alle am Freitag um 19 Uhr');
+with x as (update public.events set title = 'Fremd' where title like '%-Magnum' returning 1)
+select pg_temp.check((select count(*) from x) = 0, 'Serie ohne Organisator ändert nur der Admin');
+select public.claim_organizer((select id from public.events where title like '%-Magnum' order by starts_at limit 1));
+with x as (update public.events set title = 'Grosser Abend', starts_at = starts_at + interval '1 day' where organizer_id = public.uid() and title like '%-Magnum' returning 1)
+select pg_temp.check((select count(*) from x) = 1, 'Organisator ändert Name und Datum');
+select pg_temp.verboten($q$update public.events set starts_at = now() - interval '9 days' where title = 'Grosser Abend'$q$, 'Datum nicht in die Vergangenheit');
+select pg_temp.verboten($q$select public.admin_set_rsvp('20000000-0000-0000-0000-000000000002', public.uid(), 'in')$q$, 'Anwesenheit trägt nur der Admin nach');
+select pg_temp.als('A');
+select public.admin_set_rsvp('20000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-00000000000b', 'in');
+select pg_temp.check((select status from public.rsvps where event_id = '20000000-0000-0000-0000-000000000002' and member_id = '00000000-0000-0000-0000-00000000000b') = 'in', 'Admin trägt Anwesenheit nach');
+select public.admin_set_rsvp('20000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-00000000000b', null);
+select pg_temp.check((select count(*) from public.rsvps where event_id = '20000000-0000-0000-0000-000000000002' and member_id = '00000000-0000-0000-0000-00000000000b') = 0, 'Admin entfernt Anwesenheit');
+delete from public.events where title like '%-Magnum';
+select pg_temp.check(public.magnum_termine() = 0, 'Gelöschter Abend kommt nicht zurück');
+reset role;
+select pg_temp.als('');
+
+
 update public.settings set max_members = (select count(*) from public.profiles);
 insert into public.invites (token_hash, expires_at, used_at, email) values ('h-zuviel', now() + interval '1 day', now(), 'zuviel@test');
 select pg_temp.verboten($q$insert into neon_auth."user" (email) values ('zuviel@test')$q$, 'Voller Club nimmt niemanden auf');
