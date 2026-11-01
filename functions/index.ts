@@ -15,7 +15,7 @@ import { cors } from "hono/cors";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { Pool } from "pg";
 import { checkFoto, checkPfad, MAX_FOTO } from "./fotos.mjs";
-import { checkJoin, checkToken, clubFull, hashToken, INVITE_DAYS, joinError, newToken } from "./invite.mjs";
+import { checkJoin, checkToken, hashToken, INVITE_DAYS, joinError, newToken } from "./invite.mjs";
 import { safeEqual } from "./sicherheit.mjs";
 import { buildIssue, DAILY_LIMIT } from "./vorschlag.mjs";
 
@@ -62,10 +62,6 @@ const member = async (req: Request) => {
   const id = await userId(req);
   if (!id) return null;
   return (await q("select id, is_admin from public.profiles where id = $1", [id]))[0] ?? null;
-};
-const full = async () => {
-  const [r] = await q("select (select count(*)::int from public.profiles) n, (select max_members from public.settings where id = 1) max");
-  return clubFull(r.n, r.max);
 };
 
 // ───────────── Status & Login ─────────────
@@ -123,7 +119,6 @@ app.post("/invite", async (c) => {
     try { hash = await hashToken(checkToken(body.token)) } catch (e) { return c.json({ error: (e as Error).message }, 400) }
     const [open] = await q("select id, created_by from public.invites where token_hash = $1 and used_at is null and expires_at > now()", [hash]);
     if (!open) return c.json({ error: INVALID }, 404);
-    if (await full()) return c.json({ error: "Der Club ist voll. Bitte beim Admin melden." }, 409);
     if (body.action === "check") {
       const [p] = await q("select display_name from public.profiles where id = $1", [open.created_by]);
       return c.json({ ok: true, from: p?.display_name ?? null });
@@ -138,8 +133,6 @@ app.post("/invite", async (c) => {
     if (!r.ok) {
       await q("update public.invites set used_at = null, email = null, name = null, device = null where id = $1", [inv.id]); // Link bleibt gültig
       if (r.status === 429) return c.json(BESETZT, 429);
-      // Hat jemand gleichzeitig den letzten Platz genommen, kommt nur ein allgemeiner Fehler zurück
-      if (await full()) return c.json({ error: "Der Club ist voll. Bitte beim Admin melden." }, 409);
       const e = await r.json().catch(() => ({}));
       return c.json({ error: joinError(e.code || e.message) }, 400);
     }
@@ -149,7 +142,6 @@ app.post("/invite", async (c) => {
   const m = await member(c.req.raw);
   if (!m) return c.json({ error: "Nur Mitglieder dürfen einladen." }, 403);
   if (body.action === "create") {
-    if (await full()) return c.json({ error: "Der Club ist voll (12 Mitglieder)." }, 409);
     const t = newToken(), expires_at = new Date(Date.now() + INVITE_DAYS * 864e5).toISOString();
     await q("insert into public.invites (token_hash, created_by, expires_at) values ($1, $2, $3)", [await hashToken(t), m.id, expires_at]);
     return c.json({ ok: true, token: t, expires_at });

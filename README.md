@@ -1,6 +1,6 @@
 # Magnum
 
-PWA des **Magnum Clubs** (12 Mitglieder): Anlässe mit An- und Abmeldung, Reisen, Rangliste, Sammelkarten und Statistik. Gamification, Zusammenhalt, Fröhlichkeit und Geselligkeit, damit alle öfter kommen. Login nur mit Einladung, Live-Sync zwischen allen Handys.
+PWA des **Magnum Clubs**: Anlässe mit An- und Abmeldung, Reisen, Rangliste, Sammelkarten und Statistik. Gamification, Zusammenhalt, Fröhlichkeit und Geselligkeit, damit alle öfter kommen. Login nur mit Einladung, Live-Sync zwischen allen Handys.
 
 Aufgebaut wie die App **Herren Inter** (InterChampionship), als Backend aber [Neon](https://neon.com): eine einzige `index.html` ohne Framework, Playwright-Tests, Deployment über GitHub Actions. Alles läuft **kostenlos**: GitHub (Code, Tests, Hosting über GitHub Pages) + Neon Free.
 
@@ -9,17 +9,17 @@ Aufgebaut wie die App **Herren Inter** (InterChampionship), als Backend aber [Ne
 | Bereich | Inhalt |
 |---|---|
 | 🍷 Termine | Begrüssung je nach Lage, am Tag nach einem Anlass für alle, die dabei waren: „Hast du Kopfweh?“ oder „Hallo Brummschädel“, nach drei verpassten Anlässen „Komm mal wieder“. Spruch des Tages, eigener Rang mit Punkten, Streak und errechneter Trinkfestigkeit, Club-Ziel, die **nächsten drei Magnum-Abende** (letzter Freitag im Monat, automatisch angelegt, Name und Datum anpassbar), **Duell des Monats Android gegen iPhone**, nächste Anlässe mit „Bin dabei“ / „Abmelden“. Beim Abmelden: **„Ich kann nicht, möchte aber virtuell dabei sein und bezahle eine Magnum“** (Streak bleibt, Magnum geht in die Kasse). „Ich organisiere den Abend“, einen künftigen Abend kann jedes Mitglied jederzeit übernehmen. Magnum-Kasse, Magnum-Abend mit hüpfenden Weingläsern, „Mein Abend“ (Getränke fotografieren), Prost-Wand |
-| Anlass-Details | Wer dabei ist, **Ämtli OK und Verpflegung** mit mehreren Personen, **Magnums des Abends mit Gasttrinkern pro Magnum**, Heimweg/Fahrservice: Mitfahrer bewerten den Fahrer (3 Kriterien) und verteilen 10–50 Punkte |
+| Anlass-Details | Beiz und Quittung pro Termin, Wer dabei ist, Organisator (im Anlass anpassbar), **Magnums des Abends mit Gasttrinkern pro Magnum**, Heimweg/Fahrservice: Mitfahrer bewerten den Fahrer (3 Kriterien) und verteilen 10–50 Punkte |
 | ✈️ Reisen | Reisen erfassen, mitreisen, **OK und Kassier** eintragen, **Auszeichnung „De Sacceri“**: Antrag durch ein Mitglied, ⅔-Mehrheit der Anwesenden. Beste Bilder hochladen: 3 sichtbar, der Rest wird zur **Collage-Karte unter „Legendär“** |
 | 👥 Club | Saison-Rangliste (gleiche Punkte = gleicher Rang), Mitgliederprofile mit Gerät, Rollen Mitglied und Administrator, **Spitznamen** (Vorschlag + zweite Unterstützung + ⅔-Mehrheit), Einladungen, Verbesserungsvorschläge (→ GitHub-Issue), Administration |
 | 🃏 Karten | Sammelkarten Magic Moment, Legendär, „Klug war’s nicht, aber geil“, Sacceri- und Collage-Karten, geheime Karten (Trophäe, Location, Club) zum Freischalten |
-| 📊 Statistik | Kennzahlen, Teilnahme pro Anlass, Beizen mit Quittungsfoto, Kosten pro Kopf, Bewertung (Preis-Leistung, Geselligkeit, „Willkommen, auch wenn du betrunken bist“), Link zu Google Maps |
+| 📊 Statistik | **Karte der Beizen** (OpenStreetMap, ohne Schlüssel), Kennzahlen, Teilnahme pro Anlass, Beizen mit Quittungsfoto, Kosten pro Kopf, Bewertung (Preis-Leistung, Geselligkeit, „Willkommen, auch wenn du betrunken bist“), Link zu Google Maps |
 
 ### Spielregeln
 
 - **Abstimmungen** (Sacceri, Spitznamen): Zweidrittelmehrheit der Stimmberechtigten. Jede Stimme zählt gleich viel. Beim Sacceri stimmt ab, wer beim Antrag mitreist. Die Regeln laufen in der Datenbank (`db/setup.sql`) und lassen sich nicht über die App umgehen.
-- **Punkte:** Anlass +50, virtuell mit Magnum +20, organisiert +40, Gasttrinker +15, Reise +30, als Fahrer 10–50 von jedem Mitfahrer, Fahrt bewertet +5, Restaurant bewertet +5, Sammelkarte +10, Vorschlag +10. Punkte für Anlässe und Reisen zählen, sobald sie stattgefunden haben. An- und abmelden geht bis und mit Anlasstag, mitreisen bis und mit Starttag und solange Plätze frei sind. Vergangene Anlässe und Reisen trägt nur der Administrator nach. Unter „Vergangene Anlässe“ erfasst er sie und setzt in den Details die Anwesenheit.
-- **Magnum-Serie:** Immer am letzten Freitag im Monat um 19 Uhr, Name aus dem Datum (z. B. „November-Magnum“). Anpassen dürfen Organisator und Admin. Ein gelöschter oder verschobener Abend wird nicht neu angelegt.
+- **Punkte:** Anlass +50, virtuell mit Magnum +20, organisiert +40, Gasttrinker +15, Reise +30, als Fahrer 10–50 von jedem Mitfahrer, Fahrt bewertet +5, Restaurant bewertet +5, Sammelkarte +10, auf einer Karte dabei +10, Vorschlag +10. Punkte für Anlässe und Reisen zählen, sobald sie stattgefunden haben. An- und abmelden geht bis und mit Anlasstag, mitreisen bis und mit Starttag und solange Plätze frei sind. Vergangene Anlässe und Reisen trägt nur der Administrator nach. Unter „Vergangene Anlässe“ erfasst er sie und setzt in den Details die Anwesenheit.
+- **Magnum-Serie:** Immer am letzten Freitag im Monat um 19 Uhr, Name aus dem Datum (z. B. „November-Magnum“). Anpassen dürfen Organisator und Admin, auch den Organisator selbst. Ein gelöschter oder verschobener Abend wird nicht neu angelegt.
 - **Ränge:** Neuling, Stammgast (200), Kellermeister (400), Magnum-Ritter (600), Club-Legende (900).
 - **Streak:** Anlässe in Folge (dabei oder virtuell). „Nur abmelden“ setzt sie auf 0, der **Rekord** bleibt stehen.
 - **Duell des Monats:** Anwesenheit in Prozent, Android gegen iPhone (das Gerät wird bei der Registrierung erkannt, ändern kann es nur der Administrator). Es zählt nur, wer wirklich dabei war. Wer im Vormonat verloren hat, bringt die nächste Magnum; das zeigt die App nur an.
@@ -71,7 +71,7 @@ Nach dem ersten Release einen Einladungslink erzeugen. Wer ihn einlöst, wird Ad
 DATABASE_URL="$(neon connection-string main)" node scripts/erster-link.mjs https://<github-name>.github.io/magnum/
 ```
 
-Alle weiteren Mitglieder lädst du in der App ein: **Club → Einladungen → Einladungslink erstellen** und per WhatsApp schicken. Der Link gilt 7 Tage und einmal. Der Club nimmt höchstens 12 Mitglieder auf (`settings.max_members`).
+Alle weiteren Mitglieder lädst du in der App ein: **Club → Einladungen → Einladungslink erstellen** und per WhatsApp schicken. Der Link gilt 7 Tage und einmal.
 
 ### 4. Verbesserungsvorschläge → GitHub-Issues
 
@@ -115,5 +115,4 @@ Demo-Konten: `ot@magnum.test` (Admin, iPhone), `beat@magnum.test` (Android), `ch
 - Push-Nachrichten vor Anlässen (wie bei Herren Inter mit VAPID, hier als Route der Function `api`)
 - Deutsche Mails: Neon verschickt Passwort-Mails auf Englisch. Eigene Texte gehen über einen Webhook und eigenen Mailversand.
 - Bilderkennung für Getränkefotos
-- Karte mit allen Beizen in der App (heute: Link pro Beiz zu Google Maps)
 - Teilen-Knöpfe für die WhatsApp-Gruppe

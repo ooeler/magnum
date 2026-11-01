@@ -62,7 +62,7 @@ jobs:
         run: >
           semgrep scan --error --metrics=off
           --config p/javascript --config p/typescript --config p/secrets --config p/github-actions
-          --exclude tests --exclude node_modules
+          --exclude tests --exclude node_modules --exclude app/leaflet.js
       - name: Abhängigkeiten mit bekannten Schwachstellen
         run: |
           apk add --no-cache nodejs npm > /dev/null 2>&1 || true

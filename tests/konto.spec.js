@@ -161,11 +161,9 @@ test.describe("Wartung und Fehler", () => {
 test.describe("Einladungen ohne Limite", () => {
   const neu = (page, id) => page.evaluate((id) => window.__mg.asId(id, (sb) => sb.functions.invoke("invite", { body: { action: "create" } })).then((r) => !r.error), id);
 
-  test("Mitglieder erstellen beliebig viele Links, nur der volle Club stoppt", async ({ page }) => {
+  test("Mitglieder erstellen beliebig viele Links, keine Obergrenze", async ({ page }) => {
     await page.goto("/");
     for (let i = 0; i < 6; i++) expect(await neu(page, "u-beat")).toBe(true);
-    await page.evaluate(() => { const d = window.__mg.db(); d.settings[0].max_members = d.profiles.length; localStorage.setItem("__mg_db", JSON.stringify(d)) });
-    expect(await neu(page, "u-beat")).toBe(false);
   });
 });
 

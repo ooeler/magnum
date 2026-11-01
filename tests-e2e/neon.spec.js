@@ -142,16 +142,6 @@ test("Magnum-Serie: drei Abende, Name aus dem Datum, Anpassen", async () => {
   expect(uebernahme.s, JSON.stringify(uebernahme.j)).toBeLessThan(300);
 });
 
-test("Ämtli: mehrere Personen über die Data API", async () => {
-  const ev = (await daten(B.token, "/events?select=id&limit=1")).j[0].id;
-  for (const [m, amt] of [[B.id, "ok"], [B.id, "verpflegung"]]) {
-    const r = await daten(B.token, "/event_aemtli", { method: "POST", body: JSON.stringify({ event_id: ev, member_id: m, amt, added_by: B.id }) });
-    expect(r.s, JSON.stringify(r.j)).toBeLessThan(300);
-  }
-  expect((await daten(A.token, `/event_aemtli?event_id=eq.${ev}&select=amt`)).j.length).toBe(2);
-  expect((await daten(A.token, `/event_aemtli?event_id=eq.${ev}&amt=eq.ok`, { method: "DELETE" })).s).toBeLessThan(300);
-});
-
 test("Live-Sync: Änderungen erhöhen den Stand", async () => {
   const a = (await daten(B.token, "/sync_stand?select=stand")).j[0].stand;
   const p = await daten(B.token, "/posts", { method: "POST", body: JSON.stringify({ text: "Prost" }) });

@@ -86,7 +86,7 @@ base.test.describe("Sicherheit (statisch)", () => {
     expect(S.safeEqual(undefined, undefined)).toBe(false);
   });
 
-  base.test("Einladung: Token, Eingaben und volle Clubs", async () => {
+  base.test("Einladung: Token und Eingaben", async () => {
     const L = await import("../functions/invite.mjs");
     const t = L.newToken();
     expect(t).toMatch(/^[A-Za-z0-9_-]{43}$/);
@@ -97,8 +97,6 @@ base.test.describe("Sicherheit (statisch)", () => {
     expect(() => L.checkJoin({ name: "L", email: "l@m.ch", password: "geheim1234" })).toThrow("Namen");
     expect(() => L.checkJoin({ name: "Luca", email: "kaputt", password: "geheim1234" })).toThrow("Mail");
     expect(() => L.checkJoin({ name: "Luca", email: "l@m.ch", password: "1234567" })).toThrow("8 Zeichen");
-    expect(L.clubFull(12, 12)).toBe(true);
-    expect(L.clubFull(11, 12)).toBe(false);
   });
 
   base.test("Vorschläge: Issue ohne Mail-Adressen und ohne @-Erwähnungen", async () => {

@@ -21,7 +21,7 @@ Du bist ein erfahrener, skeptischer QA-Tester. Du testest die Web-App „Magnum�
 ## Use Cases
 - Ohne Login nur die Anmeldung. Zugang nur mit Einladungslink; ein Link gilt einmal. Bei der Registrierung wird das Gerät erkannt.
 - Termine: An- und Abmelden. Beim Abmelden die Option „virtuell dabei mit Magnum“: Streak bleibt, Magnum in der Kasse, Beitrag auf der Prost-Wand. „Ich organisiere den Abend“ nur, wenn noch niemand organisiert.
-- Anlass-Details: Ämtli OK und Verpflegung (mehrere Personen), Magnums erfassen, Gasttrinker pro Magnum. Fahrservice: mitfahren, Fahrer mit 3 Kriterien bewerten und 10–50 Punkte verteilen; nicht beim eigenen Auto.
+- Anlass-Details: Magnums erfassen, Gasttrinker pro Magnum. Fahrservice: mitfahren, Fahrer mit 3 Kriterien bewerten und 10–50 Punkte verteilen; nicht beim eigenen Auto.
 - Reisen: OK/Kassier eintragen, Sacceri beantragen und abstimmen (⅔ der Mitreisenden). Bilder: 3 sichtbar, Rest als Collage-Karte unter „Legendär“.
 - Club: Rangliste, Spitznamen (Vorschlag + zweite Unterstützung + ⅔), Einladungen, Vorschläge (→ GitHub-Issue). Nur der Admin sieht die Administration und kann den Gerätetyp anpassen.
 - Am Tag nach einem Anlass: Wer dabei war, wird mit „Hast du Kopfweh?“ oder „Hallo Brummschädel“ begrüsst, virtuell Dabeigewesene nicht.

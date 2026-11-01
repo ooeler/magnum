@@ -15,7 +15,6 @@ grant execute on function public.uid() to authenticated;
 -- ───────────── Einstellungen & Wartung ─────────────
 create table if not exists public.settings (
   id           int primary key default 1 check (id = 1),
-  max_members  int  not null default 12,
   goal_title   text not null default '30 Zusagen bis zum Chlaus-Magnum = Apéro für alle',
   goal_target  int  not null default 30,
   magnum_price numeric(6,2) not null default 45
@@ -72,18 +71,10 @@ language sql stable set search_path = public as $$
   select (now() at time zone 'Europe/Zurich')::date
 $$;
 
--- Der Club hat höchstens settings.max_members Mitglieder. Die Sperre lässt parallele Beitritte warten.
-create or replace function public.check_club_size() returns trigger
-language plpgsql security definer set search_path = public as $$
-declare v_max int;
-begin
-  select max_members into v_max from public.settings where id = 1 for update;
-  if (select count(*) from public.profiles) >= v_max then raise exception 'Der Club ist voll'; end if;
-  return new;
-end $$;
+-- Der Club hat keine Obergrenze mehr
 drop trigger if exists club_size_check on public.profiles;
-create trigger club_size_check before insert on public.profiles
-  for each row execute function public.check_club_size();
+drop function if exists public.check_club_size();
+alter table public.settings drop column if exists max_members;
 
 -- ───────────── Einladungen (Link statt Mail, siehe functions/index.ts) ─────────────
 create table if not exists public.invites (
@@ -285,15 +276,8 @@ drop trigger if exists rsvp_check on public.rsvps;
 create trigger rsvp_check before insert or update or delete on public.rsvps
   for each row execute function public.check_rsvp();
 
--- Ämtli pro Anlass: OK und Verpflegung, jeweils mehrere Personen. Alle Mitglieder tragen ein, wie bei den Reisen.
-create table if not exists public.event_aemtli (
-  event_id  uuid not null references public.events(id) on delete cascade,
-  member_id uuid not null references public.profiles(id) on delete cascade,
-  amt       text not null check (amt in ('ok', 'verpflegung')),
-  added_by  uuid default public.uid() references public.profiles(id) on delete set null,
-  primary key (event_id, member_id, amt)
-);
-alter table public.event_aemtli enable row level security;
+-- Die Ämtli pro Anlass gibt es nicht mehr, es braucht nur den Organisator
+drop table if exists public.event_aemtli;
 
 -- ───────────── Magnum-Serie: immer am letzten Freitag im Monat, die nächsten drei stehen im Kalender ─────────────
 create or replace function public.letzter_freitag(p_monat date) returns date
@@ -385,6 +369,26 @@ begin
   update public.rsvps set redeemed = true where status = 'virtual' and not redeemed;
   get diagnostics n = row_count;
   return n;
+end $$;
+
+-- Beiz und Quittung gehören zum Termin
+alter table public.restaurant_visits add column if not exists event_id uuid references public.events(id) on delete set null;
+
+-- Organisator setzen oder entfernen: Admin, wer den Anlass erfasst hat oder ihn organisiert. Vergangenes nur der Admin.
+create or replace function public.set_organizer(p_event uuid, p_member uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare e public.events;
+begin
+  select * into e from public.events where id = p_event;
+  if not found then raise exception 'Anlass nicht gefunden'; end if;
+  if not (public.is_admin() or e.created_by = public.uid() or e.organizer_id = public.uid()) then
+    raise exception 'Das dürfen nur Organisator und Administrator';
+  end if;
+  update public.events set organizer_id = p_member where id = p_event;
+  if p_member is not null then
+    insert into public.rsvps (event_id, member_id, status) values (p_event, p_member, 'in')
+    on conflict (event_id, member_id) do update set status = 'in', updated_at = now();
+  end if;
 end $$;
 
 -- ───────────── Heimweg / Fahrservice ─────────────
@@ -683,6 +687,15 @@ create table if not exists public.cards (
 );
 alter table public.cards enable row level security;
 
+-- Wer auf einer Karte dabei war, bekommt Punkte. Eintragen darf, wer die Karte erstellt hat, oder der Admin.
+create table if not exists public.card_members (
+  card_id   uuid not null references public.cards(id) on delete cascade,
+  member_id uuid not null references public.profiles(id) on delete cascade,
+  added_by  uuid default public.uid() references public.profiles(id) on delete set null,
+  primary key (card_id, member_id)
+);
+alter table public.card_members enable row level security;
+
 -- ───────────── Getränkefotos (Trinkfestigkeit) ─────────────
 create table if not exists public.drinks (
   id         uuid primary key default gen_random_uuid(),
@@ -775,7 +788,7 @@ begin
   foreach t in array array['settings', 'profiles', 'admin_log', 'restaurants', 'restaurant_visits',
     'restaurant_ratings', 'events', 'rsvps', 'magnums', 'magnum_guests', 'rides', 'ride_passengers', 'trips',
     'trip_participants', 'trip_photos', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
-    'sayings', 'saying_prosts', 'feedback', 'sync_stand', 'event_aemtli']
+    'sayings', 'saying_prosts', 'feedback', 'sync_stand', 'card_members']
   loop
     execute format('drop policy if exists "Mitglieder lesen" on public.%I', t);
     execute format('create policy "Mitglieder lesen" on public.%I for select to authenticated using (public.is_member())', t);
@@ -820,12 +833,14 @@ begin
   end loop;
 end $$;
 
--- Ämtli: Alle Mitglieder tragen ein und aus
-drop policy if exists "Ämtli eintragen" on public.event_aemtli;
-drop policy if exists "Ämtli austragen" on public.event_aemtli;
-create policy "Ämtli eintragen" on public.event_aemtli for insert to authenticated with check (public.is_member() and added_by = public.uid());
-create policy "Ämtli austragen" on public.event_aemtli for delete to authenticated using (public.is_member());
-revoke update on public.event_aemtli from authenticated;
+-- Personen auf Karten: Ersteller der Karte oder Admin
+drop policy if exists "Karte eintragen" on public.card_members;
+drop policy if exists "Karte austragen" on public.card_members;
+create policy "Karte eintragen" on public.card_members for insert to authenticated with check (
+  added_by = public.uid() and (public.is_admin() or exists (select 1 from public.cards c where c.id = card_id and c.created_by = public.uid())));
+create policy "Karte austragen" on public.card_members for delete to authenticated using (
+  public.is_admin() or exists (select 1 from public.cards c where c.id = card_id and c.created_by = public.uid()));
+revoke update on public.card_members from authenticated;
 
 -- Anlässe: Auch wer organisiert, passt Name, Datum und Ort an
 drop policy if exists "Ersteller ändern" on public.events;
@@ -879,6 +894,7 @@ revoke execute on function public.admin_set_device(uuid, text) from public, anon
 revoke execute on function public.admin_set_role(uuid, text) from public, anonymous;
 revoke execute on function public.admin_set_admin(uuid, boolean) from public, anonymous;
 revoke execute on function public.claim_organizer(uuid) from public, anonymous;
+revoke execute on function public.set_organizer(uuid, uuid) from public, anonymous;
 revoke execute on function public.open_magnum_kasse() from public, anonymous;
 revoke execute on function public.eligible_voters(uuid) from public, anonymous;
 revoke execute on function public.resolve_proposal(uuid) from public, anonymous, authenticated;
@@ -895,14 +911,13 @@ revoke execute on function public.admin_set_rsvp(uuid, uuid, text) from public, 
 revoke execute on function public.sync_bump() from public, anonymous, authenticated;
 revoke execute on function public.check_ride_passenger() from public, anonymous, authenticated;
 revoke execute on function public.heute() from public, anonymous, authenticated;
-revoke execute on function public.check_club_size() from public, anonymous, authenticated;
 revoke execute on function public.check_event() from public, anonymous, authenticated;
 revoke execute on function public.check_rsvp() from public, anonymous, authenticated;
 revoke execute on function public.check_trip() from public, anonymous, authenticated;
 revoke execute on function public.check_trip_participant() from public, anonymous, authenticated;
 revoke execute on function public.set_created_at() from public, anonymous, authenticated;
 grant execute on function public.is_member(), public.is_admin(), public.me(), public.magnum_termine(), public.admin_set_rsvp(uuid, uuid, text),
-  public.admin_set_device(uuid, text), public.admin_set_role(uuid, text), public.admin_set_admin(uuid, boolean), public.claim_organizer(uuid),
+  public.admin_set_device(uuid, text), public.admin_set_role(uuid, text), public.admin_set_admin(uuid, boolean), public.claim_organizer(uuid), public.set_organizer(uuid, uuid),
   public.open_magnum_kasse(), public.eligible_voters(uuid), public.propose_sacceri(uuid, uuid),
   public.propose_nickname(uuid, text), public.second_proposal(uuid), public.cast_ballot(uuid, boolean)
   to authenticated;
@@ -913,7 +928,7 @@ declare t text;
 begin
   foreach t in array array['profiles', 'events', 'rsvps', 'magnums', 'magnum_guests', 'rides', 'ride_passengers',
     'trips', 'trip_participants', 'trip_photos', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
-    'sayings', 'saying_prosts', 'event_aemtli', 'restaurants', 'restaurant_visits', 'restaurant_ratings', 'feedback', 'admin_log']
+    'sayings', 'saying_prosts', 'card_members', 'restaurants', 'restaurant_visits', 'restaurant_ratings', 'feedback', 'admin_log']
   loop
     execute format('drop trigger if exists sync_bump on public.%I', t);
     execute format('create trigger sync_bump after insert or update or delete on public.%I for each statement execute function public.sync_bump()', t);

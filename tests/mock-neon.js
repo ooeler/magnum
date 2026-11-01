@@ -21,7 +21,7 @@
   function seed() {
     var P = function (id, n, role, since, dev, extra) { return Object.assign({ id: id, display_name: n, nickname: null, role_title: role, since_year: since, fav_wine: null, specialty: null, device: dev, device_set_by_admin: false, is_admin: false, invited_by: null, last_seen: null, created_at: iso(-400) }, extra || {}) };
     var d = {
-      settings: [{ id: 1, max_members: 12, goal_title: "30 Zusagen bis zum Chlaus-Magnum = Apéro für alle", goal_target: 30, magnum_price: 45 }],
+      settings: [{ id: 1, goal_title: "30 Zusagen bis zum Chlaus-Magnum = Apéro für alle", goal_target: 30, magnum_price: 45 }],
       app_status: [{ id: "main", maintenance: false }],
       profiles: [
         P(M.ot, "Ot", "Präsident", 2009, "iphone", { is_admin: true, fav_wine: "Cornalin", specialty: "Reden nach Mitternacht" }),
@@ -41,7 +41,7 @@
       ],
       rsvps: [], magnums: [{ id: "m-1", event_id: "e-1", wine: "Cornalin 2019", brought_by: M.kurt, created_at: iso(-2) }],
       magnum_guests: [{ id: "g-1", magnum_id: "m-1", name: "Peter (Gast von Kurt)", added_by: M.kurt, created_at: iso(-2) }],
-      rides: [{ id: "r-1", event_id: "e-1", driver_id: M.jurg, direction: "Richtung Wil", seats: 3, created_at: iso(-1) }], ride_passengers: [], event_aemtli: [],
+      rides: [{ id: "r-1", event_id: "e-1", driver_id: M.jurg, direction: "Richtung Wil", seats: 3, created_at: iso(-1) }], ride_passengers: [], card_members: [],
       trips: [
         { id: "t-bordeaux", title: "Bordeaux", starts_on: day(-60), ends_on: day(-57), program: "Saint-Émilion, Médoc, Austern in Arcachon", seats: 12, color: "#5A1F2E", ok_id: M.chris, kassier_id: M.beat, sacceri_id: M.dani, created_by: M.chris, created_at: iso(-200) },
         { id: "t-wallis", title: "Wallis", starts_on: day(190), ends_on: day(192), program: "Weinwanderung Sierre–Salgesch, Raclette", seats: 12, color: "#6E2433", ok_id: M.chris, kassier_id: null, sacceri_id: null, created_by: M.chris, created_at: iso(-20) }
@@ -103,15 +103,15 @@
   var OWNER = { restaurant_ratings: "member_id", rsvps: "member_id", trip_participants: "member_id", drinks: "member_id", saying_prosts: "member_id", post_prosts: "member_id",
     ride_passengers: "passenger_id", rides: "driver_id", restaurants: "created_by", restaurant_visits: "created_by", events: "created_by", magnums: "brought_by", magnum_guests: "added_by",
     trip_photos: "uploaded_by", cards: "created_by", sayings: "author_id", posts: "author_id", trips: "created_by" };
-  var PK = { event_aemtli: ["event_id", "member_id", "amt"], rsvps: ["event_id", "member_id"], restaurant_ratings: ["restaurant_id", "member_id"], trip_participants: ["trip_id", "member_id"], saying_prosts: ["saying_id", "member_id"],
+  var PK = { card_members: ["card_id", "member_id"], rsvps: ["event_id", "member_id"], restaurant_ratings: ["restaurant_id", "member_id"], trip_participants: ["trip_id", "member_id"], saying_prosts: ["saying_id", "member_id"],
     post_prosts: ["post_id", "member_id"], ride_passengers: ["ride_id", "passenger_id"], ballots: ["proposal_id", "voter_id"] };
   var PERSONAL = ["restaurant_ratings", "rsvps", "trip_participants", "drinks", "saying_prosts", "post_prosts", "ride_passengers", "rides"];
   var COLS = { profiles: ["display_name", "fav_wine", "specialty"], trips: ["title", "starts_on", "ends_on", "program", "seats", "color", "ok_id", "kassier_id"],
     events: ["title", "starts_at", "location"], ride_passengers: ["stars_safe", "stars_punctual", "stars_mood", "points_given", "rated_at"],
     rsvps: ["event_id", "member_id", "status", "updated_at"], posts: ["text"], sayings: ["text"] };
   var READONLY = ["settings", "proposals", "ballots", "admin_log", "feedback"];
-  var CASCADE = { events: [["rsvps", "event_id"], ["magnums", "event_id"], ["rides", "event_id"], ["event_aemtli", "event_id"]], magnums: [["magnum_guests", "magnum_id"]], rides: [["ride_passengers", "ride_id"]],
-    trips: [["trip_participants", "trip_id"], ["trip_photos", "trip_id"], ["proposals", "trip_id"]], posts: [["post_prosts", "post_id"]], sayings: [["saying_prosts", "saying_id"]],
+  var CASCADE = { events: [["rsvps", "event_id"], ["magnums", "event_id"], ["rides", "event_id"]], magnums: [["magnum_guests", "magnum_id"]], rides: [["ride_passengers", "ride_id"]],
+    cards: [["card_members", "card_id"]], trips: [["trip_participants", "trip_id"], ["trip_photos", "trip_id"], ["proposals", "trip_id"]], posts: [["post_prosts", "post_id"]], sayings: [["saying_prosts", "saying_id"]],
     restaurants: [["restaurant_visits", "restaurant_id"], ["restaurant_ratings", "restaurant_id"]], proposals: [["ballots", "proposal_id"]] };
   var AS = null; // Tests: als andere Person handeln (window.__mg.as)
   function me() { if (AS) return AS; var s = get(SESS); return s ? s.user.id : null }
@@ -203,6 +203,7 @@
         if (own && r[own] == null) r[own] = u;
         if (own && r[own] != u) return RLS(t);
         if (t == "trips" && r.sacceri_id) return RLS(t);
+        if (t == "card_members" && !(admin(d) || d.cards.some(function (c) { return c.id == r.card_id && c.created_by == u }))) return RLS(t);
         if (t == "rsvps" && "redeemed" in r) return fail("permission denied for table rsvps", "42501");
         var ex = d[t].find(function (x) { return pkMatch(t, x, r) && (PK[t] || r.id) });
         if (ex && q.op == "insert") return fail("duplicate key value violates unique constraint", "23505");
@@ -234,7 +235,7 @@
     }
     if (q.op == "delete") {
       for (var k = 0; k < hit.length; k++) {
-        var r2 = hit[k], darf = t == "event_aemtli" ? true : t == "trips" ? (r2.created_by == u || admin(d)) : own && (r2[own] == u || admin(d));
+        var r2 = hit[k], darf = t == "card_members" ? (admin(d) || d.cards.some(function (c) { return c.id == r2.card_id && c.created_by == u })) : t == "trips" ? (r2.created_by == u || admin(d)) : own && (r2[own] == u || admin(d));
         if (!darf) continue;
         var e3 = t == "rsvps" ? checkRow(d, t, r2, r2, true) : null; if (e3) return fail(e3);
         d[t] = d[t].filter(function (x) { return x !== r2 }); removeCascade(d, t, r2); out.push(r2);
@@ -270,6 +271,11 @@
   var RPC = {
     me: function (d, u) { var p = d.profiles.find(function (x) { return x.id == u }); if (!p) return null; var prev = p.last_seen; p.last_seen = new Date().toISOString(); return { id: u, is_admin: p.is_admin, prev_seen: prev } },
     magnum_termine: function () { return 0 },
+    set_organizer: function (d, u, a) {
+      var e = d.events.find(function (x) { return x.id == a.p_event }); if (!e) throw "Anlass nicht gefunden";
+      if (!(admin(d) || e.created_by == u || e.organizer_id == u)) throw "Das dürfen nur Organisator und Administrator";
+      e.organizer_id = a.p_member;
+    },
     admin_set_rsvp: function (d, u, a) {
       if (!admin(d)) throw "Nur der Administrator trägt Anwesenheit nach";
       d.rsvps = d.rsvps.filter(function (x) { return !(x.event_id == a.p_event && x.member_id == a.p_member) });
@@ -343,12 +349,10 @@
   var FN = {
     invite: function (b) {
       var d = db(), now = new Date().toISOString(), INVALID = "Dieser Einladungslink ist ungültig, abgelaufen oder wurde schon verwendet.";
-      var full = d.profiles.length >= d.settings[0].max_members;
       if (b.action == "check" || b.action == "join") {
         if (!/^[A-Za-z0-9_-]{43}$/.test(String(b.token || ""))) return fnFail("Dieser Einladungslink ist ungültig.");
         var inv = d.__invites.find(function (x) { return x.token == b.token && !x.used_at && x.expires_at > now });
         if (!inv) return fnFail(INVALID);
-        if (full) return fnFail("Der Club ist voll. Bitte beim Admin melden.");
         var from = d.profiles.find(function (p) { return p.id == inv.created_by });
         if (b.action == "check") return ok({ ok: true, from: from ? from.display_name : null });
         var name = String(b.name || "").trim(), email = String(b.email || "").trim().toLowerCase(), U = users();
@@ -366,7 +370,6 @@
       var u = me(); if (!u) return fnFail("Nicht angemeldet");
       if (!member(d)) return fnFail("Nur Mitglieder dürfen einladen.");
       if (b.action == "create") {
-        if (full) return fnFail("Der Club ist voll (12 Mitglieder).");
         var t = token(); d.__invites.push({ id: ++d.__seq, token: t, created_by: u, created_at: now, expires_at: new Date(Date.now() + 7 * 864e5).toISOString(), used_at: null }); save(d);
         return ok({ ok: true, token: t });
       }
