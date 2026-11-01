@@ -276,15 +276,8 @@ drop trigger if exists rsvp_check on public.rsvps;
 create trigger rsvp_check before insert or update or delete on public.rsvps
   for each row execute function public.check_rsvp();
 
--- Ämtli pro Anlass: OK und Verpflegung, jeweils mehrere Personen. Alle Mitglieder tragen ein, wie bei den Reisen.
-create table if not exists public.event_aemtli (
-  event_id  uuid not null references public.events(id) on delete cascade,
-  member_id uuid not null references public.profiles(id) on delete cascade,
-  amt       text not null check (amt in ('ok', 'verpflegung')),
-  added_by  uuid default public.uid() references public.profiles(id) on delete set null,
-  primary key (event_id, member_id, amt)
-);
-alter table public.event_aemtli enable row level security;
+-- Die Ämtli pro Anlass gibt es nicht mehr, es braucht nur den Organisator
+drop table if exists public.event_aemtli;
 
 -- ───────────── Magnum-Serie: immer am letzten Freitag im Monat, die nächsten drei stehen im Kalender ─────────────
 create or replace function public.letzter_freitag(p_monat date) returns date
@@ -795,7 +788,7 @@ begin
   foreach t in array array['settings', 'profiles', 'admin_log', 'restaurants', 'restaurant_visits',
     'restaurant_ratings', 'events', 'rsvps', 'magnums', 'magnum_guests', 'rides', 'ride_passengers', 'trips',
     'trip_participants', 'trip_photos', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
-    'sayings', 'saying_prosts', 'feedback', 'sync_stand', 'event_aemtli', 'card_members']
+    'sayings', 'saying_prosts', 'feedback', 'sync_stand', 'card_members']
   loop
     execute format('drop policy if exists "Mitglieder lesen" on public.%I', t);
     execute format('create policy "Mitglieder lesen" on public.%I for select to authenticated using (public.is_member())', t);
@@ -848,13 +841,6 @@ create policy "Karte eintragen" on public.card_members for insert to authenticat
 create policy "Karte austragen" on public.card_members for delete to authenticated using (
   public.is_admin() or exists (select 1 from public.cards c where c.id = card_id and c.created_by = public.uid()));
 revoke update on public.card_members from authenticated;
-
--- Ämtli: Alle Mitglieder tragen ein und aus
-drop policy if exists "Ämtli eintragen" on public.event_aemtli;
-drop policy if exists "Ämtli austragen" on public.event_aemtli;
-create policy "Ämtli eintragen" on public.event_aemtli for insert to authenticated with check (public.is_member() and added_by = public.uid());
-create policy "Ämtli austragen" on public.event_aemtli for delete to authenticated using (public.is_member());
-revoke update on public.event_aemtli from authenticated;
 
 -- Anlässe: Auch wer organisiert, passt Name, Datum und Ort an
 drop policy if exists "Ersteller ändern" on public.events;
@@ -942,7 +928,7 @@ declare t text;
 begin
   foreach t in array array['profiles', 'events', 'rsvps', 'magnums', 'magnum_guests', 'rides', 'ride_passengers',
     'trips', 'trip_participants', 'trip_photos', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
-    'sayings', 'saying_prosts', 'event_aemtli', 'card_members', 'restaurants', 'restaurant_visits', 'restaurant_ratings', 'feedback', 'admin_log']
+    'sayings', 'saying_prosts', 'card_members', 'restaurants', 'restaurant_visits', 'restaurant_ratings', 'feedback', 'admin_log']
   loop
     execute format('drop trigger if exists sync_bump on public.%I', t);
     execute format('create trigger sync_bump after insert or update or delete on public.%I for each statement execute function public.sync_bump()', t);

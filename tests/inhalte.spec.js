@@ -230,7 +230,7 @@ test.describe("Beiz erfassen", () => {
 });
 
 test.describe("Anlässe anpassen", () => {
-  const anpassen = (page, title) => page.getByRole("button", { name: "Name und Datum anpassen" }).click();
+  const anpassen = (page, title) => page.getByRole("button", { name: "Anlass anpassen" }).click();
 
   test("Organisator ändert Name und Datum", async ({ page }) => {
     await login(page);
@@ -263,7 +263,7 @@ test.describe("Anlässe anpassen", () => {
   test("Andere Mitglieder passen fremde Anlässe nicht an", async ({ page }) => {
     await login(page, BEAT);
     await details(page, "Herbst-Stamm");
-    await expect(page.getByRole("button", { name: "Name und Datum anpassen" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Anlass anpassen" })).toHaveCount(0);
     await page.evaluate(() => window.magnumDb.createClient().from("events").update({ title: "Fremd" }).eq("id", "e-1"));
     expect(await page.evaluate(() => window.__mg.db().events.find((e) => e.id == "e-1").title)).toBe("Herbst-Stamm");
   });
@@ -303,25 +303,6 @@ test.describe("Anlässe anpassen", () => {
   });
 });
 
-test.describe("Ämtli beim Anlass", () => {
-  test("OK und Verpflegung mit mehreren Personen", async ({ page }) => {
-    await login(page, BEAT);
-    await details(page, "Herbst-Stamm");
-    const a = card(page, "Ämtli");
-    await a.locator("select[data-f=ok]").selectOption({ label: "Beat" });
-    await expect(a.getByRole("button", { name: "Beat aus OK austragen" })).toBeVisible();
-    await a.locator("select[data-f=ok]").selectOption({ label: "Dani" });
-    await expect(a.getByRole("button", { name: "Dani aus OK austragen" })).toBeVisible();
-    await a.locator("select[data-f=verpflegung]").selectOption({ label: "Gabi" });
-    await a.locator("select[data-f=verpflegung]").selectOption({ label: "Hans" });
-    await expect(a.getByRole("button", { name: "Hans aus Verpflegung austragen" })).toBeVisible();
-    await expect(a.locator("select[data-f=ok] option", { hasText: "Dani" }), "nicht doppelt wählbar").toHaveCount(0);
-    await a.getByRole("button", { name: "Dani aus OK austragen" }).click();
-    await expect(a.getByRole("button", { name: "Dani aus OK austragen" })).toHaveCount(0);
-    expect(await page.evaluate(() => window.__mg.db().event_aemtli.map((x) => x.amt + ":" + x.member_id).sort())).toEqual(["ok:u-beat", "verpflegung:u-gabi", "verpflegung:u-hans"]);
-  });
-});
-
 test.describe("Beiz, Karte und Organisator", () => {
   test("Quittung gehört zum Termin, nicht in die Statistik", async ({ page }) => {
     await login(page);
@@ -357,7 +338,7 @@ test.describe("Beiz, Karte und Organisator", () => {
   test("Organisator im Anlass ändern", async ({ page }) => {
     await login(page);
     await details(page, "Herbst-Stamm");
-    await page.getByRole("button", { name: "Name und Datum anpassen" }).click();
+    await page.getByRole("button", { name: "Anlass anpassen" }).click();
     await page.locator("[data-k=edOrg]").selectOption({ label: "Beat" });
     await page.getByRole("button", { name: "Speichern" }).click();
     await expect(toast(page)).toContainText("Anlass angepasst");

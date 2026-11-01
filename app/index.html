@@ -153,7 +153,7 @@ details summary{cursor:pointer;font-weight:700;list-style:none}details summary::
 // ═══════════════════════════════════════════════════════════════════════
 var C = window.MG_CONFIG || {}, sb = null, ME = null, PRF = null, PREV = null, MAINT = false, READY = false;
 var TABLES = ["settings", "profiles", "events", "rsvps", "magnums", "magnum_guests", "rides", "ride_passengers", "trips",
-  "trip_participants", "trip_photos", "proposals", "ballots", "posts", "post_prosts", "cards", "drinks", "sayings", "event_aemtli", "card_members",
+  "trip_participants", "trip_photos", "proposals", "ballots", "posts", "post_prosts", "cards", "drinks", "sayings", "card_members",
   "saying_prosts", "restaurants", "restaurant_visits", "restaurant_ratings", "feedback", "admin_log"];
 var D = {}; TABLES.forEach(function (t) { D[t] = [] });
 var TAB = lsGet("mg_tab") || "termine", OV = null, SH = null, UI = {}, AUTH = { mode: "login" }, INVITE = null, INVLIST = null, NEWLINK = null, BUSY = false;
@@ -591,17 +591,6 @@ function pastForm() {
     '<label class="f">Organisator<select class="t" data-k="paOrg">' + memberOptions(v("paOrg"), null, "– niemand –") + "</select></label>" +
     '<div class="row"><button class="btn grow">Erfassen</button><button type="button" class="btn ghost" data-a="ui" data-k="newPast" data-v="">Abbrechen</button></div></form>';
 }
-var AEMTLI = [["ok", "OK"], ["verpflegung", "Verpflegung"]];
-function aemtliVon(e, amt) { return D.event_aemtli.filter(function (x) { return x.event_id == e.id && x.amt == amt }) }
-function aemtli(e) {
-  return '<section class="card" aria-label="Ämtli"><span class="b" style="font-size:15px">Ämtli</span>' + AEMTLI.map(function (a) {
-    var L = aemtliVon(e, a[0]), ids = L.map(function (x) { return x.member_id });
-    return '<div class="col" style="gap:6px"><span class="lbl">' + a[1] + '</span><div class="chips">' + L.map(function (x) {
-      return '<button class="chip" data-a="aemtliweg" data-id="' + e.id + '" data-m="' + x.member_id + '" data-v="' + a[0] + '" aria-label="' + esc(nm(x.member_id)) + " aus " + a[1] + ' austragen">' + esc(nm(x.member_id)) + " ×</button>";
-    }).join("") + (L.length ? "" : '<span class="sm mu">Noch niemand</span>') + "</div>" +
-      '<select class="t" data-c="aemtli" data-id="' + e.id + '" data-f="' + a[0] + '" aria-label="' + a[1] + ' eintragen">' + memberOptions("", function (p) { return ids.indexOf(p.id) < 0 }, "+ Person eintragen") + "</select></div>";
-  }).join("") + "</section>";
-}
 function darfAendern(e) { var me = uid(); return isAdmin() || e.created_by == me || e.organizer_id == me }
 function eventEdit(e) {
   return '<form class="card" data-s="evedit" data-id="' + e.id + '"><span class="mid">Anlass anpassen</span><label class="f">Name<input class="t" data-k="edTitle" value="' + esc(v("edTitle", e.title)) + '" maxlength="80" required></label>' +
@@ -977,7 +966,7 @@ function eventView(e) {
     '<span class="sm b">' + (e.organizer_id ? "Organisation: " + esc(nm(e.organizer_id)) : '<span style="color:var(--orange)">Organisator gesucht</span>') + "</span></div><main>";
   h += '<div class="row wrap"><button class="pill ' + (s == "in" ? "on" : "") + '" data-a="rsvp" data-id="' + e.id + '" data-v="in">Bin dabei</button><button class="pill ' + (s == "out" ? "out" : "") + '" data-a="abmelden" data-id="' + e.id + '">Abmelden</button>' +
     (s == "virtual" ? '<span class="chip v">Virtuell dabei · Magnum spendiert</span>' : "") + "</div>";
-  h += aemtli(e) + beizTermin(e);
+  h += beizTermin(e);
   var grp = [["in", "Dabei"], ["virtual", "Virtuell dabei"], ["out", "Abgemeldet"]];
   h += '<section class="card">' + grp.map(function (g) { var L = R.filter(function (r) { return r.status == g[0] }); return L.length ? '<div class="col"><span class="lbl">' + g[1] + " (" + L.length + ')</span><div class="chips">' + L.map(function (r) { return '<span class="chip' + (g[0] == "virtual" ? " v" : "") + '">' + esc(nm(r.member_id)) + "</span>" }).join("") + "</div></div>" : "" }).join("") +
     (R.length ? "" : '<span class="empty">Noch niemand angemeldet.</span>') + "</section>";
@@ -994,7 +983,7 @@ function eventView(e) {
     '<form class="row" data-s="magnum" data-id="' + e.id + '"><input class="t" data-k="mWine" value="' + esc(v("mWine")) + '" placeholder="Wein, z.B. Cornalin 2019" maxlength="80" aria-label="Welche Magnum"><button class="btn"' + (v("mWine").trim() ? "" : " disabled") + ">Erfassen</button></form></section>";
   h += rides(e);
   if (isAdmin() && new Date(e.starts_at).getTime() < now()) h += anwesenheit(e);
-  if (darfAendern(e)) h += UI.evEdit == e.id ? eventEdit(e) : '<button class="btn ghost" data-a="ui" data-k="evEdit" data-v="' + e.id + '">Name und Datum anpassen</button>';
+  if (darfAendern(e)) h += UI.evEdit == e.id ? eventEdit(e) : '<button class="btn ghost" data-a="ui" data-k="evEdit" data-v="' + e.id + '">Anlass anpassen</button>';
   if (e.created_by == me || isAdmin()) h += '<button class="btn ghost" data-a="delevent" data-id="' + e.id + '">Anlass löschen</button>';
   return h + "</main>";
 }
@@ -1113,7 +1102,6 @@ var ACT = {
   },
   deltrip: function (d) { if (!confirm("Reise wirklich löschen?")) return; OV = null; after(sb.from("trips").delete().eq("id", d.id), "Reise gelöscht") },
   kartweg: function (d) { after(sb.from("card_members").delete().eq("card_id", d.id).eq("member_id", d.m), "Von der Karte genommen") },
-  aemtliweg: function (d) { after(sb.from("event_aemtli").delete().eq("event_id", d.id).eq("member_id", d.m).eq("amt", d.v), "Ausgetragen") },
   anw: function (d) { after(sb.rpc("admin_set_rsvp", { p_event: d.id, p_member: d.m, p_status: d.v || null }), "Anwesenheit von " + nm(d.m) + " gespeichert") },
   delevent: function (d) { if (!confirm("Anlass wirklich löschen?")) return; OV = null; after(sb.from("events").delete().eq("id", d.id), "Anlass gelöscht") },
   delcard: function (d) { if (!confirm("Karte wirklich löschen?")) return; OV = null; after(sb.from("cards").delete().eq("id", d.id), "Karte gelöscht") },
@@ -1308,10 +1296,6 @@ var CHANGE = {
   kartdazu: function (el) {
     if (!el.value) return;
     after(sb.from("card_members").insert({ card_id: el.getAttribute("data-id"), member_id: el.value, added_by: uid() }), nm(el.value) + " ist dabei · +10 Punkte");
-  },
-  aemtli: function (el) {
-    if (!el.value) return;
-    after(sb.from("event_aemtli").insert({ event_id: el.getAttribute("data-id"), member_id: el.value, amt: el.getAttribute("data-f"), added_by: uid() }), "Eingetragen");
   },
   tripset: function (el) { var o = {}; o[el.getAttribute("data-f")] = el.value || null; after(sb.from("trips").update(o).eq("id", el.getAttribute("data-id")), "Gespeichert") }
 };

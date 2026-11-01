@@ -418,25 +418,6 @@ select pg_temp.verboten($q$select public.admin_set_admin(public.uid(), false)$q$
 reset role;
 select pg_temp.als('');
 
--- 18) Ämtli beim Anlass: mehrere pro Amt, nur bekannte Ämter, nicht doppelt
-set role authenticated;
-select pg_temp.als('C');
-insert into public.event_aemtli (event_id, member_id, amt) values
-  ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000c', 'ok'),
-  ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000d', 'ok'),
-  ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000b', 'verpflegung');
-select pg_temp.check((select count(*) from public.event_aemtli where amt = 'ok') = 2, 'Mehrere im OK');
-do $$ begin
-  insert into public.event_aemtli (event_id, member_id, amt) values ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000c', 'kasse');
-  raise exception 'FEHLER: unbekanntes Amt';
-exception when check_violation then raise notice 'ok – nur OK und Verpflegung'; end $$;
-with x as (delete from public.event_aemtli where member_id = '00000000-0000-0000-0000-00000000000d' returning 1)
-select pg_temp.check((select count(*) from x) = 1, 'Austragen geht');
-select pg_temp.als('X');
-select pg_temp.check((select count(*) from public.event_aemtli) = 0, 'Nicht-Mitglied sieht keine Ämtli');
-reset role;
-select pg_temp.als('');
-
 -- 17) Magnum-Serie: letzter Freitag im Monat, die nächsten drei, gelöschte kommen nicht zurück
 select pg_temp.check(public.letzter_freitag('2026-11-10') = '2026-11-27', 'Letzter Freitag im November 2026');
 select pg_temp.check(public.letzter_freitag('2026-12-01') = '2026-12-25', 'Letzter Freitag im Dezember 2026');
