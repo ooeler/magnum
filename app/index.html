@@ -117,6 +117,12 @@ nav button.on{color:var(--ac)}nav button.on i{background:var(--ac)}
 @keyframes mgFlyR{0%{transform:translateX(calc(100vw + 70px)) rotate(12deg)}50%{transform:translate(50vw,-30px) rotate(-10deg)}100%{transform:translateX(-70px) rotate(12deg)}}
 @keyframes mgSnow{to{transform:translateY(105vh)}}
 @media (prefers-reduced-motion:reduce){.fx,#snow{display:none}}
+.laden{display:flex;flex-direction:column;align-items:center;gap:12px;padding:32px 0;text-align:center;color:var(--mu)}
+#app>.laden{min-height:100vh;justify-content:center}
+.ladeglas .rand{fill:none;stroke:#F4ECE0;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.ladeglas .wein{fill:#8E1F36;transform:translateY(46px);animation:mgFill 2s ease-in-out infinite}
+@keyframes mgFill{0%{transform:translateY(46px)}70%,90%{transform:translateY(8px)}100%{transform:translateY(46px)}}
+@media (prefers-reduced-motion:reduce){.ladeglas .wein{animation:none;transform:translateY(8px)}}
 .star{width:44px;height:44px;border:0;background:transparent;padding:0;display:inline-flex;align-items:center;justify-content:center}
 .stars{display:flex;gap:2px}
 .bars{display:flex;align-items:flex-end;gap:8px;height:130px}.bars>div{flex:1 1 0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;height:100%}
@@ -130,7 +136,7 @@ details summary{cursor:pointer;font-weight:700;list-style:none}details summary::
 .kasse{display:flex;gap:4px;flex-wrap:wrap}.kasse i{width:14px;height:28px;border-radius:4px 4px 3px 3px;background:var(--teal)}
 </style>
 </head><body>
-<div id="app"></div>
+<div id="app"><div class="laden"><svg class="ladeglas" width="64" height="96" viewBox="0 0 64 96" role="img" aria-label="Lädt"><defs><clipPath id="kelch"><path d="M14 6C10 34 20 50 32 50S54 34 50 6Z"/></clipPath></defs><g clip-path="url(#kelch)"><rect class="wein" x="0" y="6" width="64" height="46"/></g><path class="rand" d="M14 6C10 34 20 50 32 50S54 34 50 6ZM32 50V86M20 88H44"/></svg></div></div>
 <div id="toast" role="status" hidden></div>
 <script src="config.js"></script>
 <script src="client.js"></script>
@@ -311,7 +317,16 @@ function after(p, msg) {
     if (r && r.error) throw r.error;
     if (msg) toast(msg);
     return loadAll().then(function () { render(); return r && r.data });
-  }).catch(function (e) { toast(errText(e)); render() });
+  }).catch(function (e) {
+    // Scheitert es, weil gerade ein Update läuft, zeigt die App die Update-Seite statt einer Fehlermeldung
+    return wartung().then(function (mt) { if (!mt) toast(errText(e)); render() });
+  });
+}
+function wartung() {
+  return sb.from("app_status").select("maintenance").eq("id", "main").maybeSingle().then(function (r) {
+    if (r.data && r.data.maintenance) MAINT = true;
+    return MAINT;
+  }).catch(function () { return MAINT });
 }
 function errText(e) {
   var m = (e && (e.message || e.error_description)) || String(e || "Fehler");
@@ -389,6 +404,8 @@ var TABS = [["termine", "Termine", "Anlässe & Abend"], ["reisen", "Reisen", "Un
 var GLASS = '<svg width="30" height="40" viewBox="0 0 34 44" aria-hidden="true" fill="none" stroke="#E8B95A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2h8v8c0 3 7 6 7 13v17a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V23c0-7 7-10 7-13z"/><path d="M6 26h22M6 34h22"/></svg>';
 var HAT = '<svg class="hat" width="26" height="24" viewBox="0 0 26 24" aria-hidden="true"><path d="M3 19C5 8 12 2 19 5c2 1 3 4 3 7-2-2-4-3-5-2 1 3 2 6 2 9z" fill="#B3263A"/><rect x="1" y="18" width="20" height="5" rx="2.5" fill="#F4ECE0"/><circle cx="22.5" cy="13" r="2.5" fill="#F4ECE0"/></svg>';
 var FULL = '<svg width="40" height="62" viewBox="0 0 40 62" aria-hidden="true" fill="none" stroke="#F4ECE0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 18c0 11 5 17 12 17s12-6 12-17z" fill="#8E1F36" stroke="none"/><path d="M7 3c-2 16 3 32 13 32S35 19 33 3z"/><path d="M20 35v20M11 58h18"/></svg>';
+var LADEN = '<svg class="ladeglas" width="64" height="96" viewBox="0 0 64 96" role="img" aria-label="Lädt"><defs><clipPath id="kelch"><path d="M14 6C10 34 20 50 32 50S54 34 50 6Z"/></clipPath></defs><g clip-path="url(#kelch)"><rect class="wein" x="0" y="6" width="64" height="46"/></g><path class="rand" d="M14 6C10 34 20 50 32 50S54 34 50 6ZM32 50V86M20 88H44"/></svg>';
+function laden(t) { return '<div class="laden">' + LADEN + "<span>" + esc(t) + "</span></div>" }
 var BACK = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2L4 8l6 6"/></svg>';
 var CAM = '<svg width="20" height="18" viewBox="0 0 20 18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M2 5h4l2-3h4l2 3h4v11H2z"/><circle cx="10" cy="10" r="3.5"/></svg>';
 function star(on) { return '<svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3 6.5 7 .8-5.2 4.8 1.5 7L12 17.6 5.7 21.1l1.5-7L2 9.3l7-.8z" fill="' + (on ? "#E8B95A" : "transparent") + '" stroke="' + (on ? "#E8B95A" : "#6A585C") + '" stroke-width="1.5" stroke-linejoin="round"/></svg>' }
@@ -409,11 +426,11 @@ function render() {
   var f = document.activeElement, fk = f && f.getAttribute && f.getAttribute("data-k"), fs = f && f.selectionStart;
   var html;
   if (!sb) html = authShell('<div class="card"><b>Noch nicht eingerichtet</b><span class="mu sm">In <code>config.js</code> fehlen die Neon-Adressen (siehe README).</span></div>');
-  else if (MAINT) html = authShell('<div class="card"><span class="big">Update wird eingespielt</span><span class="mu">Gleich geht es weiter. Die App lädt danach von selbst neu.</span></div>');
+  else if (MAINT) html = authShell('<div class="card">' + laden("Update wird eingespielt") + '<span class="mu" style="text-align:center">Gleich geht es weiter. Die App lädt danach von selbst neu.</span></div>');
   else if (INVITE) html = joinView();
   else if (AUTH.mode == "recovery") html = recoveryView();
   else if (!ME) html = loginView();
-  else if (!READY) html = authShell('<div class="empty">Lade den Club …</div>');
+  else if (!READY) html = authShell(laden("Lade den Club …"));
   else if (!PRF) html = authShell('<div class="card"><span class="mid">Kein Mitglied</span><span class="mu sm">Dieses Konto gehört nicht zum Magnum Club. Zugang gibt es nur mit einer Einladung.</span><button class="btn ghost" data-a="logout">Abmelden</button></div>');
   else html = shell();
   app.innerHTML = html;
@@ -450,7 +467,7 @@ function loginView() {
 }
 function deviceGuess() { return /android/i.test(navigator.userAgent) ? "android" : "iphone" }
 function joinView() {
-  if (INVITE.state == "checking") return authShell('<div class="empty">Einladung wird geprüft …</div>');
+  if (INVITE.state == "checking") return authShell(laden("Einladung wird geprüft …"));
   if (INVITE.state == "bad") return authShell('<div class="card"><span class="mid">Einladung ungültig</span><span class="err">' + esc(INVITE.err) + '</span><button class="btn ghost" data-a="noinvite">Zur Anmeldung</button></div>');
   var dv = deviceGuess();
   return authShell('<div class="col"><span class="big">Du bist eingeladen!</span><span class="mu">' + (INVITE.from ? "Eingeladen von " + esc(INVITE.from) + ". " : "") + "Lege dein Konto an, dann bist du im Club.</span></div>" +
@@ -1217,7 +1234,12 @@ function readInvite() {
 function start() {
   if (!C.data || !C.api || !window.magnumDb) { render(); return }
   sb = window.magnumDb.createClient(C);
-  sb.from("app_status").select("maintenance").eq("id", "main").maybeSingle().then(function (r) { if (r.data && r.data.maintenance) { MAINT = true; render() } });
+  wartung().then(function (mt) { if (mt) render() });
+  // Auch die Anmeldeseite merkt, wenn ein Update beginnt oder endet
+  CH = sb.channel("club").on("postgres_changes", { event: "*", schema: "public" }, function (p) {
+    if (p && p.table == "app_status") { var mt = !!(p.new && p.new.maintenance); if (MAINT && !mt) location.reload(); MAINT = mt; render(); return }
+    if (READY) refresh();
+  }).subscribe();
   readInvite();
   sb.auth.onAuthStateChange(function (ev, s) {
     if (ev == "PASSWORD_RECOVERY") { AUTH = { mode: "recovery" }; render(); return }
@@ -1228,11 +1250,6 @@ function start() {
     READY = false; render();
     setTimeout(function () {
       sb.rpc("me").then(function (r) { PREV = r.data && r.data.prev_seen; return loadAll() }).then(function () { READY = true; render(); loadInvites() });
-      if (CH) return;
-      CH = sb.channel("club").on("postgres_changes", { event: "*", schema: "public" }, function (p) {
-        if (p && p.table == "app_status") { var mt = !!(p.new && p.new.maintenance); if (MAINT && !mt) location.reload(); MAINT = mt; render(); return }
-        refresh();
-      }).subscribe();
     }, 0);
   });
   render();

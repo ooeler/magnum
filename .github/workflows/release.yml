@@ -1,12 +1,10 @@
 # Deployment. Läuft automatisch nach jedem gemergten Pull Request (siehe auto-merge.yml)
-# oder manuell über ein veröffentlichtes Release / "Run workflow".
+# oder manuell über "Run workflow" auf main (GitHub Pages nimmt nur Deployments von main an).
 # Reihenfolge: Tests → Backup → Wartungsseite an → Neon-Dienste → Datenbank (setup.sql + Migrationen) → Sicherheitsprüfung → Funktionstest → App (GitHub Pages) → Wartungsseite aus.
 # Bricht ein Schritt ab, geht nichts Neues live; das Backup erlaubt jederzeit ein Rollback (README: Rollback).
 name: Release
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       grund:

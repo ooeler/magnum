@@ -197,6 +197,7 @@
     if (!u) return fail("JWT expired");
     if (!d[t]) return fail('relation "public.' + t + '" does not exist');
     if (q.op == "select") return Promise.resolve(shape(q, member(d) ? d[t].filter(function (r) { return match(q, r) }) : []));
+    if (d.app_status[0].maintenance) return fail("Datenbank nicht erreichbar");
     if (!member(d) || READONLY.indexOf(t) >= 0) return RLS(t);
     var own = OWNER[t], out = [];
     if (q.op == "insert" || q.op == "upsert") {
@@ -327,6 +328,7 @@
     if (!u) return fail("JWT expired");
     if (!RPC[fn]) return fail("function " + fn + " does not exist");
     if (fn != "me" && !member(d)) return fail("Nur Mitglieder");
+    if (fn == "me" && window.__mg_warten) return new Promise(function (ok2) { window.__mg_weiter = function () { window.__mg_warten = false; ok2(rpc(fn, a)) } });
     try { var r = RPC[fn](d, u, a || {}); save(d); notify(); return ok(r === undefined ? null : r) } catch (e) { return fail(String(e.message || e)) }
   }
 

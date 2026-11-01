@@ -79,5 +79,6 @@ jobs:
           if [ "$BUMP" = "minor" ]; then mi=$((mi+1)); pa=0; else pa=$((pa+1)); fi
           tag="v$ma.$mi.$pa"; echo "Neue Version: $tag (vorher $last)"
           gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target main --title "Magnum ${tag#v}" --generate-notes
-          # Ein mit GITHUB_TOKEN erstelltes Release startet keine Workflows → Deployment explizit anstossen
-          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "$tag" -f grund="$TITLE (#$PR)"
+          # Ein mit GITHUB_TOKEN erstelltes Release startet keine Workflows → Deployment explizit anstossen.
+          # Von main aus: GitHub Pages nimmt nur Deployments von main an, keine von Tags.
+          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref main -f grund="$TITLE ($tag, #$PR)"
