@@ -5,7 +5,7 @@
 // Einladung /invite           Links statt Mail
 // Vorschlag /feedback         Vorschlag speichern, /feedback-export für GitHub Actions (feedback-issues.yml)
 // Fotos     /fotos, /fotos/links  privater Speicher: nur JPEG bis 5 MB, nur Mitglieder
-// Backup    /backup           täglicher Function Trigger (neon.ts)
+// Backup    /backup           täglicher Function Trigger (neon.ts), legt auch die nächsten Magnum-Abende an
 import { attachDatabasePool } from "@neon/functions";
 import { parseTriggerDelivery } from "@neon/functions/triggers";
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
@@ -233,6 +233,7 @@ app.post("/backup", async (c) => {
   const t = await parseTriggerDelivery(c.req.raw);
   if (!t.ok) return c.json({ error: t.error }, t.error === "invalid_body" ? 400 : 401);
   await q("select public.snapshot_club('täglich')");
+  await q("select public.magnum_termine()");
   return c.json({ ok: true });
 });
 

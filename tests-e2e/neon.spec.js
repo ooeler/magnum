@@ -125,6 +125,33 @@ test("Rechte an der App vorbei", async () => {
   expect((await daten(A.token, "/rpc/open_magnum_kasse", { method: "POST", body: "{}" })).j).toBe(1);
 });
 
+test("Magnum-Serie: drei Abende, Name aus dem Datum, Anpassen", async () => {
+  await db.query("truncate public.magnum_serie");
+  const n = await daten(B.token, "/rpc/magnum_termine", { method: "POST", body: "{}" });
+  expect(n.s, JSON.stringify(n.j)).toBe(200);
+  const zwei = await daten(B.token, "/rpc/magnum_termine", { method: "POST", body: "{}" });
+  expect(zwei.j).toBe(0);
+  const L = (await daten(B.token, "/events?select=id,title,starts_at&title=like.*-Magnum&order=starts_at")).j;
+  expect(L.length).toBeGreaterThanOrEqual(1);
+  const e = L[0];
+  expect((await daten(B.token, `/events?id=eq.${e.id}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ title: "Fremd" }) })).j || []).toEqual([]);
+  expect((await daten(B.token, "/rpc/claim_organizer", { method: "POST", body: JSON.stringify({ p_event: e.id }) })).s).toBeLessThan(300);
+  const u = await daten(B.token, `/events?id=eq.${e.id}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ title: "Grosser Abend" }) });
+  expect(u.j[0].title).toBe("Grosser Abend");
+  const uebernahme = await daten(A.token, "/rpc/claim_organizer", { method: "POST", body: JSON.stringify({ p_event: e.id }) });
+  expect(uebernahme.s, JSON.stringify(uebernahme.j)).toBeLessThan(300);
+});
+
+test("Ämtli: mehrere Personen über die Data API", async () => {
+  const ev = (await daten(B.token, "/events?select=id&limit=1")).j[0].id;
+  for (const [m, amt] of [[B.id, "ok"], [B.id, "verpflegung"]]) {
+    const r = await daten(B.token, "/event_aemtli", { method: "POST", body: JSON.stringify({ event_id: ev, member_id: m, amt, added_by: B.id }) });
+    expect(r.s, JSON.stringify(r.j)).toBeLessThan(300);
+  }
+  expect((await daten(A.token, `/event_aemtli?event_id=eq.${ev}&select=amt`)).j.length).toBe(2);
+  expect((await daten(A.token, `/event_aemtli?event_id=eq.${ev}&amt=eq.ok`, { method: "DELETE" })).s).toBeLessThan(300);
+});
+
 test("Live-Sync: Änderungen erhöhen den Stand", async () => {
   const a = (await daten(B.token, "/sync_stand?select=stand")).j[0].stand;
   const p = await daten(B.token, "/posts", { method: "POST", body: JSON.stringify({ text: "Prost" }) });

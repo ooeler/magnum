@@ -86,6 +86,28 @@ test.describe("Komm mal wieder", () => {
   });
 });
 
+test.describe("Flasche oben rechts", () => {
+  const stand = (page) => page.locator("header .flasche").getAttribute("data-fuellung").then(Number);
+
+  test("füllt sich vom letzten Anlass bis zum nächsten Termin", async ({ page }) => {
+    await login(page);
+    const heute = await stand(page);
+    expect(heute).toBeGreaterThan(0);
+    expect(heute).toBeLessThan(100);
+    await fix(page, "2026-11-07T17:00:00+01:00");
+    await page.reload();
+    await expect(page.locator("header .flasche")).toBeVisible();
+    expect(await stand(page)).toBeGreaterThan(heute);
+  });
+
+  test("nach dem Anlass wieder leer, ohne nächsten Termin voll", async ({ page }) => {
+    await page.goto("/");
+    await page.evaluate(() => { const d = window.__mg.db(); d.events = d.events.filter((e) => e.id.startsWith("e-past")); localStorage.setItem("__mg_db", JSON.stringify(d)) });
+    await login(page);
+    expect(await stand(page)).toBe(100);
+  });
+});
+
 test.describe("Effekte", () => {
   const mittwoch = "2026-10-21T10:00:00+02:00";
 

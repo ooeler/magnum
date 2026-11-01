@@ -228,3 +228,96 @@ test.describe("Beiz erfassen", () => {
     await expect(toast(page)).toContainText("Standort nicht freigegeben");
   });
 });
+
+test.describe("Anlässe anpassen", () => {
+  const anpassen = (page, title) => page.getByRole("button", { name: "Name und Datum anpassen" }).click();
+
+  test("Organisator ändert Name und Datum", async ({ page }) => {
+    await login(page);
+    await details(page, "Chlaus-Magnum");
+    await page.keyboard.press("Escape");
+    await event(page, "Chlaus-Magnum").getByRole("button", { name: /Ich organisiere/ }).click();
+    await details(page, "Chlaus-Magnum");
+    await anpassen(page);
+    await page.fill("[data-k=edTitle]", "Chlaus-Abend");
+    await page.fill("[data-k=edAt]", "2026-12-04T18:30");
+    await page.getByRole("button", { name: "Speichern" }).click();
+    await expect(toast(page)).toContainText("Anlass angepasst");
+    await page.keyboard.press("Escape");
+    await expect(event(page, "Chlaus-Abend")).toBeVisible();
+  });
+
+  test("Automatischer Name wandert mit dem Datum", async ({ page }) => {
+    await page.goto("/");
+    await page.evaluate(() => { const d = window.__mg.db(); d.events.push({ id: "e-serie", title: "Dezember-Magnum", starts_at: "2026-12-25T18:00:00.000Z", location: null, organizer_id: null, created_by: null, created_at: new Date().toISOString() }); localStorage.setItem("__mg_db", JSON.stringify(d)) });
+    await login(page);
+    await details(page, "Dezember-Magnum");
+    await anpassen(page);
+    await page.fill("[data-k=edAt]", "2027-01-08T19:00");
+    await page.getByRole("button", { name: "Speichern" }).click();
+    await expect(toast(page)).toContainText("Anlass angepasst");
+    await page.keyboard.press("Escape");
+    await expect(event(page, "Januar-Magnum")).toBeVisible();
+  });
+
+  test("Andere Mitglieder passen fremde Anlässe nicht an", async ({ page }) => {
+    await login(page, BEAT);
+    await details(page, "Herbst-Stamm");
+    await expect(page.getByRole("button", { name: "Name und Datum anpassen" })).toHaveCount(0);
+    await page.evaluate(() => window.magnumDb.createClient().from("events").update({ title: "Fremd" }).eq("id", "e-1"));
+    expect(await page.evaluate(() => window.__mg.db().events.find((e) => e.id == "e-1").title)).toBe("Herbst-Stamm");
+  });
+
+  test("Admin erfasst vergangenen Anlass und trägt Anwesenheit nach", async ({ page }) => {
+    await login(page);
+    await page.locator("summary", { hasText: "Vergangene Anlässe" }).click();
+    await page.getByRole("button", { name: "+ Vergangenen Anlass erfassen" }).click();
+    await page.fill("[data-k=paTitle]", "Gründungsfeier");
+    await page.fill("[data-k=paAt]", "2026-03-27T19:00");
+    await page.locator("form[data-s=pastevent] .btn.grow").click();
+    await expect(toast(page)).toContainText("Anlass erfasst");
+    await page.getByRole("button", { name: /Gründungsfeier/ }).click();
+    const a = card(page, "Anwesenheit nachtragen");
+    await a.locator(".row", { hasText: "Beat" }).first().getByRole("button", { name: "Dabei" }).click();
+    await expect(toast(page)).toContainText("Anwesenheit von Beat gespeichert");
+    const e = await page.evaluate(() => { const d = window.__mg.db(), x = d.events.find((v) => v.title == "Gründungsfeier"); return d.rsvps.find((r) => r.event_id == x.id && r.member_id == "u-beat").status });
+    expect(e).toBe("in");
+  });
+
+  test("Datum in der Zukunft ist kein vergangener Anlass", async ({ page }) => {
+    await login(page);
+    await page.locator("summary", { hasText: "Vergangene Anlässe" }).click();
+    await page.getByRole("button", { name: "+ Vergangenen Anlass erfassen" }).click();
+    await page.fill("[data-k=paTitle]", "Zukunft");
+    await page.fill("[data-k=paAt]", "2030-01-01T19:00");
+    await page.locator("form[data-s=pastevent] .btn.grow").click();
+    await expect(toast(page)).toContainText("Vergangenheit");
+  });
+
+  test("Mitglieder sehen keine Nachtrag-Funktionen", async ({ page }) => {
+    await login(page, BEAT);
+    await page.locator("summary", { hasText: "Vergangene Anlässe" }).click();
+    await expect(page.getByRole("button", { name: "+ Vergangenen Anlass erfassen" })).toHaveCount(0);
+    const r = await page.evaluate(() => window.magnumDb.createClient().rpc("admin_set_rsvp", { p_event: "e-past1", p_member: "u-beat", p_status: "in" }));
+    expect(r.error.message).toContain("Nur der Administrator");
+  });
+});
+
+test.describe("Ämtli beim Anlass", () => {
+  test("OK und Verpflegung mit mehreren Personen", async ({ page }) => {
+    await login(page, BEAT);
+    await details(page, "Herbst-Stamm");
+    const a = card(page, "Ämtli");
+    await a.locator("select[data-f=ok]").selectOption({ label: "Beat" });
+    await expect(a.getByRole("button", { name: "Beat aus OK austragen" })).toBeVisible();
+    await a.locator("select[data-f=ok]").selectOption({ label: "Dani" });
+    await expect(a.getByRole("button", { name: "Dani aus OK austragen" })).toBeVisible();
+    await a.locator("select[data-f=verpflegung]").selectOption({ label: "Gabi" });
+    await a.locator("select[data-f=verpflegung]").selectOption({ label: "Hans" });
+    await expect(a.getByRole("button", { name: "Hans aus Verpflegung austragen" })).toBeVisible();
+    await expect(a.locator("select[data-f=ok] option", { hasText: "Dani" }), "nicht doppelt wählbar").toHaveCount(0);
+    await a.getByRole("button", { name: "Dani aus OK austragen" }).click();
+    await expect(a.getByRole("button", { name: "Dani aus OK austragen" })).toHaveCount(0);
+    expect(await page.evaluate(() => window.__mg.db().event_aemtli.map((x) => x.amt + ":" + x.member_id).sort())).toEqual(["ok:u-beat", "verpflegung:u-gabi", "verpflegung:u-hans"]);
+  });
+});
