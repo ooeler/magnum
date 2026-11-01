@@ -151,7 +151,7 @@ details summary{cursor:pointer;font-weight:700;list-style:none}details summary::
 // ═══════════════════════════════════════════════════════════════════════
 var C = window.MG_CONFIG || {}, sb = null, ME = null, PRF = null, PREV = null, MAINT = false, READY = false;
 var TABLES = ["settings", "profiles", "events", "rsvps", "magnums", "magnum_guests", "rides", "ride_passengers", "trips",
-  "trip_participants", "trip_photos", "proposals", "ballots", "posts", "post_prosts", "cards", "drinks", "phrases", "sayings",
+  "trip_participants", "trip_photos", "proposals", "ballots", "posts", "post_prosts", "cards", "drinks", "sayings",
   "saying_prosts", "restaurants", "restaurant_visits", "restaurant_ratings", "feedback", "admin_log"];
 var D = {}; TABLES.forEach(function (t) { D[t] = [] });
 var TAB = lsGet("mg_tab") || "termine", OV = null, SH = null, UI = {}, AUTH = { mode: "login" }, INVITE = null, INVLIST = null, NEWLINK = null, BUSY = false;
@@ -170,7 +170,7 @@ function first(id) { return nm(id).split(" ")[0] }
 function ini(id) { return (nm(id).trim().charAt(0) || "?").toUpperCase() }
 function deviceText(p) { return p.device == "android" ? "Android" : "iPhone" }
 function isAdmin() { return !!(PRF && PRF.is_admin) }
-function S() { return D.settings[0] || { max_members: 12, goal_title: "Club-Ziel", goal_target: 30, phrase_fee: 2, magnum_price: 45 } }
+function S() { return D.settings[0] || { max_members: 12, goal_title: "Club-Ziel", goal_target: 30, magnum_price: 45 } }
 function byDate(a, b) { return new Date(a.starts_at) - new Date(b.starts_at) }
 var MON = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 function fDate(iso, time) {
@@ -522,7 +522,7 @@ function termine() {
   var up = upcoming();
   h += up.length ? up.map(eventCard).join("") : '<div class="card empty">Noch kein Anlass geplant. Organisiere den nächsten!</div>';
   h += UI.newEv ? eventForm() : '<button class="btn dash" data-a="ui" data-k="newEv" data-v="1">+ Anlass erfassen</button>';
-  h += kasse() + meinAbend() + schwein() + wand();
+  h += kasse() + meinAbend() + wand();
   var past = pastEvents().slice(0, 6);
   if (past.length) h += '<details class="card"><summary>Vergangene Anlässe (' + past.length + ")</summary><div class=\"lst\" style=\"margin-top:10px\">" + past.map(function (e) {
     return '<button type="button" class="row sb" style="background:none;border:0;border-top:1px solid var(--ln);text-align:left;width:100%;color:var(--tx)" data-a="ov" data-t="event" data-id="' + e.id + '"><span class="grow"><b>' + esc(e.title) + '</b><br><span class="sm mu">' + esc(fDate(e.starts_at)) + '</span></span><span class="sm mu">' + D.rsvps.filter(function (r) { return r.event_id == e.id && r.status == "in" }).length + " dabei</span></button>";
@@ -561,7 +561,7 @@ function eventCard(e) {
   return '<article class="card ev" data-ev="' + e.id + '"><div class="dt"><b>' + d.getDate() + "</b><span>" + MON[d.getMonth()] + '</span></div><div class="col grow">' +
     '<span class="b" style="font-size:16px">' + esc(e.title) + '</span><span class="sm mu">' + esc(fDate(e.starts_at, true)) + (e.location ? " · " + esc(e.location) : "") + "</span>" +
     '<span class="sm mu" data-test="anzahl">' + nIn + " von " + D.profiles.length + " dabei" + (nV ? " · " + nV + " virtuell" : "") + (g ? " · " + g + " Gasttrinker" : "") + (s == "in" ? " · du bist dabei" : s == "out" ? " · du bist abgemeldet" : s ? "" : " · noch offen") + "</span>" +
-    (e.organizer_id ? '<span class="sm b">Organisation: ' + esc(nm(e.organizer_id)) + (e.organizer_id == me ? " (du)" : "") + "</span>"
+    (e.organizer_id ? '<span class="sm b">Organisation: ' + esc(nm(e.organizer_id)) + (e.organizer_id == me ? " (du)" : "") + "</span>" + (e.organizer_id != me ? '<button class="btn dash" style="align-self:flex-start;min-height:40px" data-a="takeover" data-id="' + e.id + '">Abend übernehmen · +40</button>' : "")
       : '<span class="sm b" style="color:var(--orange)">Organisator gesucht</span><button class="btn dash" style="align-self:flex-start;min-height:40px" data-a="organize" data-id="' + e.id + '">Ich organisiere den Abend · +40</button>') +
     (s == "virtual" ? '<span class="chip v" style="align-self:flex-start">Virtuell dabei · 1 Magnum spendiert</span>' : "") +
     '<div class="row wrap"><button class="pill ' + (s == "in" ? "on" : "") + '" data-a="rsvp" data-id="' + e.id + '" data-v="in" aria-pressed="' + (s == "in") + '">Bin dabei</button>' +
@@ -593,21 +593,6 @@ function meinAbend() {
     '<span class="sm mu">Letztes Getränk: <b style="color:var(--tx)">' + esc((KINDS.filter(function (k) { return k[0] == last.kind })[0] || [])[1]) + "</b> – stimmt's? Sonst antippen:</span>" +
     '<div class="chips">' + KINDS.map(function (k) { return '<button class="pill sm ' + (last.kind == k[0] ? "on" : "") + '" data-a="drinkkind" data-id="' + last.id + '" data-v="' + k[0] + '">' + k[1] + "</button>" }).join("") + "</div>";
   return h + '<label class="btn line file">' + CAM + 'Getränk fotografieren<input type="file" accept="image/*" capture="environment" data-c="drink" aria-label="Getränk fotografieren"></label></section>';
-}
-var PHRASES = ["Am Ende des Tages …", "Das ist ein No-Go", "Wir sind auf einem guten Weg", "Das nehmen wir mal so mit", "Grundsätzlich ja, aber …"];
-function schwein() {
-  var st = S(), tot = 0, cnt = {};
-  D.phrases.forEach(function (p) { tot += Number(p.fee_chf); cnt[p.speaker_id] = (cnt[p.speaker_id] || 0) + 1 });
-  var king = Object.keys(cnt).sort(function (a, b) { return cnt[b] - cnt[a] })[0];
-  var rec = D.phrases.slice().sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1 }).slice(0, 3);
-  return '<section class="card" aria-label="Phrasenschwein"><div class="row"><svg width="56" height="42" viewBox="0 0 56 42" aria-hidden="true" fill="none" stroke="#E79AA8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"><ellipse cx="26" cy="22" rx="19" ry="13" fill="#E79AA8" fill-opacity="0.18"/><path d="M14 11l-2-6 7 4"/><rect x="44" y="17" width="8" height="9" rx="3"/><circle cx="38" cy="17" r="1.2" fill="#E79AA8"/><path d="M20 34v5M33 34v5"/><path d="M22 9h8" stroke="#E8B95A" stroke-width="3"/></svg>' +
-    '<div class="col grow" style="gap:2px"><span class="lbl">Phrasenschwein</span><span class="mid" data-test="schwein">' + chf(tot) + '</span><span class="sm mu">Reicht für ' + Math.floor(tot / st.magnum_price) + " Magnum" + (Math.floor(tot / st.magnum_price) == 1 ? "" : "s") + "</span></div></div>" +
-    (king ? '<span class="sm"><span class="mu">Phrasenkönig: </span><b>' + esc(nm(king)) + "</b> (" + cnt[king] + ")</span>" : "") +
-    (rec.length ? '<div class="lst">' + rec.map(function (p) { return '<div class="row sb sm"><span class="grow"><b>' + esc(first(p.speaker_id)) + '</b> <span class="mu">«' + esc(p.phrase) + '»</span></span><span style="color:var(--pink);font-weight:700">' + chf(p.fee_chf) + "</span></div>" }).join("") + "</div>" : "") +
-    '<form class="col tile" data-s="phrase" style="gap:10px;padding:12px"><span class="b">Phrase melden</span><label class="f">Wer hat sie gedroschen?<select class="t" data-k="phWho">' + memberOptions(v("phWho")) + "</select></label>" +
-    '<div class="chips">' + PHRASES.map(function (p) { return '<button type="button" class="pill sm ' + (v("phText") == p ? "on" : "") + '" data-a="setui" data-k="phText" data-v="' + esc(p) + '">' + esc(p) + "</button>" }).join("") + "</div>" +
-    '<input class="t" data-k="phText" value="' + esc(v("phText")) + '" placeholder="…oder Phrase eintippen" maxlength="200" aria-label="Phrase">' +
-    '<button class="btn pink"' + (v("phWho") && v("phText").trim() ? "" : " disabled") + ">Ab ins Schwein · " + chf(st.phrase_fee) + "</button></form></section>";
 }
 function wand() {
   var L = D.posts.slice().sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1 }).slice(0, UI.wandAll ? 30 : 6);
@@ -985,7 +970,7 @@ var ACT = {
   tab: function (d) { TAB = d.v; lsSet("mg_tab", TAB); OV = null; SH = null; render(); window.scrollTo(0, 0) },
   install: function () { var p = INST; INST = null; if (p) p.prompt(); render() },
   ui: function (d) { UI[d.k] = d.v || null; render() },
-  setui: function (d) { UI[d.k] = UI[d.k] == d.v && d.k == "phText" ? "" : d.v; render() },
+  setui: function (d) { UI[d.k] = d.v; render() },
   ov: function (d) { OV = { t: d.t, id: d.id }; UI.gOpen = null; UI.rideForm = null; render(); var o = document.getElementById("ov"); if (o) o.scrollTop = 0 },
   close: function () { if (SH) SH = null; else OV = null; render() },
   authmode: function (d) { AUTH = { mode: d.v }; render() },
@@ -1003,6 +988,11 @@ var ACT = {
     after(sb.from("rsvps").upsert({ event_id: d.id, member_id: uid(), status: "virtual", updated_at: new Date().toISOString() }).then(function (r) {
       if (r.error) return r; return post("kann nicht an «" + e.title + "», spendiert aber eine Magnum für die Kasse.");
     }), "Prost! Deine Magnum ist in der Kasse · +20 Punkte");
+  },
+  takeover: function (d) {
+    var e = D.events.find(function (x) { return x.id == d.id }), alt = nm(e.organizer_id);
+    if (!confirm("Abend von " + alt + " übernehmen?")) return;
+    after(sb.rpc("claim_organizer", { p_event: d.id }).then(function (r) { if (r.error) return r; return post("übernimmt «" + e.title + "» von " + alt + ". Danke!") }), "Du organisierst jetzt den Abend · +40 Punkte");
   },
   organize: function (d) {
     var e = D.events.find(function (x) { return x.id == d.id });
@@ -1116,10 +1106,6 @@ var SUBMIT = {
     }), "Anlass erfasst" + (org ? " · du organisierst ihn" : "")).then(function () { UI.newEv = UI.evTitle = UI.evAt = UI.evLoc = UI.evOrg = null; render() });
   },
   saying: function () { var t = v("spText").trim(); if (!t) return; after(sb.from("sayings").insert({ text: t, author_id: uid() }), "Spruch eingereicht · die meisten Prosts machen ihn zum Spruch des Tages").then(function () { UI.spText = null; UI.spForm = null; render() }) },
-  phrase: function () {
-    var w = v("phWho"), t = v("phText").trim(); if (!w || !t) return;
-    after(sb.from("phrases").insert({ speaker_id: w, phrase: t, fee_chf: S().phrase_fee, reported_by: uid() }), "Oink! " + first(w) + " zahlt " + chf(S().phrase_fee) + " ins Phrasenschwein").then(function () { UI.phWho = UI.phText = null; render() });
-  },
   post: function () { var t = v("postText").trim(); if (!t) return; after(post(t)).then(function () { UI.postText = null; render() }) },
   trip: function () {
     if (!v("trTitle").trim() || !v("trFrom")) return toast("Bitte Ziel und Datum angeben");

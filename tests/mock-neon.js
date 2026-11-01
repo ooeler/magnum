@@ -21,7 +21,7 @@
   function seed() {
     var P = function (id, n, role, since, dev, extra) { return Object.assign({ id: id, display_name: n, nickname: null, role_title: role, since_year: since, fav_wine: null, specialty: null, device: dev, device_set_by_admin: false, is_admin: false, invited_by: null, last_seen: null, created_at: iso(-400) }, extra || {}) };
     var d = {
-      settings: [{ id: 1, max_members: 12, goal_title: "30 Zusagen bis zum Chlaus-Magnum = Apéro für alle", goal_target: 30, phrase_fee: 2, magnum_price: 45 }],
+      settings: [{ id: 1, max_members: 12, goal_title: "30 Zusagen bis zum Chlaus-Magnum = Apéro für alle", goal_target: 30, magnum_price: 45 }],
       app_status: [{ id: "main", maintenance: false }],
       profiles: [
         P(M.ot, "Ot", "Präsident", 2009, "iphone", { is_admin: true, fav_wine: "Cornalin", specialty: "Reden nach Mitternacht" }),
@@ -58,11 +58,7 @@
         { id: "c-2", title: "Sonnenaufgang im Rebberg", rarity: "magic", story: "Alle wurden still und haben nur noch geschaut.", happened_on: "2021-09-11", place: "Elsass", who: "Alle", photo_path: null, created_by: M.chris, created_at: iso(-250) },
         { id: "c-3", title: "Schwimmen im Brunnen", rarity: "geil", story: "Um 2 Uhr nachts schien es eine gute Idee.", happened_on: "2022-07-02", place: "[Ort]", who: "Beat, Erich", photo_path: null, created_by: M.beat, created_at: iso(-200) }
       ],
-      drinks: [], phrases: [
-        { id: "ph-1", speaker_id: M.beat, phrase: "Am Ende des Tages …", fee_chf: 2, reported_by: M.ot, created_at: iso(-12) },
-        { id: "ph-2", speaker_id: M.beat, phrase: "Das ist ein No-Go", fee_chf: 2, reported_by: M.chris, created_at: iso(-12) },
-        { id: "ph-3", speaker_id: M.ot, phrase: "Das müssen wir grundsätzlich anschauen", fee_chf: 2, reported_by: M.beat, created_at: iso(-40) }
-      ],
+      drinks: [],
       sayings: [
         { id: "s-1", text: "Eine Magnum ist keine Flasche, sondern eine Einladung.", author_id: M.ot, created_at: iso(-30) },
         { id: "s-2", text: "Wer früh geht, verpasst immer den besten Wein.", author_id: M.chris, created_at: iso(-20) },
@@ -81,7 +77,7 @@
         { restaurant_id: "re-2", member_id: M.chris, preis: 3, gesellig: 5, willkommen: 4, updated_at: iso(-12) }
       ],
       feedback: [
-        { id: 7, user_id: M.gabi, kind: "idee", title: "💡 Phrasenschwein-Rangliste", body: "", labels: [], status: "umgesetzt", issue_number: 7, issue_url: "https://github.com/ooeler/magnum/issues/7", error: null, created_at: iso(-15) },
+        { id: 7, user_id: M.gabi, kind: "idee", title: "💡 Weinkarte im Club", body: "", labels: [], status: "umgesetzt", issue_number: 7, issue_url: "https://github.com/ooeler/magnum/issues/7", error: null, created_at: iso(-15) },
         { id: 9, user_id: M.beat, kind: "fehler", title: "🐞 Push kommt doppelt bei Android", body: "", labels: [], status: "erfasst", issue_number: 9, issue_url: "https://github.com/ooeler/magnum/issues/9", error: null, created_at: iso(-3) }
       ],
       admin_log: [], __invites: [], __seq: 10
@@ -106,13 +102,13 @@
   // ───────────── Regeln (Spiegel von db/setup.sql) ─────────────
   var OWNER = { restaurant_ratings: "member_id", rsvps: "member_id", trip_participants: "member_id", drinks: "member_id", saying_prosts: "member_id", post_prosts: "member_id",
     ride_passengers: "passenger_id", rides: "driver_id", restaurants: "created_by", restaurant_visits: "created_by", events: "created_by", magnums: "brought_by", magnum_guests: "added_by",
-    trip_photos: "uploaded_by", cards: "created_by", phrases: "reported_by", sayings: "author_id", posts: "author_id", trips: "created_by" };
+    trip_photos: "uploaded_by", cards: "created_by", sayings: "author_id", posts: "author_id", trips: "created_by" };
   var PK = { rsvps: ["event_id", "member_id"], restaurant_ratings: ["restaurant_id", "member_id"], trip_participants: ["trip_id", "member_id"], saying_prosts: ["saying_id", "member_id"],
     post_prosts: ["post_id", "member_id"], ride_passengers: ["ride_id", "passenger_id"], ballots: ["proposal_id", "voter_id"] };
   var PERSONAL = ["restaurant_ratings", "rsvps", "trip_participants", "drinks", "saying_prosts", "post_prosts", "ride_passengers", "rides"];
   var COLS = { profiles: ["display_name", "fav_wine", "specialty"], trips: ["title", "starts_on", "ends_on", "program", "seats", "color", "ok_id", "kassier_id"],
     events: ["title", "starts_at", "location"], ride_passengers: ["stars_safe", "stars_punctual", "stars_mood", "points_given", "rated_at"],
-    rsvps: ["event_id", "member_id", "status", "updated_at"], posts: ["text"], sayings: ["text"], phrases: ["phrase"] };
+    rsvps: ["event_id", "member_id", "status", "updated_at"], posts: ["text"], sayings: ["text"] };
   var READONLY = ["settings", "proposals", "ballots", "admin_log", "feedback"];
   var CASCADE = { events: [["rsvps", "event_id"], ["magnums", "event_id"], ["rides", "event_id"]], magnums: [["magnum_guests", "magnum_id"]], rides: [["ride_passengers", "ride_id"]],
     trips: [["trip_participants", "trip_id"], ["trip_photos", "trip_id"], ["proposals", "trip_id"]], posts: [["post_prosts", "post_id"]], sayings: [["saying_prosts", "saying_id"]],
@@ -211,8 +207,7 @@
         var ex = d[t].find(function (x) { return pkMatch(t, x, r) && (PK[t] || r.id) });
         if (ex && q.op == "insert") return fail("duplicate key value violates unique constraint", "23505");
         var bad = checkRow(d, t, r, ex); if (bad) return fail(bad);
-        if (t == "phrases") r.fee_chf = d.settings[0].phrase_fee;
-        if (t == "posts" || t == "sayings" || t == "phrases") r.created_at = new Date().toISOString();
+        if (t == "posts" || t == "sayings") r.created_at = new Date().toISOString();
         if (t == "ride_passengers") { var e = checkRide(d, r, !ex); if (e) return fail(e) }
         if (ex) { Object.assign(ex, r); out.push(ex); continue }
         if (!PK[t] && r.id == null) r.id = uuid();
@@ -275,7 +270,7 @@
   var RPC = {
     me: function (d, u) { var p = d.profiles.find(function (x) { return x.id == u }); if (!p) return null; var prev = p.last_seen; p.last_seen = new Date().toISOString(); return { id: u, is_admin: p.is_admin, prev_seen: prev } },
     claim_organizer: function (d, u, a) {
-      var e = d.events.find(function (x) { return x.id == a.p_event }); if (!e || e.organizer_id) throw "Der Anlass hat schon einen Organisator";
+      var e = d.events.find(function (x) { return x.id == a.p_event }); if (!e || e.organizer_id == u || tag(e.starts_at) < day(0)) throw "Der Anlass lässt sich nicht übernehmen";
       e.organizer_id = u; var r = d.rsvps.find(function (x) { return x.event_id == e.id && x.member_id == u });
       if (r) r.status = "in"; else d.rsvps.push({ event_id: e.id, member_id: u, status: "in", redeemed: false, updated_at: new Date().toISOString() });
     },

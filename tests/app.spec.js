@@ -52,14 +52,26 @@ test.describe("Termine", () => {
     await expect(ev).toContainText("7 von 11 dabei · 1 Gasttrinker · du bist dabei");
   });
 
-  test("Organisieren: nur wenn noch niemand organisiert", async ({ page }) => {
+  test("Organisieren: offener Abend", async ({ page }) => {
     await login(page);
     const ev = event(page, "Chlaus-Magnum");
     await expect(ev).toContainText("Organisator gesucht");
     await ev.getByRole("button", { name: /Ich organisiere/ }).click();
     await expect(ev).toContainText("Organisation: Ot (du)");
     await expect(ev).toContainText("du bist dabei");
-    await expect(event(page, "Herbst-Stamm").getByRole("button", { name: /Ich organisiere/ })).toHaveCount(0);
+    await expect(ev.getByRole("button", { name: "Abend übernehmen" }), "den eigenen nicht").toHaveCount(0);
+  });
+
+  test("Vergebenen Abend jederzeit übernehmen", async ({ page }) => {
+    await login(page);
+    const ev = event(page, "Herbst-Stamm");
+    await expect(ev).toContainText("Organisation: Kurt");
+    await expect(ev.getByRole("button", { name: /Ich organisiere/ })).toHaveCount(0);
+    await ev.getByRole("button", { name: "Abend übernehmen" }).click();
+    await expect(ev).toContainText("Organisation: Ot (du)");
+    await expect(ev).toContainText("du bist dabei");
+    await expect(page.locator("#toast")).toContainText("Du organisierst jetzt den Abend");
+    await expect(page.locator("body")).toContainText("übernimmt «Herbst-Stamm» von Kurt");
   });
 
   test("Anlass erfassen", async ({ page }) => {
@@ -103,17 +115,6 @@ test.describe("Termine", () => {
     await send.click();
     await expect(r).toContainText("Du hast Jürg +30 Punkte gegeben");
     await expect(r).toContainText("+30 Punkte erhalten");
-  });
-
-  test("Phrasenschwein", async ({ page }) => {
-    await login(page);
-    const s = card(page, "Phrasenschwein");
-    await expect(s.locator("[data-test=schwein]")).toHaveText("CHF 6");
-    await s.locator("select[data-k=phWho]").selectOption({ label: "Beat" });
-    await s.getByRole("button", { name: "Das nehmen wir mal so mit" }).click();
-    await s.getByRole("button", { name: /Ab ins Schwein/ }).click();
-    await expect(s.locator("[data-test=schwein]")).toHaveText("CHF 8");
-    await expect(s).toContainText("Phrasenkönig: Beat (3)");
   });
 
   test("Spruch des Tages: Prost und einreichen", async ({ page }) => {
@@ -232,7 +233,7 @@ test.describe("Club", () => {
     await login(page);
     await tab(page, "Club");
     const f = card(page, "Verbesserungsvorschläge");
-    await expect(f).toContainText("Phrasenschwein-Rangliste");
+    await expect(f).toContainText("Weinkarte im Club");
     await f.getByRole("button", { name: "+ Vorschlag machen" }).click();
     await f.getByRole("button", { name: "Wunsch" }).click();
     await f.locator("[data-k=fbTitle]").fill("Weinkarte pro Magnum");

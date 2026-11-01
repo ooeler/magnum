@@ -152,20 +152,23 @@ select pg_temp.check(public.second_proposal((select id from public.proposals whe
 select pg_temp.check((select nickname from public.profiles where display_name = 'Dani') = 'Navi', 'Spitzname gesetzt');
 
 
--- 9) Organisator: nur einmal, und man ist dann angemeldet
+-- 9) Organisator: jederzeit übernehmbar, und man ist dann angemeldet
 select pg_temp.als('C');
 select public.claim_organizer('20000000-0000-0000-0000-000000000001');
 select pg_temp.check((select status from public.rsvps where member_id = public.uid()) = 'in', 'Organisator ist angemeldet');
 select pg_temp.als('D');
+select public.claim_organizer('20000000-0000-0000-0000-000000000001');
+select pg_temp.check((select organizer_id from public.events where id = '20000000-0000-0000-0000-000000000001') = public.uid(), 'Künftiger Abend lässt sich übernehmen');
+select pg_temp.check((select status from public.rsvps where member_id = public.uid() and event_id = '20000000-0000-0000-0000-000000000001') = 'in', 'Wer übernimmt, ist angemeldet');
 do $$ begin
   perform public.claim_organizer('20000000-0000-0000-0000-000000000001');
-  raise exception 'FEHLER: zweiter Organisator möglich';
+  raise exception 'FEHLER: eigener Abend nochmals übernommen';
 exception when raise_exception then
-  if sqlerrm like 'FEHLER%' then raise; end if; raise notice 'ok – nur ein Organisator';
+  if sqlerrm like 'FEHLER%' then raise; end if; raise notice 'ok – den eigenen Abend nicht nochmals';
 end $$;
 
 -- 10) Virtuell dabei + Magnum-Kasse (nur Admin öffnet)
-insert into public.rsvps (event_id, status) values ('20000000-0000-0000-0000-000000000001', 'virtual');
+update public.rsvps set status = 'virtual' where member_id = public.uid();
 do $$ begin
   perform public.open_magnum_kasse();
   raise exception 'FEHLER: Nicht-Admin öffnete die Kasse';
@@ -383,13 +386,10 @@ select pg_temp.check((select organizer_id from public.events where id = '2000000
 delete from public.trip_participants where trip_id = '10000000-0000-0000-0000-000000000002' and member_id = public.uid();
 select pg_temp.verboten($q$insert into public.trip_participants (trip_id) values ('10000000-0000-0000-0000-000000000002')$q$, 'Kein Mitreisen nach dem Start');
 
--- Server legt Busse und Zeitpunkt fest
+-- Server legt den Zeitpunkt fest
 select pg_temp.als('C');
-insert into public.phrases (speaker_id, phrase, fee_chf, created_at) values (public.uid(), 'Am Ende des Tages', -9999.99, '2099-01-01');
-select pg_temp.check((select fee_chf = 2 and created_at < now() + interval '1 minute' from public.phrases where phrase = 'Am Ende des Tages'), 'Busse und Zeitpunkt vom Server');
 insert into public.posts (text, created_at) values ('Zukunft', '2099-01-01');
 select pg_temp.check((select created_at < now() + interval '1 minute' from public.posts where text = 'Zukunft'), 'Beitrag bekommt die Serverzeit');
-select pg_temp.verboten($q$update public.phrases set fee_chf = 0 where reported_by = public.uid()$q$, 'Busse nachträglich nicht änderbar');
 reset role;
 select pg_temp.als('');
 
