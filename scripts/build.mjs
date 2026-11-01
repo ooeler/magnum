@@ -19,9 +19,9 @@ export function csp(html, neon = hosts) {
     `script-src 'self' ${hashes.join(" ")}`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
-    `connect-src 'self' ${neon.join(" ")}`,
+    `connect-src 'self' https://nominatim.openstreetmap.org ${neon.join(" ")}`,
     // Fotos kommen als signierte Links aus dem privaten Neon-Speicher
-    `img-src 'self' data: blob: ${neon.join(" ")}`,
+    `img-src 'self' data: blob: https://*.basemaps.cartocdn.com ${neon.join(" ")}`,
     "worker-src 'self'",
     "manifest-src 'self'",
     "base-uri 'none'",

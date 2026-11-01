@@ -1,5 +1,5 @@
 // Einladungslinks: reine Logik, damit sie getestet werden kann.
-// Jedes Mitglied darf einladen. Der Club hat höchstens settings.max_members Mitglieder (Standard 12).
+// Jedes Mitglied darf einladen, es gibt keine Obergrenze.
 export const INVITE_DAYS = 7;
 
 // Link-Token: 32 Zufallsbytes (base64url). In der Datenbank liegt nur der SHA-256-Hash.
@@ -31,10 +31,6 @@ export function checkJoin(input) {
   if (password.length > 72) throw new Error("Das Passwort darf höchstens 72 Zeichen haben.");
   const device = input?.device === "android" ? "android" : "iphone";
   return { name, email, password, device };
-}
-
-export function clubFull(count, max) {
-  return Number(count) >= Number(max || 12);
 }
 
 // Verständliche Meldung für die häufigsten Fehler des Auth-Dienstes

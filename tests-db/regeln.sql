@@ -239,7 +239,7 @@ begin
   if anlaesse = 0 or stimmen = 0 then raise exception 'FEHLER: Test braucht Anlässe und Stimmen'; end if;
   hid := public.snapshot_club('Test');
   delete from public.events; delete from public.proposals;
-  update public.settings set max_members = 99;
+  update public.settings set goal_target = 99;
   perform public.restore_club(hid);
   select count(*) into n from public.events;
   if n <> anlaesse then raise exception 'FEHLER: Anlässe nicht wiederhergestellt'; end if;
@@ -247,7 +247,7 @@ begin
   if n <> stimmen then raise exception 'FEHLER: Stimmen nicht wiederhergestellt'; end if;
   select count(*) into n from public.profiles;
   if n <> profile then raise exception 'FEHLER: Profile nicht wiederhergestellt'; end if;
-  if (select max_members from public.settings) <> 12 then raise exception 'FEHLER: Einstellungen nicht wiederhergestellt'; end if;
+  if (select goal_target from public.settings) = 99 then raise exception 'FEHLER: Einstellungen nicht wiederhergestellt'; end if;
   if not exists (select 1 from public.backups where reason = 'vor Wiederherstellung') then
     raise exception 'FEHLER: Stand vor dem Wiederherstellen nicht gesichert';
   end if;
@@ -274,7 +274,7 @@ with x as (update public.rsvps set status = 'out' where member_id <> public.uid(
 select pg_temp.check((select count(*) from x) = 0, 'Fremde Anmeldungen nicht änderbar');
 with x as (delete from public.events where created_by <> public.uid() returning 1)
 select pg_temp.check((select count(*) from x) = 0, 'Fremde Anlässe nicht löschbar');
-with x as (update public.settings set max_members = 99 returning 1)
+with x as (update public.settings set goal_target = 99 returning 1)
 select pg_temp.check((select count(*) from x) = 0, 'Einstellungen nicht änderbar');
 do $$ begin
   perform 1 from public.invites;
@@ -393,6 +393,18 @@ select pg_temp.check((select created_at < now() + interval '1 minute' from publi
 reset role;
 select pg_temp.als('');
 
+-- 20) Organisator setzen: Admin, Ersteller oder Organisator, nicht Fremde
+set role authenticated;
+select pg_temp.als('B');
+select pg_temp.verboten($q$select public.set_organizer('20000000-0000-0000-0000-000000000002', public.uid())$q$, 'Fremde setzen keinen Organisator');
+select pg_temp.als('A');
+select public.set_organizer('20000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-00000000000b');
+select pg_temp.check((select organizer_id from public.events where id = '20000000-0000-0000-0000-000000000002') = '00000000-0000-0000-0000-00000000000b', 'Admin setzt Organisator auch rückwirkend');
+select public.set_organizer('20000000-0000-0000-0000-000000000002', null);
+select pg_temp.check((select organizer_id from public.events where id = '20000000-0000-0000-0000-000000000002') is null, 'Organisator entfernen');
+reset role;
+select pg_temp.als('');
+
 -- 19) Administrator: Mitglied ist Standard, Rolle nur durch Admins, einer bleibt
 set role authenticated;
 select pg_temp.als('C');
@@ -455,9 +467,20 @@ reset role;
 select pg_temp.als('');
 
 
-update public.settings set max_members = (select count(*) from public.profiles);
-insert into public.invites (token_hash, expires_at, used_at, email) values ('h-zuviel', now() + interval '1 day', now(), 'zuviel@test');
-select pg_temp.verboten($q$insert into neon_auth."user" (email) values ('zuviel@test')$q$, 'Voller Club nimmt niemanden auf');
-update public.settings set max_members = 12;
+insert into public.invites (token_hash, expires_at, used_at, email) select 'h-viel' || i, now() + interval '1 day', now(), 'viel' || i || '@test' from generate_series(1, 15) i;
+insert into neon_auth."user" (email) select 'viel' || i || '@test' from generate_series(1, 15) i;
+select pg_temp.check((select count(*) from public.profiles) > 15, 'Keine Obergrenze bei den Mitgliedern');
+
+-- 21) Personen auf Karten: Ersteller oder Admin, nur diese bekommen Punkte
+set role authenticated;
+select pg_temp.als('C');
+insert into public.cards (id, title, rarity) values ('50000000-0000-0000-0000-000000000001', 'Grosse Nacht', 'magic');
+insert into public.card_members (card_id, member_id) values ('50000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000b');
+select pg_temp.als('D');
+select pg_temp.verboten($q$insert into public.card_members (card_id, member_id) values ('50000000-0000-0000-0000-000000000001', public.uid())$q$, 'Fremde tragen sich nicht ein');
+with x as (delete from public.card_members returning 1)
+select pg_temp.check((select count(*) from x) = 0, 'Fremde nehmen niemanden von der Karte');
+reset role;
+select pg_temp.als('');
 
 select 'ALLE DB-TESTS GRÜN' as ergebnis;

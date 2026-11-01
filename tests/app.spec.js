@@ -255,11 +255,11 @@ test.describe("Club", () => {
 });
 
 test.describe("Einladung", () => {
-  test("nur mit Einladungslink: Konto anlegen, Gerät wird erkannt, Club voll", async ({ page }, info) => {
+  test("nur mit Einladungslink: Konto anlegen, Gerät wird erkannt", async ({ page }, info) => {
     await login(page);
     await tab(page, "Club");
     const inv = card(page, "Einladungen");
-    await expect(inv).toContainText("11 / 12 Mitglieder");
+    await expect(inv).toContainText("11 Mitglieder");
     await inv.getByRole("button", { name: "Einladungslink erstellen" }).click();
     const link = await inv.locator("[data-test=link]").textContent();
     expect(link).toMatch(/#einladung=[A-Za-z0-9_-]{43}$/);
@@ -278,7 +278,7 @@ test.describe("Einladung", () => {
     await expect(page.locator("nav")).toBeVisible();
     await expect(page.locator(".hello")).toContainText("Luca");
     await tab(page, "Club");
-    await expect(card(page, "Einladungen")).toContainText("Der Club ist voll (12 Mitglieder)");
+    await expect(card(page, "Einladungen")).toContainText("12 Mitglieder");
     await page.locator(".mem", { hasText: "Luca" }).click();
     await expect(page.locator("[data-test=geraet]")).toHaveText(android ? "Android" : "iPhone");
     await expect(page.locator("#ov")).toContainText("Eingeladen von: Ot");
@@ -330,7 +330,7 @@ test.describe("Sammelkarten & Statistik", () => {
 
   test("Beiz mit Quittung erfassen öffnet direkt die Bewertung", async ({ page }) => {
     await login(page);
-    await tab(page, "Statistik");
+    await event(page, "Herbst-Stamm").getByRole("button", { name: "Details" }).click();
     await page.getByRole("button", { name: /Quittung fotografieren \/ Beiz erfassen/ }).click();
     await page.fill("[data-k=rsName]", "Löwen");
     await page.fill("[data-k=rsPlace]", "Wilen");

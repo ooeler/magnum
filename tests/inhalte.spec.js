@@ -204,7 +204,7 @@ test.describe("Fahrservice", () => {
 test.describe("Beiz erfassen", () => {
   const offen = async (page) => {
     await login(page);
-    await tab(page, "Statistik");
+    await details(page, "Herbst-Stamm");
     await page.getByRole("button", { name: /Beiz erfassen/ }).click();
   };
 
@@ -319,5 +319,81 @@ test.describe("Ämtli beim Anlass", () => {
     await a.getByRole("button", { name: "Dani aus OK austragen" }).click();
     await expect(a.getByRole("button", { name: "Dani aus OK austragen" })).toHaveCount(0);
     expect(await page.evaluate(() => window.__mg.db().event_aemtli.map((x) => x.amt + ":" + x.member_id).sort())).toEqual(["ok:u-beat", "verpflegung:u-gabi", "verpflegung:u-hans"]);
+  });
+});
+
+test.describe("Beiz, Karte und Organisator", () => {
+  test("Quittung gehört zum Termin, nicht in die Statistik", async ({ page }) => {
+    await login(page);
+    await tab(page, "Statistik");
+    await expect(page.getByRole("button", { name: /Beiz erfassen/ })).toHaveCount(0);
+    await tab(page, "Termine");
+    await details(page, "Herbst-Stamm");
+    await page.getByRole("button", { name: /Beiz erfassen/ }).click();
+    await expect(page.locator("[data-k=rsName]")).toHaveValue("Pinte zum Hirschen");
+    await page.getByRole("button", { name: "Speichern" }).click();
+    await expect(toast(page)).toContainText("Besuch gespeichert");
+    const v = await page.evaluate(() => window.__mg.db().restaurant_visits.find((x) => x.event_id == "e-1"));
+    expect(v).toBeTruthy();
+  });
+
+  test("Karte zeigt die Beizen mit Standort", async ({ page }) => {
+    await page.goto("/");
+    await page.evaluate(() => { const d = window.__mg.db(); Object.assign(d.restaurants[0], { lat: 47.42, lng: 9.37 }); localStorage.setItem("__mg_db", JSON.stringify(d)) });
+    await login(page);
+    await tab(page, "Statistik");
+    const k = card(page, "Karte der Beizen");
+    await expect(k.locator(".leaflet-container")).toBeVisible();
+    await expect(k.locator("path.leaflet-interactive")).toHaveCount(1);
+    await expect(k.locator("[data-test=ohne-standort]")).toHaveText("1 Beiz ohne Standort");
+  });
+
+  test("Ohne Standort: freundlicher Hinweis", async ({ page }) => {
+    await login(page);
+    await tab(page, "Statistik");
+    await expect(card(page, "Karte der Beizen")).toContainText("Noch keine Beiz mit Standort");
+  });
+
+  test("Organisator im Anlass ändern", async ({ page }) => {
+    await login(page);
+    await details(page, "Herbst-Stamm");
+    await page.getByRole("button", { name: "Name und Datum anpassen" }).click();
+    await page.locator("[data-k=edOrg]").selectOption({ label: "Beat" });
+    await page.getByRole("button", { name: "Speichern" }).click();
+    await expect(toast(page)).toContainText("Anlass angepasst");
+    expect(await page.evaluate(() => window.__mg.db().events.find((e) => e.id == "e-1").organizer_id)).toBe("u-beat");
+  });
+
+  test("Fremde setzen keinen Organisator", async ({ page }) => {
+    await login(page, BEAT);
+    const r = await page.evaluate(() => window.magnumDb.createClient().rpc("set_organizer", { p_event: "e-1", p_member: "u-beat" }));
+    expect(r.error.message).toContain("Organisator und Administrator");
+  });
+});
+
+test.describe("Personen auf Karten", () => {
+  const karte = (page) => card(page, "Auf der Karte dabei");
+  const punkte = (page) => page.locator("[data-test=punkte]").textContent().then(Number);
+
+  test("Eingetragene bekommen +10 Punkte", async ({ page }) => {
+    await login(page);
+    const vorher = await punkte(page);
+    await tab(page, "Karten");
+    await page.locator(".kc", { hasText: "Die 6-Liter-Nacht" }).click();
+    await karte(page).locator("select[data-c=kartdazu]").selectOption({ label: "Ot" });
+    await expect(toast(page)).toContainText("ist dabei · +10 Punkte");
+    await expect(karte(page).getByRole("button", { name: "Ot von der Karte nehmen" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await tab(page, "Termine");
+    expect(await punkte(page)).toBe(vorher + 10);
+  });
+
+  test("Andere tragen sich nicht auf fremde Karten ein", async ({ page }) => {
+    await login(page, BEAT);
+    await tab(page, "Karten");
+    await page.locator(".kc", { hasText: "Die 6-Liter-Nacht" }).click();
+    await expect(karte(page)).toHaveCount(0);
+    const r = await page.evaluate(() => window.magnumDb.createClient().from("card_members").insert({ card_id: "c-1", member_id: "u-beat", added_by: "u-beat" }));
+    expect(r.error).toBeTruthy();
   });
 });
