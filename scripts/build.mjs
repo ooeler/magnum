@@ -12,7 +12,7 @@ const src = join(root, "app"), out = join(root, "dist");
 const hosts = (process.env.NEON_HOSTS || "https://*.neon.tech").split(",");
 
 export function csp(html, neon = hosts) {
-  const hashes = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)]
+  const hashes = [...html.matchAll(/<script>([\s\S]*?)<\/script\s*>/gi)]
     .map((m) => `'sha256-${createHash("sha256").update(m[1], "utf8").digest("base64")}'`);
   return [
     "default-src 'self'",
