@@ -2,7 +2,7 @@
 // Keine Abhängigkeit, die App liefert ihn selbst aus. Die Sitzung liegt im localStorage: Fremd-Cookies blockiert Safari.
 (function () {
   if (window.magnumDb) return; // Tests und Demo bringen ihren Nachbau mit
-  var KEY = "mg_sitzung", SYNC_MS = 30000;
+  var KEY = "mg_sitzung", SYNC_MS = 30000, UPDATE_MS = 5000;
   function createClient(cfg) {
     var S = lesen(), SUBS = [], RESET = null, CH = [];
     function lesen() { try { return JSON.parse(localStorage.getItem(KEY)) } catch (e) { return null } }
@@ -118,9 +118,11 @@
         if (st != null) STAND = st;
       });
     }
+    // Während eines Updates schneller nachfragen, damit die App gleich zurück ist
+    function takt() { pruefen(); setTimeout(takt, MAINT ? UPDATE_MS : SYNC_MS) }
     function channel() {
       var c = { on: function (a, b, cb) { c.cb = cb; return c }, subscribe: function () {
-        CH.push(c); if (!UHR) { UHR = setInterval(pruefen, SYNC_MS); document.addEventListener("visibilitychange", pruefen); pruefen() }
+        CH.push(c); if (!UHR) { UHR = true; document.addEventListener("visibilitychange", pruefen); takt() }
         return c;
       } };
       return c;

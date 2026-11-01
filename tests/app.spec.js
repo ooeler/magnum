@@ -52,14 +52,26 @@ test.describe("Termine", () => {
     await expect(ev).toContainText("7 von 11 dabei · 1 Gasttrinker · du bist dabei");
   });
 
-  test("Organisieren: nur wenn noch niemand organisiert", async ({ page }) => {
+  test("Organisieren: offener Abend", async ({ page }) => {
     await login(page);
     const ev = event(page, "Chlaus-Magnum");
     await expect(ev).toContainText("Organisator gesucht");
     await ev.getByRole("button", { name: /Ich organisiere/ }).click();
     await expect(ev).toContainText("Organisation: Ot (du)");
     await expect(ev).toContainText("du bist dabei");
-    await expect(event(page, "Herbst-Stamm").getByRole("button", { name: /Ich organisiere/ })).toHaveCount(0);
+    await expect(ev.getByRole("button", { name: "Abend übernehmen" }), "den eigenen nicht").toHaveCount(0);
+  });
+
+  test("Vergebenen Abend jederzeit übernehmen", async ({ page }) => {
+    await login(page);
+    const ev = event(page, "Herbst-Stamm");
+    await expect(ev).toContainText("Organisation: Kurt");
+    await expect(ev.getByRole("button", { name: /Ich organisiere/ })).toHaveCount(0);
+    await ev.getByRole("button", { name: "Abend übernehmen" }).click();
+    await expect(ev).toContainText("Organisation: Ot (du)");
+    await expect(ev).toContainText("du bist dabei");
+    await expect(page.locator("#toast")).toContainText("Du organisierst jetzt den Abend");
+    await expect(page.locator("body")).toContainText("übernimmt «Herbst-Stamm» von Kurt");
   });
 
   test("Anlass erfassen", async ({ page }) => {
@@ -105,17 +117,6 @@ test.describe("Termine", () => {
     await expect(r).toContainText("+30 Punkte erhalten");
   });
 
-  test("Phrasenschwein", async ({ page }) => {
-    await login(page);
-    const s = card(page, "Phrasenschwein");
-    await expect(s.locator("[data-test=schwein]")).toHaveText("CHF 6");
-    await s.locator("select[data-k=phWho]").selectOption({ label: "Beat" });
-    await s.getByRole("button", { name: "Das nehmen wir mal so mit" }).click();
-    await s.getByRole("button", { name: /Ab ins Schwein/ }).click();
-    await expect(s.locator("[data-test=schwein]")).toHaveText("CHF 8");
-    await expect(s).toContainText("Phrasenkönig: Beat (3)");
-  });
-
   test("Spruch des Tages: Prost und einreichen", async ({ page }) => {
     await login(page);
     const s = card(page, "Spruch des Tages");
@@ -150,24 +151,24 @@ test.describe("Termine", () => {
 });
 
 test.describe("Reisen", () => {
-  test("Sacceri: Antrag, ⅔-Mehrheit der Anwesenden, Android zählt doppelt", async ({ page }) => {
+  test("Sacceri: Antrag, ⅔-Mehrheit der Anwesenden, jede Stimme zählt gleich", async ({ page }) => {
     await login(page);
     await tab(page, "Reisen");
     await page.locator(".trip", { hasText: "Wallis" }).click();
     const s = card(page, "Auszeichnung De Sacceri");
-    // Mitreisende: Ot 1, Beat 2 (Android), Chris 1, Dani 1 → total 5, nötig 4
-    await expect(s).toContainText("4 von 5 Stimmen");
+    // Mitreisende: Ot, Beat, Chris, Dani → total 4, nötig 3
+    await expect(s).toContainText("3 von 4 Stimmen");
     await s.locator("select[data-k=sacPick]").selectOption({ label: "Chris «Navi»" });
     await s.getByRole("button", { name: "Auszeichnung beantragen" }).click();
-    await expect(s.locator("[data-test=tally]")).toHaveText("Ja 1 · Nein 0 · offen 4 · nötig 4");
+    await expect(s.locator("[data-test=tally]")).toHaveText("Ja 1 · Nein 0 · offen 3 · nötig 3");
     await expect(s).toContainText("Deine Stimme ist abgegeben");
     await as(page, BEAT.email, "sb.rpc('cast_ballot', { p_proposal: window.__mg.db().proposals.find(p => p.status == 'open').id, p_yes: true })");
-    await expect(s.locator("[data-test=tally]")).toHaveText("Ja 3 · Nein 0 · offen 2 · nötig 4");
-    await expect(s).toContainText("Beat ×2 · Ja");
+    await expect(s.locator("[data-test=tally]")).toHaveText("Ja 2 · Nein 0 · offen 2 · nötig 3");
+    await expect(s).toContainText("Beat · Ja");
     // Dani hat im Test kein Login – Stimme direkt über die ID
     await page.evaluate(() => window.__mg.asId("u-dani", (sb) => sb.rpc("cast_ballot", { p_proposal: window.__mg.db().proposals.find((p) => p.status == "open").id, p_yes: true })));
     await expect(s.locator("[data-test=sacceri]")).toHaveText("Chris");
-    await expect(card(page, "Auszeichnung De Sacceri")).toContainText("mit 4 von 5 Stimmen");
+    await expect(card(page, "Auszeichnung De Sacceri")).toContainText("mit 3 von 4 Stimmen");
   });
 
   test("OK und Kassier eintragen, mitreisen, Bilder: 3 sichtbar, Rest als Collage", async ({ page }) => {
@@ -195,9 +196,9 @@ test.describe("Club", () => {
     await n.getByRole("button", { name: "Vorschlagen" }).click();
     await expect(n.locator("[data-test=nickstatus]")).toContainText("Braucht eine zweite Person");
     await as(page, BEAT.email, "sb.rpc('second_proposal', { p_proposal: window.__mg.db().proposals.find(p => p.kind == 'nickname' && p.status == 'open').id })");
-    // Alle ausser Dani: 10 Personen, 3 mit Android → total 13, nötig 9; Ot 1 + Beat 2 = 3
+    // Alle ausser Dani: 10 Personen, nötig 7; Ot + Beat = 2
     await expect(n.locator("[data-test=nickstatus]")).toContainText("unterstützt von Beat");
-    await expect(n).toContainText("Ja 3 · Nein 0 · offen 10 · nötig 9");
+    await expect(n).toContainText("Ja 2 · Nein 0 · offen 8 · nötig 7");
   });
 
   test("Eigenen Spitznamen vergeben die anderen", async ({ page }) => {
@@ -212,9 +213,8 @@ test.describe("Club", () => {
     await tab(page, "Club");
     await page.locator(".mem", { hasText: "Hans" }).click();
     await expect(page.locator("[data-test=geraet]")).toHaveText("iPhone");
-    await card(page, "Admin").getByRole("button", { name: "Android ×2" }).click();
-    await expect(page.locator("[data-test=geraet]")).toHaveText("Android (Stimme zählt doppelt)");
-    await expect(page.locator("#ov")).toContainText("vom Admin bestätigt");
+    await card(page, "Admin").getByRole("button", { name: "Android" }).click();
+    await expect(page.locator("[data-test=geraet]")).toHaveText("Android");
     await page.locator("#ov [data-a=close]").click();
     await expect(page.locator("section", { hasText: "Administration" })).toContainText("Hans: Gerätetyp iphone → android · durch Ot");
   });
@@ -233,7 +233,7 @@ test.describe("Club", () => {
     await login(page);
     await tab(page, "Club");
     const f = card(page, "Verbesserungsvorschläge");
-    await expect(f).toContainText("Phrasenschwein-Rangliste");
+    await expect(f).toContainText("Weinkarte im Club");
     await f.getByRole("button", { name: "+ Vorschlag machen" }).click();
     await f.getByRole("button", { name: "Wunsch" }).click();
     await f.locator("[data-k=fbTitle]").fill("Weinkarte pro Magnum");
@@ -280,7 +280,7 @@ test.describe("Einladung", () => {
     await tab(page, "Club");
     await expect(card(page, "Einladungen")).toContainText("Der Club ist voll (12 Mitglieder)");
     await page.locator(".mem", { hasText: "Luca" }).click();
-    await expect(page.locator("[data-test=geraet]")).toHaveText(android ? "Android (noch nicht bestätigt)" : "iPhone");
+    await expect(page.locator("[data-test=geraet]")).toHaveText(android ? "Android" : "iPhone");
     await expect(page.locator("#ov")).toContainText("Eingeladen von: Ot");
   });
 

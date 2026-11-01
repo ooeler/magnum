@@ -98,6 +98,41 @@ test.describe("Einladungen verwalten", () => {
 });
 
 test.describe("Wartung und Fehler", () => {
+  test("Speichern während eines Updates zeigt die Update-Seite, keine Fehlermeldung", async ({ page }) => {
+    await login(page);
+    await page.evaluate(() => window.__mg.maintenance(true));
+    await page.locator("[data-a=pprost][data-id=po-2]").click();
+    await expect(page.locator(".auth")).toContainText("Update wird eingespielt");
+    await expect(page.locator(".auth .ladeglas")).toBeVisible();
+    await expect(page.locator(".auth .wein"), "füllt sich langsam und bleibt voll").toHaveCSS("animation-name", "mgVoll");
+    await expect(page.locator("#toast")).not.toContainText("Datenbank");
+  });
+
+  test("Anzeige beim Laden: Weinglas füllt sich", async ({ page }) => {
+    await page.addInitScript(() => { window.__mg_warten = true });
+    await page.goto("/");
+    await page.fill("#login input[name=email]", OT.email);
+    await page.fill("#login input[name=pw]", OT.password);
+    await page.click("#login .btn");
+    const g = page.locator(".auth .ladeglas");
+    await expect(g).toBeVisible();
+    await expect(page.locator(".auth")).toContainText("Lade den Club");
+    await expect(g.locator(".wein")).toHaveCSS("animation-name", "mgFill");
+    await page.evaluate(() => window.__mg_weiter());
+    await expect(page.locator("header h1")).toHaveText("Magnum");
+    await expect(g).toHaveCount(0);
+  });
+
+  test("Bewegung reduzieren: Glas steht still und ist gefüllt", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.addInitScript(() => { window.__mg_warten = true });
+    await page.goto("/");
+    await page.fill("#login input[name=email]", OT.email);
+    await page.fill("#login input[name=pw]", OT.password);
+    await page.click("#login .btn");
+    await expect(page.locator(".ladeglas .wein")).toHaveCSS("animation-name", "none");
+  });
+
   test("Wartungsseite ersetzt die App", async ({ page }) => {
     await login(page);
     await page.evaluate(() => window.__mg.maintenance(true));

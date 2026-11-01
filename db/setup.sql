@@ -18,7 +18,6 @@ create table if not exists public.settings (
   max_members  int  not null default 12,
   goal_title   text not null default '30 Zusagen bis zum Chlaus-Magnum = Apéro für alle',
   goal_target  int  not null default 30,
-  phrase_fee   numeric(6,2) not null default 2,
   magnum_price numeric(6,2) not null default 45
 );
 alter table public.settings enable row level security;
@@ -63,12 +62,8 @@ language sql stable security definer set search_path = public as $$
   select coalesce((select is_admin from public.profiles where id = public.uid()), false)
 $$;
 
--- Bei Abstimmungen zählen Android-Stimmen doppelt, sobald der Admin das Gerät bestätigt hat.
--- Das Gerät aus der Registrierung ist nur eine Angabe der App und lässt sich nicht prüfen.
-create or replace function public.vote_weight(p_member uuid) returns int
-language sql stable security definer set search_path = public as $$
-  select case when device = 'android' and device_set_by_admin then 2 else 1 end from public.profiles where id = p_member
-$$;
+-- Jede Stimme zählt gleich viel. Das Gerät zählt nur fürs Duell des Monats.
+drop function if exists public.vote_weight(uuid);
 
 -- Heutiger Tag im Club. Die Fristen unten gelten nur für Anfragen aus der App (public.uid() gesetzt):
 -- Wiederherstellung, Release und SQL Editor laufen ohne Login und sind nicht betroffen.
@@ -164,16 +159,16 @@ alter table public.admin_log enable row level security;
 
 create or replace function public.admin_set_device(p_member uuid, p_device text) returns void
 language plpgsql security definer set search_path = public as $$
-declare v_old text; v_bestaetigt boolean;
+declare v_old text;
 begin
   if not public.is_admin() then raise exception 'Nur der Administrator darf den Gerätetyp ändern'; end if;
   if p_device not in ('iphone', 'android') then raise exception 'Unbekannter Gerätetyp'; end if;
-  select device, device_set_by_admin into v_old, v_bestaetigt from public.profiles where id = p_member;
+  select device into v_old from public.profiles where id = p_member;
   if v_old is null then raise exception 'Mitglied nicht gefunden'; end if;
-  if v_old = p_device and (v_bestaetigt or p_device = 'iphone') then return; end if;
+  if v_old = p_device then return; end if;
   update public.profiles set device = p_device, device_set_by_admin = true where id = p_member;
   insert into public.admin_log (admin_id, member_id, action)
-  values (public.uid(), p_member, case when v_old = p_device then 'Gerätetyp ' || p_device || ' bestätigt' else 'Gerätetyp ' || v_old || ' → ' || p_device end);
+  values (public.uid(), p_member, 'Gerätetyp ' || v_old || ' → ' || p_device);
 end $$;
 
 create or replace function public.admin_set_role(p_member uuid, p_role text) returns void
@@ -276,13 +271,15 @@ drop trigger if exists rsvp_check on public.rsvps;
 create trigger rsvp_check before insert or update or delete on public.rsvps
   for each row execute function public.check_rsvp();
 
--- "Ich organisiere den Abend": nur solange niemand organisiert
+-- "Ich organisiere den Abend": Einen künftigen Abend kann jedes Mitglied jederzeit übernehmen, auch von jemand anderem
 create or replace function public.claim_organizer(p_event uuid) returns void
 language plpgsql security definer set search_path = public as $$
 begin
   if not public.is_member() then raise exception 'Nur Mitglieder'; end if;
-  update public.events set organizer_id = public.uid() where id = p_event and organizer_id is null;
-  if not found then raise exception 'Der Anlass hat schon einen Organisator'; end if;
+  update public.events set organizer_id = public.uid()
+   where id = p_event and organizer_id is distinct from public.uid()
+     and (starts_at at time zone 'Europe/Zurich')::date >= public.heute();
+  if not found then raise exception 'Der Anlass lässt sich nicht übernehmen'; end if;
   insert into public.rsvps (event_id, member_id, status) values (p_event, public.uid(), 'in')
   on conflict (event_id, member_id) do update set status = 'in', updated_at = now();
 end $$;
@@ -452,7 +449,7 @@ create table if not exists public.post_prosts (
 alter table public.post_prosts enable row level security;
 
 -- ───────────── Abstimmungen: Sacceri-Auszeichnung und Spitznamen ─────────────
--- Zweidrittelmehrheit der Stimmberechtigten, Android-Stimmen zählen doppelt.
+-- Zweidrittelmehrheit der Stimmberechtigten, jede Stimme zählt gleich viel.
 create table if not exists public.proposals (
   id           uuid primary key default gen_random_uuid(),
   kind         text not null check (kind in ('sacceri', 'nickname')),
@@ -504,9 +501,8 @@ begin
   if p.status <> 'open' then return p.status; end if;
   if p.kind = 'nickname' and p.seconded_by is null then return 'open'; end if;
 
-  select coalesce(sum(public.vote_weight(v)), 0) into v_total from public.eligible_voters(p.id) v;
-  select coalesce(sum(case when b.vote then public.vote_weight(b.voter_id) else 0 end), 0),
-         coalesce(sum(case when not b.vote then public.vote_weight(b.voter_id) else 0 end), 0)
+  select count(*) into v_total from public.eligible_voters(p.id) v;
+  select count(*) filter (where b.vote), count(*) filter (where not b.vote)
     into v_yes, v_no
     from public.ballots b
    where b.proposal_id = p.id and b.voter_id in (select public.eligible_voters(p.id));
@@ -624,16 +620,11 @@ create table if not exists public.drinks (
 );
 alter table public.drinks enable row level security;
 
--- ───────────── Phrasenschwein & Spruch des Tages ─────────────
-create table if not exists public.phrases (
-  id          uuid primary key default gen_random_uuid(),
-  speaker_id  uuid not null references public.profiles(id) on delete cascade,
-  phrase      text not null check (length(phrase) between 1 and 200),
-  fee_chf     numeric(6,2) not null default 2,
-  reported_by uuid default public.uid() references public.profiles(id) on delete set null,
-  created_at  timestamptz not null default now()
-);
-alter table public.phrases enable row level security;
+-- ───────────── Spruch des Tages ─────────────
+-- Das Phrasenschwein gibt es nicht mehr
+drop table if exists public.phrases;
+drop function if exists public.set_phrase_fee();
+alter table public.settings drop column if exists phrase_fee;
 
 create table if not exists public.sayings (
   id         uuid primary key default gen_random_uuid(),
@@ -650,7 +641,7 @@ create table if not exists public.saying_prosts (
 );
 alter table public.saying_prosts enable row level security;
 
--- Zeitpunkt und Busse legt der Server fest, nicht die App
+-- Den Zeitpunkt legt der Server fest, nicht die App
 create or replace function public.set_created_at() returns trigger
 language plpgsql set search_path = public as $$
 begin
@@ -661,17 +652,7 @@ drop trigger if exists created_at_set on public.posts;
 create trigger created_at_set before insert on public.posts for each row execute function public.set_created_at();
 drop trigger if exists created_at_set on public.sayings;
 create trigger created_at_set before insert on public.sayings for each row execute function public.set_created_at();
-drop trigger if exists created_at_set on public.phrases;
-create trigger created_at_set before insert on public.phrases for each row execute function public.set_created_at();
 
-create or replace function public.set_phrase_fee() returns trigger
-language plpgsql security definer set search_path = public as $$
-begin
-  if public.uid() is not null then select phrase_fee into new.fee_chf from public.settings where id = 1; end if;
-  return new;
-end $$;
-drop trigger if exists phrase_fee_set on public.phrases;
-create trigger phrase_fee_set before insert on public.phrases for each row execute function public.set_phrase_fee();
 
 -- ───────────── Verbesserungsvorschläge → GitHub-Issues ─────────────
 -- Geschrieben nur von der Function "api", die als Datenbank-Besitzer läuft.
@@ -720,7 +701,7 @@ begin
   foreach t in array array['settings', 'profiles', 'admin_log', 'restaurants', 'restaurant_visits',
     'restaurant_ratings', 'events', 'rsvps', 'magnums', 'magnum_guests', 'rides', 'ride_passengers', 'trips',
     'trip_participants', 'trip_photos', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
-    'phrases', 'sayings', 'saying_prosts', 'feedback', 'sync_stand']
+    'sayings', 'saying_prosts', 'feedback', 'sync_stand']
   loop
     execute format('drop policy if exists "Mitglieder lesen" on public.%I', t);
     execute format('create policy "Mitglieder lesen" on public.%I for select to authenticated using (public.is_member())', t);
@@ -753,7 +734,7 @@ begin
   for r in select * from (values
     ('restaurants', 'created_by'), ('restaurant_visits', 'created_by'), ('events', 'created_by'),
     ('magnums', 'brought_by'), ('magnum_guests', 'added_by'), ('trip_photos', 'uploaded_by'),
-    ('cards', 'created_by'), ('phrases', 'reported_by'), ('sayings', 'author_id'), ('posts', 'author_id')
+    ('cards', 'created_by'), ('sayings', 'author_id'), ('posts', 'author_id')
   ) as x(tbl, col)
   loop
     execute format('drop policy if exists "Mitglieder anlegen" on public.%I', r.tbl);
@@ -798,17 +779,15 @@ grant update (event_id, member_id, status, updated_at) on public.rsvps to authen
 revoke update on public.ride_passengers from authenticated;
 grant update (stars_safe, stars_punctual, stars_mood, points_given, rated_at) on public.ride_passengers to authenticated;
 
--- Beiträge: nur der Text ist nachträglich änderbar, Zeitpunkt und Busse nicht
-revoke update on public.posts, public.sayings, public.phrases from authenticated;
+-- Beiträge: nur der Text ist nachträglich änderbar, der Zeitpunkt nicht
+revoke update on public.posts, public.sayings from authenticated;
 grant update (text) on public.posts, public.sayings to authenticated;
-grant update (phrase) on public.phrases to authenticated;
 
 -- ═════════════ Funktionsrechte ═════════════
 -- In Postgres darf standardmässig jeder (PUBLIC) Funktionen ausführen – deshalb überall explizit entziehen.
 alter default privileges in schema public revoke execute on functions from public;
 revoke execute on function public.is_member() from public, anonymous;
 revoke execute on function public.is_admin() from public, anonymous;
-revoke execute on function public.vote_weight(uuid) from public, anonymous;
 revoke execute on function public.me() from public, anonymous;
 revoke execute on function public.admin_set_device(uuid, text) from public, anonymous;
 revoke execute on function public.admin_set_role(uuid, text) from public, anonymous;
@@ -831,8 +810,7 @@ revoke execute on function public.check_rsvp() from public, anonymous, authentic
 revoke execute on function public.check_trip() from public, anonymous, authenticated;
 revoke execute on function public.check_trip_participant() from public, anonymous, authenticated;
 revoke execute on function public.set_created_at() from public, anonymous, authenticated;
-revoke execute on function public.set_phrase_fee() from public, anonymous, authenticated;
-grant execute on function public.is_member(), public.is_admin(), public.vote_weight(uuid), public.me(),
+grant execute on function public.is_member(), public.is_admin(), public.me(),
   public.admin_set_device(uuid, text), public.admin_set_role(uuid, text), public.claim_organizer(uuid),
   public.open_magnum_kasse(), public.eligible_voters(uuid), public.propose_sacceri(uuid, uuid),
   public.propose_nickname(uuid, text), public.second_proposal(uuid), public.cast_ballot(uuid, boolean)
@@ -844,7 +822,7 @@ declare t text;
 begin
   foreach t in array array['profiles', 'events', 'rsvps', 'magnums', 'magnum_guests', 'rides', 'ride_passengers',
     'trips', 'trip_participants', 'trip_photos', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
-    'phrases', 'sayings', 'saying_prosts', 'restaurants', 'restaurant_visits', 'restaurant_ratings', 'feedback', 'admin_log']
+    'sayings', 'saying_prosts', 'restaurants', 'restaurant_visits', 'restaurant_ratings', 'feedback', 'admin_log']
   loop
     execute format('drop trigger if exists sync_bump on public.%I', t);
     execute format('create trigger sync_bump after insert or update or delete on public.%I for each statement execute function public.sync_bump()', t);

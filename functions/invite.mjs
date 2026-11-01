@@ -20,7 +20,7 @@ export function checkToken(token) {
 }
 
 // Registrierung über den Link: Name, Mail, Passwort und Gerät prüfen.
-// Das Gerät erkennt die App automatisch. Doppelt zählt Android erst, wenn der Admin es bestätigt hat.
+// Das Gerät erkennt die App automatisch. Es zählt nur fürs Duell des Monats.
 export function checkJoin(input) {
   const name = String(input?.name ?? "").trim().replace(/\s+/g, " ");
   if (name.length < 2 || name.length > 40) throw new Error("Bitte deinen Namen eingeben (2–40 Zeichen).");
