@@ -52,14 +52,12 @@ jobs:
         run: |
           npm i -g neon@8.15.1  # gleiche Version wie lokal getestet
           neon link --project-id "$PROJECT" -y --no-env-pull
-          DB=$(neon connection-string main)
-          echo "::add-mask::$DB"
-          echo "DB=$DB" >> "$GITHUB_ENV"
+          neon connection-string main > "$RUNNER_TEMP/db"  # nur als Datei: Die Adresse enthält das Passwort
 
       - name: Backup vor dem Deployment
         # direkt per SQL – beim allerersten Release gibt es die Funktion noch nicht
         run: |
-          psql "$DB" -v ON_ERROR_STOP=1 -q -c "do \$\$ begin if to_regprocedure('public.snapshot_club(text)') is not null then
+          psql "$(cat "$RUNNER_TEMP/db")" -v ON_ERROR_STOP=1 -q -c "do \$\$ begin if to_regprocedure('public.snapshot_club(text)') is not null then
                perform public.snapshot_club('vor Release ${GITHUB_REF_NAME}');
              end if; end \$\$"
           echo "Backup vor Release ${GITHUB_REF_NAME} erstellt"
@@ -67,7 +65,7 @@ jobs:
       - name: Wartungsseite einschalten
         # offene Apps zeigen "Update wird eingespielt" und speichern nichts, bis das Update live ist
         run: |
-          psql "$DB" -v ON_ERROR_STOP=1 -q -c "do \$\$ begin if to_regclass('public.app_status') is not null then
+          psql "$(cat "$RUNNER_TEMP/db")" -v ON_ERROR_STOP=1 -q -c "do \$\$ begin if to_regclass('public.app_status') is not null then
                update public.app_status set maintenance = true, since = now() where id = 'main';
              end if; end \$\$"
           echo "Wartungsseite an"
@@ -81,16 +79,16 @@ jobs:
 
       - name: Datenbank einrichten (setup.sql ist mehrfach ausführbar) und Migrationen
         run: |
-          psql "$DB" -v ON_ERROR_STOP=1 -q -f db/setup.sql > /dev/null
+          psql "$(cat "$RUNNER_TEMP/db")" -v ON_ERROR_STOP=1 -q -f db/setup.sql > /dev/null
           echo "✓ db/setup.sql"
-          psql "$DB" -v ON_ERROR_STOP=1 -q -c "create table if not exists public.schema_migrations (name text primary key, applied_at timestamptz not null default now()); alter table public.schema_migrations enable row level security;"
+          psql "$(cat "$RUNNER_TEMP/db")" -v ON_ERROR_STOP=1 -q -c "create table if not exists public.schema_migrations (name text primary key, applied_at timestamptz not null default now()); alter table public.schema_migrations enable row level security;"
           for f in $(ls db/migrations/*.sql 2>/dev/null | sort); do
             n=$(basename "$f")
-            c=$(psql "$DB" -At -c "select count(*) from public.schema_migrations where name = '$n'")
+            c=$(psql "$(cat "$RUNNER_TEMP/db")" -At -c "select count(*) from public.schema_migrations where name = '$n'")
             if [ "$c" = "1" ]; then echo "✓ $n (bereits angewendet)"; continue; fi
             echo "→ $n"
-            psql "$DB" -v ON_ERROR_STOP=1 -q -f "$f"
-            psql "$DB" -q -c "insert into public.schema_migrations (name) values ('$n')"
+            psql "$(cat "$RUNNER_TEMP/db")" -v ON_ERROR_STOP=1 -q -f "$f"
+            psql "$(cat "$RUNNER_TEMP/db")" -q -c "insert into public.schema_migrations (name) values ('$n')"
           done
           neon data-api refresh-schema
 
@@ -98,11 +96,11 @@ jobs:
         run: |
           # Ohne Login darf keine Funktion ausführbar sein, jede Tabelle braucht Row Level Security
           # und der Trigger user_gate muss Konten ohne Einladung abweisen
-          f=$(psql "$DB" -At -c "select coalesce(string_agg(p.proname, ', '), '') from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          f=$(psql "$(cat "$RUNNER_TEMP/db")" -At -c "select coalesce(string_agg(p.proname, ', '), '') from pg_proc p join pg_namespace n on n.oid = p.pronamespace
                  where n.nspname = 'public' and p.prorettype <> 'trigger'::regtype and has_function_privilege('anonymous', p.oid, 'EXECUTE')")
-          t=$(psql "$DB" -At -c "select coalesce(string_agg(c.relname, ', '), '') from pg_class c join pg_namespace n on n.oid = c.relnamespace
+          t=$(psql "$(cat "$RUNNER_TEMP/db")" -At -c "select coalesce(string_agg(c.relname, ', '), '') from pg_class c join pg_namespace n on n.oid = c.relnamespace
                  where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity")
-          g=$(psql "$DB" -At -c "select count(*) from pg_trigger where tgname = 'user_gate' and tgenabled <> 'D'")
+          g=$(psql "$(cat "$RUNNER_TEMP/db")" -At -c "select count(*) from pg_trigger where tgname = 'user_gate' and tgenabled <> 'D'")
           [ -z "$f" ] || { echo "::error::Ohne Login ausführbare Funktionen: $f"; exit 1; }
           [ -z "$t" ] || { echo "::error::Tabellen ohne Row Level Security: $t"; exit 1; }
           [ "$g" = "1" ] || { echo "::error::Trigger user_gate fehlt: Konten ohne Einladung wären möglich"; exit 1; }
@@ -111,7 +109,7 @@ jobs:
       - name: Funktionstest Datenbank (ohne bleibende Änderung)
         run: |
           # sichert in der echten DB und macht es sofort rückgängig; jeder andere Fehler stoppt das Release
-          psql "$DB" -v ON_ERROR_STOP=1 -q -c "do \$\$ begin begin perform public.snapshot_club('Funktionstest'); raise exception using errcode = 'P0099';
+          psql "$(cat "$RUNNER_TEMP/db")" -v ON_ERROR_STOP=1 -q -c "do \$\$ begin begin perform public.snapshot_club('Funktionstest'); raise exception using errcode = 'P0099';
              exception when sqlstate 'P0099' then null; end; end \$\$"
           echo "snapshot_club funktioniert"
 
@@ -170,9 +168,7 @@ jobs:
           # GitHub Pages braucht nach dem Deployment einen Moment, bis die neue Version überall ausgeliefert wird
           [ "$PAGES" = "success" ] && sleep 30
           npm i -g neon@8.15.1
-          DB=$(neon connection-string main --project-id "$PROJECT")
-          echo "::add-mask::$DB"
-          psql "$DB" -v ON_ERROR_STOP=1 -q -c "do \$\$ begin if to_regclass('public.app_status') is not null then
+          psql "$(neon connection-string main --project-id "$PROJECT")" -v ON_ERROR_STOP=1 -q -c "do \$\$ begin if to_regclass('public.app_status') is not null then
                update public.app_status set maintenance = false, since = null where id = 'main';
              end if; end \$\$"
           echo "Wartungsseite aus"
