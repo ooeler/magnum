@@ -15,7 +15,7 @@ import { cors } from "hono/cors";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { Pool } from "pg";
 import { checkFoto, checkPfad, MAX_FOTO } from "./fotos.mjs";
-import { checkJoin, checkToken, clubFull, hashToken, INVITE_DAYS, joinError, MAX_OFFEN, newToken } from "./invite.mjs";
+import { checkJoin, checkToken, clubFull, hashToken, INVITE_DAYS, joinError, newToken } from "./invite.mjs";
 import { safeEqual } from "./sicherheit.mjs";
 import { buildIssue, DAILY_LIMIT } from "./vorschlag.mjs";
 
@@ -150,10 +150,6 @@ app.post("/invite", async (c) => {
   if (!m) return c.json({ error: "Nur Mitglieder dürfen einladen." }, 403);
   if (body.action === "create") {
     if (await full()) return c.json({ error: "Der Club ist voll (12 Mitglieder)." }, 409);
-    if (!m.is_admin) {
-      const [o] = await q("select count(*)::int n from public.invites where created_by = $1 and used_at is null and expires_at > now()", [m.id]);
-      if (o.n >= MAX_OFFEN) return c.json({ error: `Du hast schon ${MAX_OFFEN} offene Einladungen. Ziehe zuerst eine zurück.` }, 409);
-    }
     const t = newToken(), expires_at = new Date(Date.now() + INVITE_DAYS * 864e5).toISOString();
     await q("insert into public.invites (token_hash, created_by, expires_at) values ($1, $2, $3)", [await hashToken(t), m.id, expires_at]);
     return c.json({ ok: true, token: t, expires_at });

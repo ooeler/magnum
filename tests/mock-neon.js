@@ -360,7 +360,6 @@
       if (!member(d)) return fnFail("Nur Mitglieder dürfen einladen.");
       if (b.action == "create") {
         if (full) return fnFail("Der Club ist voll (12 Mitglieder).");
-        if (!admin(d) && d.__invites.filter(function (x) { return x.created_by == u && !x.used_at && x.expires_at > now }).length >= 3) return fnFail("Du hast schon 3 offene Einladungen. Ziehe zuerst eine zurück.");
         var t = token(); d.__invites.push({ id: ++d.__seq, token: t, created_by: u, created_at: now, expires_at: new Date(Date.now() + 7 * 864e5).toISOString(), used_at: null }); save(d);
         return ok({ ok: true, token: t });
       }
