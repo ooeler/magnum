@@ -61,7 +61,7 @@ export async function run({ env, fetch: f = fetch, log = console.log }) {
 }
 
 if (process.argv[1] && process.argv[1].split("\\").join("/").endsWith("scripts/feedback-to-issues.mjs")) {
-  for (const k of ["SUPABASE_URL", "CRON_SECRET", "GITHUB_TOKEN", "GITHUB_REPOSITORY"]) {
+  for (const k of ["MAGNUM_API_URL", "CRON_SECRET", "GITHUB_TOKEN", "GITHUB_REPOSITORY"]) {
     if (!process.env[k]) { console.error(`::error::${k} fehlt`); process.exit(1); }
   }
   run({ env: process.env }).catch((e) => { console.error(`::error::${e.message}`); process.exit(1); });
