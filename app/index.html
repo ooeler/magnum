@@ -229,7 +229,8 @@ function stats(id) {
   D.restaurant_ratings.forEach(function (r) { if (r.member_id == id) add("Restaurant bewertet", 5) });
   D.cards.forEach(function (c) { if (c.created_by == id) add("Sammelkarte", 10) });
   D.card_members.forEach(function (m) { if (m.member_id == id) add("Auf einer Karte dabei", 10) });
-  D.feedback.forEach(function (f) { if (f.user_id == id && f.status != "fehler") add("Vorschläge", 10) });
+  // 2 Punkte fürs Einreichen, die restlichen 8, sobald das Issue als umgesetzt geschlossen ist
+  D.feedback.forEach(function (f) { if (f.user_id == id && f.status != "fehler") add("Vorschläge", f.status == "umgesetzt" ? 10 : 2) });
   var virtAll = D.rsvps.filter(function (r) { return r.member_id == id && r.status == "virtual" }).length;
   var rank = rankOf(pts), next = RANKS.filter(function (r) { return r.min > pts })[0];
   var res = { points: pts, parts: parts, streak: streak, rekord: rekord, attended: attended, virt: virtAll, trips: trips, rank: rank, next: next,
@@ -760,7 +761,7 @@ function invites() {
 var FKINDS = [["idee", "Idee"], ["fehler", "Fehler"], ["wunsch", "Wunsch"]], FSTATE = { neu: "wird erfasst", erfasst: "offen", fehler: "Fehler", umgesetzt: "umgesetzt", geschlossen: "geschlossen" };
 function feedback() {
   var L = D.feedback.slice().sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1 }).slice(0, 8);
-  var h = '<section class="card" aria-label="Verbesserungsvorschläge"><div class="col" style="gap:1px"><span class="b" style="font-size:15px">Verbesserungsvorschläge</span><span class="sm mu">Jeder Vorschlag wird als öffentliches GitHub-Issue erfasst, ohne deinen Namen · +10 Punkte</span></div>';
+  var h = '<section class="card" aria-label="Verbesserungsvorschläge"><div class="col" style="gap:1px"><span class="b" style="font-size:15px">Verbesserungsvorschläge</span><span class="sm mu">Jeder Vorschlag wird als öffentliches GitHub-Issue erfasst, ohne deinen Namen · +2 Punkte, +8 wenn er angenommen wird</span></div>';
   if (L.length) h += '<div class="lst">' + L.map(function (f) {
     return '<div class="row"><span class="mono xs mu" style="min-width:34px">' + (f.issue_number ? "#" + f.issue_number : "…") + '</span><span class="grow col" style="gap:2px"><b class="sm">' + esc(f.title) + '</b><span class="xs mu">von ' + esc(nm(f.user_id)) + "</span></span>" +
       (f.issue_url && /^https:\/\/github\.com\//.test(f.issue_url) ? '<a class="chip" href="' + esc(f.issue_url) + '" target="_blank" rel="noopener">' + esc(FSTATE[f.status] || f.status) + "</a>" : '<span class="chip">' + esc(FSTATE[f.status] || f.status) + "</span>") + "</div>";
@@ -1237,7 +1238,7 @@ var SUBMIT = {
       return fnErr(r).then(function (e) {
         BUSY = false;
         if (e) { toast(e); render(); return }
-        UI.fbOpen = UI.fbTitle = UI.fbText = UI.fbKind = null; toast("Danke! Dein Vorschlag wird als GitHub-Issue erfasst · +10 Punkte");
+        UI.fbOpen = UI.fbTitle = UI.fbText = UI.fbKind = null; toast("Danke! Dein Vorschlag wird als GitHub-Issue erfasst · +2 Punkte");
         return loadAll().then(render);
       });
     });

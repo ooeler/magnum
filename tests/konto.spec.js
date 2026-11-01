@@ -209,3 +209,17 @@ test.describe("Rollen", () => {
     await expect(page.locator("#ov")).not.toContainText("Magnums mitgebracht");
   });
 });
+
+test.describe("Punkte für Vorschläge", () => {
+
+  test("2 beim Einreichen, 10 nach der Annahme", async ({ page }) => {
+    await login(page);
+    const vorher = Number(await page.locator("[data-test=punkte]").textContent());
+    await page.evaluate(() => { const d = window.__mg.db(); d.feedback.push({ id: 50, user_id: "u-ot", kind: "idee", title: "x", body: "", labels: [], status: "erfasst", issue_number: 50, issue_url: null, error: null, created_at: new Date().toISOString() }); localStorage.setItem("__mg_db", JSON.stringify(d)) });
+    await page.reload();
+    await expect(page.locator("[data-test=punkte]")).toHaveText(String(vorher + 2));
+    await page.evaluate(() => { const d = window.__mg.db(); d.feedback.find((f) => f.id == 50).status = "umgesetzt"; localStorage.setItem("__mg_db", JSON.stringify(d)) });
+    await page.reload();
+    await expect(page.locator("[data-test=punkte]")).toHaveText(String(vorher + 10));
+  });
+});
