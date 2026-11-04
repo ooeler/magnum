@@ -6,6 +6,7 @@
 // Vorschlag /feedback         Vorschlag speichern, /feedback-export für GitHub Actions (feedback-issues.yml)
 // Fotos     /fotos, /fotos/links  privater Speicher: nur JPEG bis 5 MB, nur Mitglieder
 // Backup    /backup           täglicher Function Trigger (neon.ts), legt auch die nächsten Magnum-Abende an
+// Push      /push/*, /taeglich  Abo speichern, täglich: Erinnerung 7 Tage vor dem Anlass, montags die Karte der Woche
 import { attachDatabasePool } from "@neon/functions";
 import { parseTriggerDelivery } from "@neon/functions/triggers";
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
@@ -16,6 +17,8 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { Pool } from "pg";
 import { checkFoto, checkPfad, MAX_FOTO } from "./fotos.mjs";
 import { checkJoin, checkToken, hashToken, INVITE_DAYS, joinError, newToken } from "./invite.mjs";
+import webpush from "web-push";
+import { checkAbo, erinnerungen, karteWaehlen, tagZuerich, wochenStart } from "./push.mjs";
 import { safeEqual } from "./sicherheit.mjs";
 import { buildIssue, DAILY_LIMIT } from "./vorschlag.mjs";
 
@@ -227,6 +230,75 @@ app.post("/backup", async (c) => {
   await q("select public.snapshot_club('täglich')");
   await q("select public.magnum_termine()");
   return c.json({ ok: true });
+});
+
+// ───────────── Push-Nachrichten ─────────────
+// Die Schlüssel entstehen beim ersten Bedarf und liegen nur in der Datenbank (Tabelle ohne Zugriff über die App)
+const schluessel = async () => {
+  const [k] = await q("select public_key, private_key from public.push_config where id = 1");
+  if (k) return k;
+  const n = webpush.generateVAPIDKeys();
+  await q("insert into public.push_config (id, public_key, private_key) values (1, $1, $2) on conflict (id) do nothing", [n.publicKey, n.privateKey]);
+  return (await q("select public_key, private_key from public.push_config where id = 1"))[0];
+};
+const senden = async (titel: string, text: string, url = "./") => {
+  const k = await schluessel();
+  webpush.setVapidDetails(APP_URL, k.public_key, k.private_key);
+  let n = 0;
+  for (const a of await q("select endpoint, p256dh, auth from public.push_abos")) {
+    try {
+      await webpush.sendNotification({ endpoint: a.endpoint, keys: { p256dh: a.p256dh, auth: a.auth } }, JSON.stringify({ title: titel, body: text, url }), { TTL: 86400 });
+      n++;
+    } catch (e) {
+      // Abgelaufene Abos räumen wir weg, andere Fehler bleiben im Log
+      const s = (e as { statusCode?: number }).statusCode;
+      if (s == 404 || s == 410) await q("delete from public.push_abos where endpoint = $1", [a.endpoint]); else console.error("Push", s);
+    }
+  }
+  return n;
+};
+const einmal = async (art: string, ref: string) => (await q("insert into public.push_log (art, ref) values ($1, $2) on conflict do nothing returning 1", [art, ref])).length == 1;
+
+app.get("/push/key", async (c) => c.json({ key: (await schluessel()).public_key }));
+app.post("/push/abo", async (c) => {
+  const m = await member(c.req.raw);
+  if (!m) return c.json({ error: "Kein Mitglied" }, 403);
+  let a;
+  try { a = checkAbo(await c.req.json()) } catch (e) { return c.json({ error: (e as Error).message }, 400) }
+  await q(`insert into public.push_abos (endpoint, member_id, p256dh, auth) values ($1, $2, $3, $4)
+    on conflict (endpoint) do update set member_id = excluded.member_id, p256dh = excluded.p256dh, auth = excluded.auth`, [a.endpoint, m.id, a.p256dh, a.auth]);
+  return c.json({ ok: true });
+});
+app.post("/push/abmelden", async (c) => {
+  const m = await member(c.req.raw);
+  if (!m) return c.json({ error: "Kein Mitglied" }, 403);
+  const b = await c.req.json().catch(() => ({}));
+  await q("delete from public.push_abos where endpoint = $1 and member_id = $2", [String(b.endpoint ?? ""), m.id]);
+  return c.json({ ok: true });
+});
+
+// Täglich: Erinnerung 7 Tage vor jedem Anlass, montags wird eine Sammelkarte aufgedeckt
+app.post("/taeglich", async (c) => {
+  const t = await parseTriggerDelivery(c.req.raw);
+  if (!t.ok) return c.json({ error: t.error }, t.error === "invalid_body" ? 400 : 401);
+  await q("select public.magnum_termine()");
+  const heute = tagZuerich(new Date()), erg = { erinnert: 0, karte: null as string | null };
+  const E = await q("select id, title, starts_at from public.events where starts_at between now() + interval '5 days' and now() + interval '9 days'");
+  for (const e of erinnerungen(E, heute)) {
+    if (await einmal("erinnerung", e.id)) { await senden("In 7 Tagen: " + e.title, "Bist du dabei? Melde dich in der App an."); erg.erinnert++ }
+  }
+  const woche = wochenStart(heute);
+  const [schon] = await q("select card_id from public.karte_der_woche where woche = $1", [woche]);
+  if (!schon) {
+    const karten = (await q("select id from public.cards")).map((x) => x.id);
+    const bisher = (await q("select card_id from public.karte_der_woche order by woche desc limit 10")).map((x) => x.card_id);
+    const id = karteWaehlen(karten, bisher);
+    if (id) {
+      const [k] = await q("insert into public.karte_der_woche (woche, card_id) values ($1, $2) on conflict do nothing returning card_id", [woche, id]);
+      if (k) { const [c2] = await q("select title from public.cards where id = $1", [id]); await senden("Karte der Woche", c2.title); erg.karte = id }
+    }
+  }
+  return c.json(erg);
 });
 
 export default app;

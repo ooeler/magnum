@@ -17,6 +17,12 @@ export default defineConfig({
     },
   },
   triggers: {
+    "tageslauf": {
+      type: "schedule",
+      function: "api",
+      cron: "0 9 * * *",
+      functionPath: "/taeglich",
+    },
     "tagessicherung": {
       type: "schedule",
       function: "api",

@@ -220,3 +220,41 @@ test.describe("Quittung auslesen", () => {
     await expect(page.locator("[data-k=rsTotal]")).toHaveValue("113");
   });
 });
+
+test.describe("Push und Karte der Woche", () => {
+  test("Erinnerung genau 7 Tage vorher, Karte nicht doppelt", async () => {
+    const P = await import("../functions/push.mjs");
+    const E = [{ id: "a", starts_at: "2026-11-27T18:00:00Z" }, { id: "b", starts_at: "2026-11-26T18:00:00Z" }, { id: "c", starts_at: "2026-11-27T23:30:00Z" }];
+    expect(P.erinnerungen(E, "2026-11-20").map((e) => e.id)).toEqual(["a"]);
+    expect(P.wochenStart("2026-11-04")).toBe("2026-11-02");
+    expect(P.wochenStart("2026-11-02")).toBe("2026-11-02");
+    expect(P.karteWaehlen(["x", "y", "z"], ["x", "y"], () => 0)).toBe("z");
+    expect(P.karteWaehlen(["x"], ["x"], () => 0)).toBe("x");
+    expect(P.karteWaehlen([], [], () => 0)).toBeNull();
+    expect(() => P.checkAbo({ endpoint: "http://x", keys: {} })).toThrow();
+    expect(P.checkAbo({ endpoint: "https://push.example.test/abc", keys: { p256dh: "B".repeat(40), auth: "a".repeat(16) } }).endpoint).toContain("https://");
+  });
+
+  test("Karte der Woche erscheint unter Termine", async ({ page }) => {
+    await page.goto("/");
+    await page.evaluate(() => { const d = window.__mg.db(); d.karte_der_woche.push({ woche: "2026-10-26", card_id: "c-2" }); localStorage.setItem("__mg_db", JSON.stringify(d)) });
+    await login(page);
+    const k = page.locator("[aria-label='Karte der Woche']");
+    await expect(k).toContainText("Sonnenaufgang im Rebberg");
+    await k.click();
+    await expect(page.locator("#ov")).toContainText("Sonnenaufgang im Rebberg");
+  });
+
+  test("ohne installierte App: Hinweis statt Knopf", async ({ page }) => {
+    await login(page);
+    await tab(page, "Club");
+    await expect(page.locator("[data-test=push]")).toContainText("installierten App");
+  });
+
+  test("Krone für den Führenden, Icons beim Gerät", async ({ page }) => {
+    await login(page);
+    await tab(page, "Club");
+    await expect(page.locator("[data-test=krone]")).toHaveCount(1);
+    await expect(page.locator(".mem", { hasText: "Beat" }).locator("svg")).toHaveCount(1);
+  });
+});
