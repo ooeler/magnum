@@ -143,6 +143,7 @@ details summary{cursor:pointer;font-weight:700;list-style:none}details summary::
 <script src="config.js"></script>
 <link rel="stylesheet" href="leaflet.css">
 <script src="client.js"></script>
+<script src="quittung.js"></script>
 <script src="leaflet.js"></script>
 <script>
 "use strict";
@@ -241,13 +242,22 @@ function stats(id) {
 }
 // Trinkfestigkeit: Ø Einheiten pro Abend aus den fotografierten Getränken
 function drinkLevel(id) {
-  var days = {};
+  var days = {}, quittung = {};
   D.drinks.forEach(function (d) { if (d.member_id == id) days[d.drunk_on] = (days[d.drunk_on] || 0) + (UNITS[d.kind] || 0) });
+  // Quittung: Der Wein zählt zu gleichen Teilen für alle Anwesenden, 1 dl ist ein Glas
+  D.restaurant_visits.forEach(function (x) {
+    var e = x.event_id && D.events.find(function (y) { return y.id == x.event_id });
+    if (!e || !Number(x.wein_dl) || rsvp(e.id, id) != "in") return;
+    var n = D.rsvps.filter(function (r) { return r.event_id == e.id && r.status == "in" }).length, t = localDay(e.starts_at);
+    quittung[t] = (quittung[t] || 0) + Number(x.wein_dl) / n;
+  });
+  // Am gleichen Abend zählt der höhere Wert, Fotos und Quittung werden nicht addiert
+  Object.keys(quittung).forEach(function (t) { days[t] = Math.max(days[t] || 0, quittung[t]) });
   var n = Object.keys(days).length, photos = D.drinks.filter(function (d) { return d.member_id == id }).length;
   if (!n) return { level: 0, label: "Noch keine Fotos", basis: "Fotografiere deine Getränke am Abend, dann wird sie errechnet.", avg: 0 };
   var sum = 0; Object.keys(days).forEach(function (k) { sum += days[k] });
   var avg = sum / n, lv = avg < 1.5 ? 1 : avg < 3 ? 2 : avg < 4.5 ? 3 : avg < 6 ? 4 : 5;
-  return { level: lv, label: LEVELS[lv - 1], avg: avg, basis: "Ø " + avg.toFixed(1).replace(".", ",") + " Getränke pro Abend aus " + photos + " Fotos an " + n + " Abend" + (n > 1 ? "en" : "") };
+  return { level: lv, label: LEVELS[lv - 1], avg: avg, basis: "Ø " + avg.toFixed(1).replace(".", ",") + " Getränke pro Abend aus " + (photos ? photos + " Fotos" : "Quittungen") + " an " + n + " Abend" + (n > 1 ? "en" : "") };
 }
 // Rangliste: gleiche Punktzahl = gleicher Rang, Nummer nur beim ersten
 function board() {
@@ -933,6 +943,20 @@ function beizTermin(e) {
     (V.length ? '<div class="lst">' + V.map(function (x) { var r = D.restaurants.find(function (y) { return y.id == x.restaurant_id }); return '<button type="button" class="row sb sm" style="background:none;border:0;width:100%;text-align:left;color:var(--tx)" data-a="ov" data-t="resto" data-id="' + x.restaurant_id + '"><b>' + esc(r ? r.name : "Beiz") + "</b><span>" + esc(chf(x.total_chf)) + (x.receipt_path ? " · Quittung ✓" : "") + "</span></button>" }).join("") + "</div>" : "") +
     (UI.newResto == e.id ? restoForm(e) : '<button class="btn file" data-a="ui" data-k="newResto" data-v="' + e.id + '">' + CAM + "Quittung fotografieren / Beiz erfassen</button>") + "</section>";
 }
+// Texterkennung auf dem Gerät: Das Foto verlässt dafür das Handy nicht
+function ocrLaden() {
+  return window.Tesseract ? Promise.resolve() : new Promise(function (ok, nein) { var s = document.createElement("script"); s.src = "ocr/tesseract.min.js"; s.onload = ok; s.onerror = nein; document.head.append(s) });
+}
+function quittungErkennen(file) {
+  UI.rsOcr = "laeuft"; render();
+  return ocrLaden().then(function () { return Tesseract.createWorker("deu", 1, { workerPath: "ocr/worker.min.js", corePath: "ocr/", langPath: "ocr/", workerBlobURL: false }) }).then(function (w) {
+    return w.recognize(file).then(function (r) { w.terminate(); return r.data.text });
+  }).then(function (text) {
+    var q = quittungLesen(text);
+    UI.rsWein = String(q.wein_dl); UI.rsMin = String(q.mineral); if (q.total && !v("rsTotal")) UI.rsTotal = String(q.total);
+    UI.rsOcr = q.zeilen.length ? "fertig" : "nichts"; render();
+  }).catch(function () { UI.rsOcr = "fehler"; render() });
+}
 function restoForm(e) {
   var sel = v("rsId");
   return '<form class="col tile" data-s="visit" style="gap:10px;padding:12px"><span class="b">Besuch erfassen</span><label class="f">Beiz<select class="t" data-k="rsId"><option value="">+ Neue Beiz</option>' + D.restaurants.slice().sort(function (a, b) { return a.name.localeCompare(b.name, "de") }).map(function (r) { return '<option value="' + r.id + '"' + (sel == r.id ? " selected" : "") + ">" + esc(r.name) + "</option>" }).join("") + "</select></label>" +
@@ -940,6 +964,10 @@ function restoForm(e) {
       '<button type="button" class="btn ghost" data-a="geo">' + (UI.rsLat ? "Standort übernommen ✓" : "Aktuellen Standort für die Karte verwenden") + "</button>") +
     '<div class="g3"><label class="f">Datum<input class="t" type="date" data-k="rsDate" value="' + esc(v("rsDate", localDay(e.starts_at))) + '"></label><label class="f">Personen<input class="t" type="number" min="1" max="100" data-k="rsPeople" value="' + esc(v("rsPeople", "8")) + '"></label><label class="f">Total CHF<input class="t" type="number" min="0" step="0.05" data-k="rsTotal" value="' + esc(v("rsTotal")) + '"></label></div>' +
     '<label class="btn ghost file">' + CAM + (UI.rsFile ? "Quittung gewählt ✓" : "Quittung fotografieren") + '<input type="file" accept="image/*" capture="environment" data-c="receipt" aria-label="Quittung fotografieren"></label>' +
+    (UI.rsFile ? (UI.rsOcr == "laeuft" ? laden("Quittung wird gelesen …") : '<button type="button" class="btn ghost" data-a="ocr">Quittung auslesen</button>') : "") +
+    (UI.rsOcr == "fertig" ? '<span class="sm" data-test="ocr">Ausgelesen. Bitte kurz prüfen und korrigieren.</span>' : UI.rsOcr == "nichts" ? '<span class="sm" data-test="ocr">Kein Wein und kein Mineral erkannt. Bitte von Hand eintragen.</span>' : UI.rsOcr == "fehler" ? '<span class="sm" data-test="ocr">Auslesen hat nicht geklappt. Bitte von Hand eintragen.</span>' : "") +
+    '<div class="g2"><label class="f">Wein total (dl)<input class="t" type="number" min="0" step="0.5" data-k="rsWein" value="' + esc(v("rsWein", "0")) + '"></label><label class="f">Mineral (Stück)<input class="t" type="number" min="0" data-k="rsMin" value="' + esc(v("rsMin", "0")) + '"></label></div>' +
+    '<span class="xs mu">Eine Flasche hat 7,5 dl, eine Magnum 15 dl. Der Wein zählt zu gleichen Teilen für alle Anwesenden.</span>' +
     '<div class="row"><button class="btn grow"' + (BUSY ? " disabled" : "") + '>Speichern</button><button type="button" class="btn ghost" data-a="ui" data-k="newResto" data-v="">Abbrechen</button></div></form>';
 }
 var CRIT = [["preis", "Preis-Leistung"], ["gesellig", "Geselligkeit"], ["willkommen", "Willkommen, auch wenn du betrunken bist"]];
@@ -1103,6 +1131,7 @@ var ACT = {
   },
   deltrip: function (d) { if (!confirm("Reise wirklich löschen?")) return; OV = null; after(sb.from("trips").delete().eq("id", d.id), "Reise gelöscht") },
   kartweg: function (d) { after(sb.from("card_members").delete().eq("card_id", d.id).eq("member_id", d.m), "Von der Karte genommen") },
+  ocr: function () { if (UI.rsFile) quittungErkennen(UI.rsFile) },
   anw: function (d) { after(sb.rpc("admin_set_rsvp", { p_event: d.id, p_member: d.m, p_status: d.v || null }), "Anwesenheit von " + nm(d.m) + " gespeichert") },
   delevent: function (d) { if (!confirm("Anlass wirklich löschen?")) return; OV = null; after(sb.from("events").delete().eq("id", d.id), "Anlass gelöscht") },
   delcard: function (d) { if (!confirm("Karte wirklich löschen?")) return; OV = null; after(sb.from("cards").delete().eq("id", d.id), "Karte gelöscht") },
@@ -1270,10 +1299,10 @@ var SUBMIT = {
     var mk = rid ? Promise.resolve(rid) : pos.then(function (o) { return sb.from("restaurants").insert({ name: name, place: v("rsPlace").trim() || null, lat: o ? o.lat : null, lng: o ? o.lng : null, created_by: uid() }).select().single() }).then(function (r) { if (r.error) throw r.error; return r.data.id });
     mk.then(function (id) {
       return (file ? upload("receipts", file) : Promise.resolve(null)).then(function (path) {
-        return sb.from("restaurant_visits").insert({ restaurant_id: id, event_id: ev.id || null, visited_on: v("rsDate", ev.starts_at ? localDay(ev.starts_at) : today()), people: Math.max(1, +v("rsPeople", 8) || 1), total_chf: Math.max(0, +v("rsTotal") || 0), receipt_path: path, created_by: uid() }).then(function (r) { if (r.error) throw r.error; return id });
+        return sb.from("restaurant_visits").insert({ restaurant_id: id, event_id: ev.id || null, visited_on: v("rsDate", ev.starts_at ? localDay(ev.starts_at) : today()), wein_dl: Math.max(0, +v("rsWein") || 0), mineral: Math.max(0, Math.round(+v("rsMin") || 0)), people: Math.max(1, +v("rsPeople", 8) || 1), total_chf: Math.max(0, +v("rsTotal") || 0), receipt_path: path, created_by: uid() }).then(function (r) { if (r.error) throw r.error; return id });
       });
     }).then(function (id) {
-      BUSY = false; ["newResto", "rsId", "rsName", "rsPlace", "rsDate", "rsPeople", "rsTotal", "rsFile", "rsLat", "rsLng"].forEach(function (k) { UI[k] = null });
+      BUSY = false; ["newResto", "rsId", "rsName", "rsPlace", "rsDate", "rsPeople", "rsTotal", "rsFile", "rsLat", "rsLng", "rsOcr", "rsWein", "rsMin"].forEach(function (k) { UI[k] = null });
       toast("Besuch gespeichert · jetzt bewerten!"); OV = { t: "resto", id: id }; return loadAll().then(render);
     }).catch(function (e) { BUSY = false; toast(errText(e)); render() });
   }

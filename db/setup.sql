@@ -373,6 +373,9 @@ end $$;
 
 -- Beiz und Quittung gehören zum Termin
 alter table public.restaurant_visits add column if not exists event_id uuid references public.events(id) on delete set null;
+-- Von der Quittung: Wein in Dezilitern und Mineral in Stück. Der Wein zählt zu gleichen Teilen für alle Anwesenden.
+alter table public.restaurant_visits add column if not exists wein_dl numeric(6,1) not null default 0 check (wein_dl >= 0);
+alter table public.restaurant_visits add column if not exists mineral int not null default 0 check (mineral >= 0);
 
 -- Organisator setzen oder entfernen: Admin, wer den Anlass erfasst hat oder ihn organisiert. Vergangenes nur der Admin.
 create or replace function public.set_organizer(p_event uuid, p_member uuid) returns void

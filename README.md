@@ -24,7 +24,7 @@ Aufgebaut wie die App **Herren Inter** (InterChampionship), als Backend aber [Ne
 - **Streak:** Anlässe in Folge (dabei oder virtuell). „Nur abmelden“ setzt sie auf 0, der **Rekord** bleibt stehen.
 - **Duell des Monats:** Anwesenheit in Prozent, Android gegen iPhone (das Gerät wird bei der Registrierung erkannt, ändern kann es nur der Administrator). Es zählt nur, wer wirklich dabei war. Wer im Vormonat verloren hat, bringt die nächste Magnum; das zeigt die App nur an.
 - **Effekte:** Am Anlasstag fliegen gefüllte Weingläser durchs Bild, an besonderen Tagen Emojis (Samichlaus, Halloween, Ostern usw.). Im Advent trägt das Glas eine Mütze, an manchen Wintertagen schneit es. Bei „Bewegung reduzieren“ bewegt sich nichts.
-- **Trinkfestigkeit:** Ø Getränke pro Abend aus den fotografierten Getränken (Wein, Bier, Schnaps 1, Magnum-Glas 1,5, Wasser 0). Die App schlägt „Wein“ vor, man korrigiert mit einem Tipp. Eine automatische Bilderkennung ist noch nicht eingebaut.
+- **Trinkfestigkeit:** Ø Getränke pro Abend aus den Quittungen (der Wein zählt zu gleichen Teilen für alle Anwesenden, 1 dl ist ein Glas) und den fotografierten Getränken, am gleichen Abend zählt der höhere Wert. Getränkefotos: (Wein, Bier, Schnaps 1, Magnum-Glas 1,5, Wasser 0). Die App schlägt „Wein“ vor, man korrigiert mit einem Tipp. Quittungen liest eine Texterkennung direkt auf dem Handy aus, kostenlos und ohne dass das Foto das Gerät verlässt. Das Ergebnis lässt sich vor dem Speichern korrigieren.
 
 ## Projektstruktur
 
@@ -114,5 +114,4 @@ Demo-Konten: `ot@magnum.test` (Admin, iPhone), `beat@magnum.test` (Android), `ch
 
 - Push-Nachrichten vor Anlässen (wie bei Herren Inter mit VAPID, hier als Route der Function `api`)
 - Deutsche Mails: Neon verschickt Passwort-Mails auf Englisch. Eigene Texte gehen über einen Webhook und eigenen Mailversand.
-- Bilderkennung für Getränkefotos
 - Teilen-Knöpfe für die WhatsApp-Gruppe

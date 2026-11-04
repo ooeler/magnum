@@ -178,3 +178,45 @@ test.describe("Effekte", () => {
     await expect(page.locator(".fx")).toHaveCount(0);
   });
 });
+
+test.describe("Quittung auslesen", () => {
+  const lesen = require("../app/quittung.js");
+
+  test("erkennt Wein in allen Grössen, Mineral und Total", () => {
+    const r = lesen(["Rest. Sonne", "2 x Cornalin 75cl 98.00", "1 Magnum Pinot Noir 1.5l 90.00", "3 Glas Fendant 1dl 15.00", "4 x Mineral 5dl 20.00", "2 Rösti 44.00", "Total CHF 267.00"].join("\n"));
+    expect(r.wein_dl).toBe(33);
+    expect(r.mineral).toBe(4);
+    expect(r.total).toBe(267);
+  });
+
+  test("ohne Grösse: Flasche 7,5 dl, Magnum 15 dl, Glas 1 dl", () => {
+    expect(lesen("Merlot 49.00").wein_dl).toBe(7.5);
+    expect(lesen("Magnum Riesling 90.00").wein_dl).toBe(15);
+    expect(lesen("2x Rotwein offen 8.00").wein_dl).toBe(2);
+    expect(lesen("Spaghetti 22.50").zeilen).toEqual([]);
+    expect(lesen("").wein_dl).toBe(0);
+  });
+
+  test("Wein der Quittung zählt für alle Anwesenden zu gleichen Teilen", async ({ page }) => {
+    await page.goto("/");
+    await page.evaluate(() => { const d = window.__mg.db(); d.drinks = []; d.restaurant_visits[1].event_id = "e-past2"; d.restaurant_visits[1].wein_dl = 36; localStorage.setItem("__mg_db", JSON.stringify(d)) });
+    await login(page);
+    await expect(page.locator("section", { hasText: "Trinkfestigkeit" }).first()).toContainText("Ø 4,0 Getränke pro Abend aus Quittungen an 1 Abend");
+  });
+
+  test("echte Texterkennung liest eine Quittung im Browser", async ({ page }, info) => {
+    test.skip(info.project.name != "desktop", "dauert, einmal reicht");
+    test.setTimeout(90000);
+    await page.addInitScript(() => { window.__testBild = () => new Promise((ok) => { const c = document.createElement("canvas"); c.width = 900; c.height = 420; const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, 900, 420); g.fillStyle = "#000"; g.font = "42px monospace"; ["2 x Merlot 75cl 98.00", "3 x Mineral 5dl 15.00", "Total 113.00"].forEach((z, i) => g.fillText(z, 30, 90 + i * 110)); c.toBlob(ok, "image/png") }) });
+    await login(page);
+    await page.locator("article.ev", { hasText: "Herbst-Stamm" }).getByRole("button", { name: "Details" }).click();
+    await page.getByRole("button", { name: /Beiz erfassen/ }).click();
+    const buf = await page.evaluate(async () => Array.from(new Uint8Array(await (await window.__testBild()).arrayBuffer())));
+    await page.locator("input[data-c=receipt]").setInputFiles({ name: "q.png", mimeType: "image/png", buffer: Buffer.from(buf) });
+    await page.getByRole("button", { name: "Quittung auslesen" }).click();
+    await expect(page.locator("[data-test=ocr]")).toContainText("Ausgelesen", { timeout: 70000 });
+    await expect(page.locator("[data-k=rsWein]")).toHaveValue("15");
+    await expect(page.locator("[data-k=rsMin]")).toHaveValue("3");
+    await expect(page.locator("[data-k=rsTotal]")).toHaveValue("113");
+  });
+});
