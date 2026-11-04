@@ -212,7 +212,7 @@ test.describe("Quittung auslesen", () => {
     await page.locator("article.ev", { hasText: "Herbst-Stamm" }).getByRole("button", { name: "Details" }).click();
     await page.getByRole("button", { name: /Beiz erfassen/ }).click();
     const buf = await page.evaluate(async () => Array.from(new Uint8Array(await (await window.__testBild()).arrayBuffer())));
-    await page.locator("input[data-c=receipt]").setInputFiles({ name: "q.png", mimeType: "image/png", buffer: Buffer.from(buf) });
+    await page.locator("input[aria-label='Quittung fotografieren']").setInputFiles({ name: "q.png", mimeType: "image/png", buffer: Buffer.from(buf) });
     await page.getByRole("button", { name: "Quittung auslesen" }).click();
     await expect(page.locator("[data-test=ocr]")).toContainText("Ausgelesen", { timeout: 70000 });
     await expect(page.locator("[data-k=rsWein]")).toHaveValue("15");

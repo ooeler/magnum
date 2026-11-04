@@ -19,16 +19,12 @@ test.describe("Reisen", () => {
     await page.fill("[data-k=trFrom]", "2027-05-14");
     await page.fill("[data-k=trTo]", "2027-05-16");
     await page.fill("[data-k=trProg]", "Riesling, Flammkuchen");
-    await page.fill("[data-k=trSeats]", "999");
-    await page.click("form[data-s=trip] .btn.grow");
-    await expect(page.locator("form[data-s=trip]"), "mehr als 50 Plätze lässt das Formular nicht zu").toBeVisible();
-    await page.fill("[data-k=trSeats]", "30");
     await page.click("form[data-s=trip] .btn.grow");
     await expect(toast(page)).toContainText("Reise erfasst");
     await expect(page.locator(".trip", { hasText: "Elsass" })).toBeVisible();
     await expect(page.locator("form[data-s=trip]")).toHaveCount(0);
     const t = await page.evaluate(() => window.__mg.db().trips.find((x) => x.title == "Elsass"));
-    expect(t).toMatchObject({ starts_on: "2027-05-14", ends_on: "2027-05-16", seats: 30, created_by: "u-ot" });
+    expect(t).toMatchObject({ starts_on: "2027-05-14", ends_on: "2027-05-16", created_by: "u-ot" });
     await tab(page, "Termine");
     await expect(page.locator("body")).toContainText("hat die Reise nach Elsass eröffnet");
   });
@@ -210,7 +206,7 @@ test.describe("Beiz erfassen", () => {
 
   test("Quittung auswählen", async ({ page }) => {
     await offen(page);
-    await page.locator("input[data-c=receipt]").setInputFiles({ name: "a.png", mimeType: "image/png", buffer: PNG });
+    await page.locator("input[aria-label='Quittung fotografieren']").setInputFiles({ name: "a.png", mimeType: "image/png", buffer: PNG });
     await expect(page.locator("form[data-s=visit]")).toContainText("Quittung gewählt ✓");
   });
 
@@ -230,7 +226,7 @@ test.describe("Beiz erfassen", () => {
 });
 
 test.describe("Anlässe anpassen", () => {
-  const anpassen = (page, title) => page.getByRole("button", { name: "Anlass anpassen" }).click();
+  const anpassen = (page) => page.locator("summary", { hasText: "Anlass anpassen" }).click();
 
   test("Organisator ändert Name und Datum", async ({ page }) => {
     await login(page);
@@ -240,7 +236,8 @@ test.describe("Anlässe anpassen", () => {
     await details(page, "Chlaus-Magnum");
     await anpassen(page);
     await page.fill("[data-k=edTitle]", "Chlaus-Abend");
-    await page.fill("[data-k=edAt]", "2026-12-04T18:30");
+    await page.fill("[data-k=edDate]", "2026-12-04");
+    await page.fill("[data-k=edTime]", "18:30");
     await page.getByRole("button", { name: "Speichern" }).click();
     await expect(toast(page)).toContainText("Anlass angepasst");
     await page.keyboard.press("Escape");
@@ -253,7 +250,7 @@ test.describe("Anlässe anpassen", () => {
     await login(page);
     await details(page, "Dezember-Magnum");
     await anpassen(page);
-    await page.fill("[data-k=edAt]", "2027-01-08T19:00");
+    await page.fill("[data-k=edDate]", "2027-01-08");
     await page.getByRole("button", { name: "Speichern" }).click();
     await expect(toast(page)).toContainText("Anlass angepasst");
     await page.keyboard.press("Escape");
@@ -263,7 +260,7 @@ test.describe("Anlässe anpassen", () => {
   test("Andere Mitglieder passen fremde Anlässe nicht an", async ({ page }) => {
     await login(page, BEAT);
     await details(page, "Herbst-Stamm");
-    await expect(page.getByRole("button", { name: "Anlass anpassen" })).toHaveCount(0);
+    await expect(page.locator("summary", { hasText: "Anlass anpassen" })).toHaveCount(0);
     await page.evaluate(() => window.magnumDb.createClient().from("events").update({ title: "Fremd" }).eq("id", "e-1"));
     expect(await page.evaluate(() => window.__mg.db().events.find((e) => e.id == "e-1").title)).toBe("Herbst-Stamm");
   });
@@ -273,7 +270,7 @@ test.describe("Anlässe anpassen", () => {
     await page.locator("summary", { hasText: "Vergangene Anlässe" }).click();
     await page.getByRole("button", { name: "+ Vergangenen Anlass erfassen" }).click();
     await page.fill("[data-k=paTitle]", "Gründungsfeier");
-    await page.fill("[data-k=paAt]", "2026-03-27T19:00");
+    await page.fill("[data-k=paDate]", "2026-03-27");
     await page.locator("form[data-s=pastevent] .btn.grow").click();
     await expect(toast(page)).toContainText("Anlass erfasst");
     await page.getByRole("button", { name: /Gründungsfeier/ }).click();
@@ -289,7 +286,7 @@ test.describe("Anlässe anpassen", () => {
     await page.locator("summary", { hasText: "Vergangene Anlässe" }).click();
     await page.getByRole("button", { name: "+ Vergangenen Anlass erfassen" }).click();
     await page.fill("[data-k=paTitle]", "Zukunft");
-    await page.fill("[data-k=paAt]", "2030-01-01T19:00");
+    await page.fill("[data-k=paDate]", "2030-01-01");
     await page.locator("form[data-s=pastevent] .btn.grow").click();
     await expect(toast(page)).toContainText("Vergangenheit");
   });
@@ -338,7 +335,7 @@ test.describe("Beiz, Karte und Organisator", () => {
   test("Organisator im Anlass ändern", async ({ page }) => {
     await login(page);
     await details(page, "Herbst-Stamm");
-    await page.getByRole("button", { name: "Anlass anpassen" }).click();
+    await page.locator("summary", { hasText: "Anlass anpassen" }).click();
     await page.locator("[data-k=edOrg]").selectOption({ label: "Beat" });
     await page.getByRole("button", { name: "Speichern" }).click();
     await expect(toast(page)).toContainText("Anlass angepasst");
@@ -376,5 +373,66 @@ test.describe("Personen auf Karten", () => {
     await expect(karte(page)).toHaveCount(0);
     const r = await page.evaluate(() => window.magnumDb.createClient().from("card_members").insert({ card_id: "c-1", member_id: "u-beat", added_by: "u-beat" }));
     expect(r.error).toBeTruthy();
+  });
+});
+
+test.describe("Gäste, Beizen und Sichtweise", () => {
+  test("Gäste beim Anlass eintragen und austragen", async ({ page }) => {
+    await login(page, BEAT);
+    await details(page, "Herbst-Stamm");
+    const g = card(page, "Gäste");
+    await g.locator("input").fill("Peter");
+    await g.getByRole("button", { name: "Eintragen" }).click();
+    await expect(toast(page)).toContainText("Peter ist als Gast eingetragen");
+    await expect(g).toContainText("Gäste (1)");
+    await g.getByRole("button", { name: "Peter austragen" }).click();
+    await expect(g).toContainText("Gäste (0)");
+  });
+
+  test("Reise ohne Obergrenze, mit Gästen", async ({ page }) => {
+    await login(page);
+    await tab(page, "Reisen");
+    await expect(page.locator(".trip", { hasText: "Wallis" })).toContainText("4 Mitreisende");
+    await page.locator(".trip", { hasText: "Wallis" }).click();
+    const g = card(page, "Gäste");
+    await g.locator("input").fill("Maria");
+    await g.getByRole("button", { name: "Eintragen" }).click();
+    await expect(g).toContainText("Gäste (1)");
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".trip", { hasText: "Wallis" })).toContainText("1 Gäste");
+  });
+
+  test("Beiz vom Termin ist schon gewählt, Felder wie beim Anlass", async ({ page }) => {
+    await page.goto("/");
+    await page.evaluate(() => { const d = window.__mg.db(); d.restaurant_visits[0].event_id = "e-1"; d.events.find((e) => e.id == "e-1").ortschaft = "Gossau"; localStorage.setItem("__mg_db", JSON.stringify(d)) });
+    await login(page);
+    await details(page, "Herbst-Stamm");
+    await page.getByRole("button", { name: /Fotografieren|Beiz erfassen/ }).first().click();
+    await expect(page.locator("select[data-k=rsId]")).toHaveValue("re-1");
+    await page.locator("select[data-k=rsId]").selectOption("");
+    await expect(page.locator("[data-k=rsPlace]")).toHaveValue("Gossau");
+    await expect(page.locator("input[aria-label='Quittung hochladen']")).toBeAttached();
+  });
+
+  test("Admin löscht eine Beiz", async ({ page }) => {
+    await login(page);
+    await tab(page, "Statistik");
+    await page.locator("[aria-label='Unsere Beizen'] button", { hasText: "Rest. Sonne" }).click();
+    await page.getByRole("button", { name: "Beiz löschen" }).click();
+    await expect(toast(page)).toContainText("Beiz gelöscht");
+    expect(await page.evaluate(() => window.__mg.db().restaurants.some((r) => r.id == "re-1"))).toBe(false);
+  });
+
+  test("Admin sieht die App als Mitglied", async ({ page }) => {
+    await login(page);
+    await tab(page, "Club");
+    await page.getByRole("button", { name: "App als Mitglied ansehen" }).click();
+    await expect(page.locator("[data-test=sicht]")).toBeVisible();
+    await page.locator(".mem", { hasText: "Beat" }).click();
+    await expect(card(page, "Rolle")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await page.locator("[data-test=sicht]").getByRole("button", { name: "Zurück zur Admin-Ansicht" }).click();
+    await page.locator(".mem", { hasText: "Beat" }).click();
+    await expect(card(page, "Rolle")).toBeVisible();
   });
 });

@@ -15,7 +15,7 @@ test.describe("Sicherheit im Browser", () => {
   test("Content-Security-Policy mit Prüfsummen ist aktiv", async ({ page }) => {
     await page.goto("/");
     const csp = await page.getAttribute('meta[http-equiv="Content-Security-Policy"]', "content");
-    expect(csp).toMatch(/script-src 'self' 'sha256-[A-Za-z0-9+/=]{44}'/);
+    expect(csp).toMatch(/script-src 'self' 'wasm-unsafe-eval' 'sha256-[A-Za-z0-9+/=]{44}'/);
     const scriptSrc = csp.split(";").map((d) => d.trim()).find((d) => d.startsWith("script-src"));
     expect(scriptSrc).not.toContain("unsafe-inline");
     expect(csp).toContain("object-src 'none'");

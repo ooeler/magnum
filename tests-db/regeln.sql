@@ -344,8 +344,6 @@ select pg_temp.als('B');
 insert into public.trip_participants (trip_id) values ('10000000-0000-0000-0000-000000000002');
 update public.trips set ok_id = public.uid() where id = '10000000-0000-0000-0000-000000000002';
 select pg_temp.check((select ok_id from public.trips where id = '10000000-0000-0000-0000-000000000002') = public.uid(), 'OK auf fremder Reise eintragen geht');
-select pg_temp.als('D');
-select pg_temp.verboten($q$insert into public.trip_participants (trip_id) values ('10000000-0000-0000-0000-000000000002')$q$, 'Volle Reise nimmt niemanden mehr');
 
 -- Stimmberechtigt ist, wer beim Antrag mitreist: Beitritt danach zählt nicht
 select pg_temp.als('C');
@@ -451,6 +449,22 @@ select pg_temp.als('');
 insert into public.invites (token_hash, expires_at, used_at, email) select 'h-viel' || i, now() + interval '1 day', now(), 'viel' || i || '@test' from generate_series(1, 15) i;
 insert into neon_auth."user" (email) select 'viel' || i || '@test' from generate_series(1, 15) i;
 select pg_temp.check((select count(*) from public.profiles) > 15, 'Keine Obergrenze bei den Mitgliedern');
+
+-- 22) Gäste bei Anlass und Reise, keine Obergrenze beim Mitreisen
+set role authenticated;
+select pg_temp.als('C');
+insert into public.gaeste (event_id, name) values ('20000000-0000-0000-0000-000000000001', 'Peter');
+insert into public.gaeste (trip_id, name) values ('10000000-0000-0000-0000-000000000001', 'Maria');
+select pg_temp.check((select count(*) from public.gaeste) = 2, 'Gäste bei Anlass und Reise');
+do $$ begin
+  insert into public.gaeste (name) values ('Niemand');
+  raise exception 'FEHLER: Gast ohne Anlass';
+exception when check_violation then raise notice 'ok – Gast gehört zu Anlass oder Reise'; end $$;
+select pg_temp.als('D');
+with x as (delete from public.gaeste returning 1)
+select pg_temp.check((select count(*) from x) = 0, 'Fremde Gäste nicht löschbar');
+reset role;
+select pg_temp.als('');
 
 -- 21) Personen auf Karten: Ersteller oder Admin, nur diese bekommen Punkte
 set role authenticated;
