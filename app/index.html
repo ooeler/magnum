@@ -143,6 +143,7 @@ details summary{cursor:pointer;font-weight:700;list-style:none}details summary::
 <script src="config.js"></script>
 <link rel="stylesheet" href="leaflet.css">
 <script src="client.js"></script>
+<script src="quittung.js"></script>
 <script src="leaflet.js"></script>
 <script>
 "use strict";
@@ -153,7 +154,7 @@ details summary{cursor:pointer;font-weight:700;list-style:none}details summary::
 // ═══════════════════════════════════════════════════════════════════════
 var C = window.MG_CONFIG || {}, sb = null, ME = null, PRF = null, PREV = null, MAINT = false, READY = false;
 var TABLES = ["settings", "profiles", "events", "rsvps", "magnums", "magnum_guests", "rides", "ride_passengers", "trips",
-  "trip_participants", "trip_photos", "proposals", "ballots", "posts", "post_prosts", "cards", "drinks", "sayings", "card_members",
+  "trip_participants", "trip_photos", "proposals", "ballots", "posts", "post_prosts", "cards", "drinks", "sayings", "card_members", "gaeste",
   "saying_prosts", "restaurants", "restaurant_visits", "restaurant_ratings", "feedback", "admin_log"];
 var D = {}; TABLES.forEach(function (t) { D[t] = [] });
 var TAB = lsGet("mg_tab") || "termine", OV = null, SH = null, UI = {}, AUTH = { mode: "login" }, INVITE = null, INVLIST = null, NEWLINK = null, BUSY = false;
@@ -171,7 +172,10 @@ function nm(id) { var p = pr(id); return p ? (p.display_name || "Mitglied") : "�
 function first(id) { return nm(id).split(" ")[0] }
 function ini(id) { return (nm(id).trim().charAt(0) || "?").toUpperCase() }
 function deviceText(p) { return p.device == "android" ? "Android" : "iPhone" }
-function isAdmin() { return !!(PRF && PRF.is_admin) }
+// Sichtweise: Ein Admin kann die App so ansehen, wie ein Mitglied sie sieht. Die Rechte in der Datenbank bleiben.
+var ALS_MITGLIED = lsGet("mg_als_mitglied") == "1";
+function echterAdmin() { return !!(PRF && PRF.is_admin) }
+function isAdmin() { return echterAdmin() && !ALS_MITGLIED }
 function S() { return D.settings[0] || { goal_title: "Club-Ziel", goal_target: 30, magnum_price: 45 } }
 function byDate(a, b) { return new Date(a.starts_at) - new Date(b.starts_at) }
 var MON = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
@@ -241,13 +245,22 @@ function stats(id) {
 }
 // Trinkfestigkeit: Ø Einheiten pro Abend aus den fotografierten Getränken
 function drinkLevel(id) {
-  var days = {};
+  var days = {}, quittung = {};
   D.drinks.forEach(function (d) { if (d.member_id == id) days[d.drunk_on] = (days[d.drunk_on] || 0) + (UNITS[d.kind] || 0) });
+  // Quittung: Der Wein zählt zu gleichen Teilen für alle Anwesenden, 1 dl ist ein Glas
+  D.restaurant_visits.forEach(function (x) {
+    var e = x.event_id && D.events.find(function (y) { return y.id == x.event_id });
+    if (!e || !Number(x.wein_dl) || rsvp(e.id, id) != "in") return;
+    var n = D.rsvps.filter(function (r) { return r.event_id == e.id && r.status == "in" }).length, t = localDay(e.starts_at);
+    quittung[t] = (quittung[t] || 0) + Number(x.wein_dl) / n;
+  });
+  // Am gleichen Abend zählt der höhere Wert, Fotos und Quittung werden nicht addiert
+  Object.keys(quittung).forEach(function (t) { days[t] = Math.max(days[t] || 0, quittung[t]) });
   var n = Object.keys(days).length, photos = D.drinks.filter(function (d) { return d.member_id == id }).length;
   if (!n) return { level: 0, label: "Noch keine Fotos", basis: "Fotografiere deine Getränke am Abend, dann wird sie errechnet.", avg: 0 };
   var sum = 0; Object.keys(days).forEach(function (k) { sum += days[k] });
   var avg = sum / n, lv = avg < 1.5 ? 1 : avg < 3 ? 2 : avg < 4.5 ? 3 : avg < 6 ? 4 : 5;
-  return { level: lv, label: LEVELS[lv - 1], avg: avg, basis: "Ø " + avg.toFixed(1).replace(".", ",") + " Getränke pro Abend aus " + photos + " Fotos an " + n + " Abend" + (n > 1 ? "en" : "") };
+  return { level: lv, label: LEVELS[lv - 1], avg: avg, basis: "Ø " + avg.toFixed(1).replace(".", ",") + " Getränke pro Abend aus " + (photos ? photos + " Fotos" : "Quittungen") + " an " + n + " Abend" + (n > 1 ? "en" : "") };
 }
 // Rangliste: gleiche Punktzahl = gleicher Rang, Nummer nur beim ersten
 function board() {
@@ -468,7 +481,7 @@ function authShell(inner) { return '<div class="auth"><div class="row">' + GLASS
 function shell() {
   var t = TABS.filter(function (x) { return x[0] == TAB })[0] || TABS[0];
   var body = { termine: termine, reisen: reisen, club: club, karten: karten, stats: statistik }[t[0]]();
-  return '<header><div><div class="sub">' + esc(t[2]) + '</div><h1>Magnum</h1><div class="hello">' + esc(hello()) + '</div></div><span class="gl">' + flasche() + (isAdvent(today()) ? HAT : "") + "</span></header>" +
+  return (ALS_MITGLIED && echterAdmin() ? '<div class="row sb sm" style="padding:8px 18px;background:var(--lila);color:#fff" data-test="sicht"><span>Ansicht als Mitglied</span><button class="pill sm" data-a="sicht">Zurück zur Admin-Ansicht</button></div>' : "") + '<header><div><div class="sub">' + esc(t[2]) + '</div><h1>Magnum</h1><div class="hello">' + esc(hello()) + '</div></div><span class="gl">' + flasche() + (isAdvent(today()) ? HAT : "") + "</span></header>" +
     "<main>" + body + "</main>" +
     '<nav aria-label="Bereiche">' + TABS.map(function (x) { return '<button type="button" data-a="tab" data-v="' + x[0] + '" class="' + (x[0] == TAB ? "on" : "") + '"' + (x[0] == TAB ? ' aria-current="page"' : "") + "><i></i><span>" + x[1] + "</span></button>" }).join("") + "</nav>" +
     (OV ? overlay() : "") + (SH ? sheet() : "");
@@ -576,8 +589,8 @@ function eventCard(e) {
   var mIds = D.magnums.filter(function (m) { return m.event_id == e.id }).map(function (m) { return m.id });
   var g = D.magnum_guests.filter(function (x) { return mIds.indexOf(x.magnum_id) >= 0 }).length;
   return '<article class="card ev" data-ev="' + e.id + '"><div class="dt"><b>' + d.getDate() + "</b><span>" + MON[d.getMonth()] + '</span></div><div class="col grow">' +
-    '<span class="b" style="font-size:16px">' + esc(e.title) + '</span><span class="sm mu">' + esc(fDate(e.starts_at, true)) + (e.location ? " · " + esc(e.location) : "") + "</span>" +
-    '<span class="sm mu" data-test="anzahl">' + nIn + " von " + D.profiles.length + " dabei" + (nV ? " · " + nV + " virtuell" : "") + (g ? " · " + g + " Gasttrinker" : "") + (s == "in" ? " · du bist dabei" : s == "out" ? " · du bist abgemeldet" : s ? "" : " · noch offen") + "</span>" +
+    '<span class="b" style="font-size:16px">' + esc(e.title) + '</span><span class="sm mu">' + esc(fDate(e.starts_at, true)) + (ortText(e) ? " · " + esc(ortText(e)) : "") + "</span>" +
+    '<span class="sm mu" data-test="anzahl">' + nIn + " von " + D.profiles.length + " dabei" + (nV ? " · " + nV + " virtuell" : "") + (g ? " · " + g + " Gasttrinker" : "") + (gaesteVon("event", e.id).length ? " · " + gaesteVon("event", e.id).length + " Gäste" : "") + (s == "in" ? " · du bist dabei" : s == "out" ? " · du bist abgemeldet" : s ? "" : " · noch offen") + "</span>" +
     (e.organizer_id ? '<span class="sm b">Organisation: ' + esc(nm(e.organizer_id)) + (e.organizer_id == me ? " (du)" : "") + "</span>" + (e.organizer_id != me ? '<button class="btn dash" style="align-self:flex-start;min-height:40px" data-a="takeover" data-id="' + e.id + '">Abend übernehmen · +40</button>' : "")
       : '<span class="sm b" style="color:var(--orange)">Organisator gesucht</span><button class="btn dash" style="align-self:flex-start;min-height:40px" data-a="organize" data-id="' + e.id + '">Ich organisiere den Abend · +40</button>') +
     (s == "virtual" ? '<span class="chip v" style="align-self:flex-start">Virtuell dabei · 1 Magnum spendiert</span>' : "") +
@@ -585,20 +598,35 @@ function eventCard(e) {
     '<button class="pill ' + (s == "out" ? "out" : "") + '" data-a="abmelden" data-id="' + e.id + '">Abmelden</button>' +
     '<button class="pill" style="border-color:var(--ac)" data-a="ov" data-t="event" data-id="' + e.id + '">Details</button></div></div></article>';
 }
+function datumZeit(p, iso, zeit) {
+  var d = iso ? localDay(iso) : "", t = iso ? lokalZeit(iso).slice(11) : (zeit || "19:00");
+  return '<div class="g2"><label class="f">Datum<input class="t" type="date" data-k="' + p + 'Date" value="' + esc(v(p + "Date", d)) + '" required></label><label class="f">Zeit<input class="t" type="time" data-k="' + p + 'Time" value="' + esc(v(p + "Time", t)) + '" required></label></div>';
+}
+function ausDatumZeit(p, iso) { return new Date(v(p + "Date", iso ? localDay(iso) : "") + "T" + v(p + "Time", iso ? lokalZeit(iso).slice(11) : "19:00")) }
+function ortFelder(p, e) {
+  return '<div class="g2"><label class="f">Name (Beiz)<input class="t" data-k="' + p + 'Loc" value="' + esc(v(p + "Loc", (e && e.location) || "")) + '" maxlength="120"></label><label class="f">Ortschaft<input class="t" data-k="' + p + 'Ort" value="' + esc(v(p + "Ort", (e && e.ortschaft) || "")) + '" maxlength="80"></label></div>';
+}
+function ortText(e) { return [e.location, e.ortschaft].filter(Boolean).join(", ") }
 function pastForm() {
   return '<form class="col" data-s="pastevent" style="gap:10px;margin-top:10px"><label class="f">Titel<input class="t" data-k="paTitle" value="' + esc(v("paTitle")) + '" maxlength="80" required></label>' +
-    '<label class="f">Datum und Zeit<input class="t" type="datetime-local" data-k="paAt" value="' + esc(v("paAt")) + '" required></label>' +
-    '<label class="f">Ort<input class="t" data-k="paLoc" value="' + esc(v("paLoc")) + '" maxlength="120"></label>' +
+    datumZeit("pa") + ortFelder("pa") +
     '<label class="f">Organisator<select class="t" data-k="paOrg">' + memberOptions(v("paOrg"), null, "– niemand –") + "</select></label>" +
     '<div class="row"><button class="btn grow">Erfassen</button><button type="button" class="btn ghost" data-a="ui" data-k="newPast" data-v="">Abbrechen</button></div></form>';
 }
+// Gäste ohne Konto bei Anlässen und Reisen. Austragen darf, wer eingetragen hat, oder der Admin.
+function gaesteVon(art, id) { return D.gaeste.filter(function (g) { return art == "event" ? g.event_id == id : g.trip_id == id }) }
+function gaesteBox(art, id) {
+  var L = gaesteVon(art, id);
+  return '<section class="card" aria-label="Gäste"><span class="b" style="font-size:15px">Gäste (' + L.length + ')</span>' +
+    (L.length ? '<div class="chips">' + L.map(function (g) { return g.added_by == uid() || isAdmin() ? '<button class="chip guest" data-a="gastweg" data-id="' + g.id + '" aria-label="' + esc(g.name) + ' austragen">' + esc(g.name) + " ×</button>" : '<span class="chip guest">' + esc(g.name) + "</span>" }).join("") + "</div>" : "") +
+    '<form class="row" data-s="gast" data-id="' + id + '" data-f="' + art + '"><input class="t" data-k="gast' + id + '" value="' + esc(v("gast" + id)) + '" placeholder="Name des Gasts" maxlength="60" aria-label="Name des Gasts"><button class="btn">Eintragen</button></form></section>';
+}
 function darfAendern(e) { var me = uid(); return isAdmin() || e.created_by == me || e.organizer_id == me }
 function eventEdit(e) {
-  return '<form class="card" data-s="evedit" data-id="' + e.id + '"><span class="mid">Anlass anpassen</span><label class="f">Name<input class="t" data-k="edTitle" value="' + esc(v("edTitle", e.title)) + '" maxlength="80" required></label>' +
-    '<label class="f">Datum und Zeit<input class="t" type="datetime-local" data-k="edAt" value="' + esc(v("edAt", lokalZeit(e.starts_at))) + '" required></label>' +
-    '<label class="f">Ort<input class="t" data-k="edLoc" value="' + esc(v("edLoc", e.location || "")) + '" maxlength="120"></label>' +
+  return '<form class="col" data-s="evedit" data-id="' + e.id + '" style="gap:10px;margin-top:10px"><label class="f">Anlass<input class="t" data-k="edTitle" value="' + esc(v("edTitle", e.title)) + '" maxlength="80" required></label>' +
+    datumZeit("ed", e.starts_at) + ortFelder("ed", e) +
     '<label class="f">Organisator<select class="t" data-k="edOrg">' + memberOptions(v("edOrg", e.organizer_id || ""), null, "– niemand –") + "</select></label>" +
-    '<div class="row"><button class="btn grow">Speichern</button><button type="button" class="btn ghost" data-a="ui" data-k="evEdit" data-v="">Abbrechen</button></div></form>';
+    '<button class="btn">Speichern</button></form>';
 }
 // Anwesenheit nachtragen: nur der Admin, nur vergangene Anlässe
 function anwesenheit(e) {
@@ -612,8 +640,7 @@ function anwesenheit(e) {
 function eventForm() {
   var dflt = (function () { var d = new Date(now() + 7 * 864e5); d.setHours(19, 0, 0, 0); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0") + "T19:00" })();
   return '<form class="card" data-s="event"><span class="mid">Neuer Anlass</span><label class="f">Titel<input class="t" data-k="evTitle" value="' + esc(v("evTitle")) + '" maxlength="80" required placeholder="z.B. Herbst-Stamm"></label>' +
-    '<label class="f">Datum und Zeit<input class="t" type="datetime-local" data-k="evAt" value="' + esc(v("evAt", dflt)) + '" required></label>' +
-    '<label class="f">Ort<input class="t" data-k="evLoc" value="' + esc(v("evLoc")) + '" maxlength="120" placeholder="Restaurant, Adresse"></label>' +
+    '<div class="g2"><label class="f">Datum<input class="t" type="date" data-k="evDate" value="' + esc(v("evDate", dflt.slice(0, 10))) + '" required></label><label class="f">Zeit<input class="t" type="time" data-k="evTime" value="' + esc(v("evTime", "19:00")) + '" required></label></div>' + ortFelder("ev") +
     '<label class="row sm"><input type="checkbox" data-k="evOrg"' + (UI.evOrg ? " checked" : "") + "> Ich organisiere ihn (+40)</label>" +
     '<div class="row"><button class="btn grow">Anlass erfassen</button><button type="button" class="btn ghost" data-a="ui" data-k="newEv" data-v="">Abbrechen</button></div></form>';
 }
@@ -657,7 +684,7 @@ function reisen() {
     return '<button type="button" class="trip" data-a="ov" data-t="trip" data-id="' + tr.id + '"><div class="band" style="background:' + esc(tr.color) + '"><b>' + esc(tr.title) + "</b><span>" + esc(fMonYear(tr.starts_on)) + "</span></div>" +
       '<div class="col" style="padding:14px 16px">' + (tr.program ? '<span class="sm mu">' + esc(tr.program) + "</span>" : "") +
       '<span class="xs mu">OK: ' + esc(tr.ok_id ? nm(tr.ok_id) : "offen") + " · Kassier: " + esc(tr.kassier_id ? nm(tr.kassier_id) : "offen") + " · Sacceri: " + esc(tr.sacceri_id ? nm(tr.sacceri_id) : "offen") + "</span>" +
-      '<div class="row sb"><span class="sm b">' + (past ? "Abgeschlossen · " : "") + n + " / " + tr.seats + ' Plätze</span><span class="chip' + (me ? " v" : "") + '">' + (me ? (past ? "warst dabei" : "angemeldet") : "Details") + "</span></div></div></button>";
+      '<div class="row sb"><span class="sm b">' + (past ? "Abgeschlossen · " : "") + n + " Mitreisende" + (gaesteVon("trip", tr.id).length ? " · " + gaesteVon("trip", tr.id).length + " Gäste" : "") + '</span><span class="chip' + (me ? " v" : "") + '">' + (me ? (past ? "warst dabei" : "angemeldet") : "Details") + "</span></div></div></button>";
   }).join("") : '<div class="card empty">Noch keine Reise geplant.</div>';
   h += UI.newTrip ? tripForm() : '<button class="btn dash" data-a="ui" data-k="newTrip" data-v="1">+ Reise erfassen</button>';
   return h;
@@ -666,7 +693,6 @@ function tripForm() {
   return '<form class="card" data-s="trip"><span class="mid">Neue Reise</span><label class="f">Ziel<input class="t" data-k="trTitle" value="' + esc(v("trTitle")) + '" required maxlength="60" placeholder="z.B. Wallis"></label>' +
     '<div class="g2"><label class="f">Von<input class="t" type="date" data-k="trFrom" value="' + esc(v("trFrom")) + '" required></label><label class="f">Bis<input class="t" type="date" data-k="trTo" value="' + esc(v("trTo")) + '"></label></div>' +
     '<label class="f">Programm<input class="t" data-k="trProg" value="' + esc(v("trProg")) + '" maxlength="300" placeholder="Weinwanderung, Degustation …"></label>' +
-    '<label class="f">Plätze<input class="t" type="number" min="1" max="50" data-k="trSeats" value="' + esc(v("trSeats", "12")) + '"></label>' +
     '<div class="row">' + COLORS.map(function (c) { return '<button type="button" data-a="setui" data-k="trColor" data-v="' + c + '" aria-label="Farbe ' + c + '" aria-pressed="' + (v("trColor", COLORS[0]) == c) + '" style="width:40px;height:40px;border-radius:50%;background:' + c + ";border:3px solid " + (v("trColor", COLORS[0]) == c ? "var(--ac)" : "transparent") + '"></button>' }).join("") + "</div>" +
     '<div class="row"><button class="btn grow">Reise erfassen</button><button type="button" class="btn ghost" data-a="ui" data-k="newTrip" data-v="">Abbrechen</button></div></form>';
 }
@@ -675,11 +701,12 @@ function tripView(tr) {
   var joined = part.indexOf(me) >= 0, past = (tr.ends_on || tr.starts_on) < today();
   var photos = D.trip_photos.filter(function (p) { return p.trip_id == tr.id }).sort(function (a, b) { return a.created_at < b.created_at ? -1 : 1 });
   var h = '<div class="top" style="background:' + esc(tr.color) + '"><button class="back" data-a="close" aria-label="Zurück">' + BACK + '</button><span style="font:900 32px/1 var(--hf);color:#FFF8EE">' + esc(tr.title) + '</span><span class="sm" style="color:#FFF8EE">' + esc(fDay(tr.starts_on)) + (tr.ends_on ? " – " + esc(fDay(tr.ends_on)) : "") + (tr.program ? " · " + esc(tr.program) : "") + "</span></div><main>";
-  h += '<div class="row sb"><span class="sm b">' + part.length + " / " + tr.seats + " Plätze" + (past ? " · abgeschlossen" : "") + "</span>" +
-    (past ? (joined ? '<span class="chip v">Warst dabei</span>' : "") : '<button class="pill ' + (joined ? "on" : "") + '" data-a="tripjoin" data-id="' + tr.id + '" aria-pressed="' + joined + '"' + (!joined && (part.length >= tr.seats || tr.starts_on < today()) ? " disabled" : "") + ">" + (joined ? "Angemeldet" : "Mitreisen · +30") + "</button>") + "</div>";
+  h += '<div class="row sb"><span class="sm b">' + part.length + " Mitreisende" + (past ? " · abgeschlossen" : "") + "</span>" +
+    (past ? (joined ? '<span class="chip v">Warst dabei</span>' : "") : '<button class="pill ' + (joined ? "on" : "") + '" data-a="tripjoin" data-id="' + tr.id + '" aria-pressed="' + joined + '"' + (!joined && tr.starts_on < today() ? " disabled" : "") + ">" + (joined ? "Angemeldet" : "Mitreisen · +30") + "</button>") + "</div>";
   if (part.length) h += '<div class="chips">' + part.map(function (p) { return '<span class="chip">' + esc(nm(p)) + "</span>" }).join("") + "</div>";
   h += '<section class="card"><span class="b" style="font-size:15px">Ämtli</span><label class="f">OK (Organisation)<select class="t" data-c="tripset" data-id="' + tr.id + '" data-f="ok_id">' + memberOptions(tr.ok_id) + "</select></label>" +
     '<label class="f">Kassier<select class="t" data-c="tripset" data-id="' + tr.id + '" data-f="kassier_id">' + memberOptions(tr.kassier_id) + "</select></label></section>";
+  h += gaesteBox("trip", tr.id);
   h += sacceri(tr, part);
   var top = photos.slice(0, 3), rest = photos.length - 3;
   h += '<section class="card"><div class="row sb"><span class="b" style="font-size:15px">Die besten Bilder</span><span class="sm mu">' + photos.length + " hochgeladen" + (photos.length > 3 ? " · 3 sichtbar" : "") + "</span></div>" +
@@ -743,6 +770,7 @@ function club() {
     '<label class="f">Lieblingswein<input class="t" data-k="pfWine" value="' + esc(v("pfWine", PRF.fav_wine || "")) + '" maxlength="60"></label>' +
     '<label class="f">Spezialität<input class="t" data-k="pfSpec" value="' + esc(v("pfSpec", PRF.specialty || "")) + '" maxlength="80"></label><button class="btn">Speichern</button></form>' +
     '<span class="sm mu">Gerät: ' + deviceText(PRF) + " · ändern kann es nur der Administrator.</span>" +
+    (echterAdmin() ? '<button class="btn ghost" data-a="sicht">' + (ALS_MITGLIED ? "Zurück zur Admin-Ansicht" : "App als Mitglied ansehen") + "</button>" : "") +
     '<button class="btn ghost" data-a="logout">Abmelden</button></section>';
   h += installCard();
   return h;
@@ -933,13 +961,32 @@ function beizTermin(e) {
     (V.length ? '<div class="lst">' + V.map(function (x) { var r = D.restaurants.find(function (y) { return y.id == x.restaurant_id }); return '<button type="button" class="row sb sm" style="background:none;border:0;width:100%;text-align:left;color:var(--tx)" data-a="ov" data-t="resto" data-id="' + x.restaurant_id + '"><b>' + esc(r ? r.name : "Beiz") + "</b><span>" + esc(chf(x.total_chf)) + (x.receipt_path ? " · Quittung ✓" : "") + "</span></button>" }).join("") + "</div>" : "") +
     (UI.newResto == e.id ? restoForm(e) : '<button class="btn file" data-a="ui" data-k="newResto" data-v="' + e.id + '">' + CAM + "Quittung fotografieren / Beiz erfassen</button>") + "</section>";
 }
+// Texterkennung auf dem Gerät: Das Foto verlässt dafür das Handy nicht
+function ocrLaden() {
+  return window.Tesseract ? Promise.resolve() : new Promise(function (ok, nein) { var s = document.createElement("script"); s.src = "ocr/tesseract.min.js"; s.onload = ok; s.onerror = nein; document.head.append(s) });
+}
+function quittungErkennen(file) {
+  UI.rsOcr = "laeuft"; render();
+  return ocrLaden().then(function () { return Tesseract.createWorker("deu", 1, { workerPath: "ocr/worker.min.js", corePath: "ocr/", langPath: "ocr/", workerBlobURL: false }) }).then(function (w) {
+    return w.recognize(file).then(function (r) { w.terminate(); return r.data.text });
+  }).then(function (text) {
+    var q = quittungLesen(text);
+    UI.rsWein = String(q.wein_dl); UI.rsMin = String(q.mineral); if (q.total && !v("rsTotal")) UI.rsTotal = String(q.total);
+    UI.rsOcr = q.zeilen.length ? "fertig" : "nichts"; render();
+  }).catch(function () { UI.rsOcr = "fehler"; render() });
+}
 function restoForm(e) {
-  var sel = v("rsId");
+  var schon = D.restaurant_visits.find(function (x) { return x.event_id == e.id }), sel = v("rsId", schon ? schon.restaurant_id : "");
   return '<form class="col tile" data-s="visit" style="gap:10px;padding:12px"><span class="b">Besuch erfassen</span><label class="f">Beiz<select class="t" data-k="rsId"><option value="">+ Neue Beiz</option>' + D.restaurants.slice().sort(function (a, b) { return a.name.localeCompare(b.name, "de") }).map(function (r) { return '<option value="' + r.id + '"' + (sel == r.id ? " selected" : "") + ">" + esc(r.name) + "</option>" }).join("") + "</select></label>" +
-    (sel ? "" : '<div class="g2"><label class="f">Name<input class="t" data-k="rsName" value="' + esc(v("rsName", e.location || "")) + '" maxlength="80"></label><label class="f">Ort<input class="t" data-k="rsPlace" value="' + esc(v("rsPlace")) + '" maxlength="80"></label></div>' +
+    (sel ? "" : '<div class="g2"><label class="f">Name<input class="t" data-k="rsName" value="' + esc(v("rsName", e.location || "")) + '" maxlength="80"></label><label class="f">Ortschaft<input class="t" data-k="rsPlace" value="' + esc(v("rsPlace", e.ortschaft || "")) + '" maxlength="80"></label></div>' +
       '<button type="button" class="btn ghost" data-a="geo">' + (UI.rsLat ? "Standort übernommen ✓" : "Aktuellen Standort für die Karte verwenden") + "</button>") +
     '<div class="g3"><label class="f">Datum<input class="t" type="date" data-k="rsDate" value="' + esc(v("rsDate", localDay(e.starts_at))) + '"></label><label class="f">Personen<input class="t" type="number" min="1" max="100" data-k="rsPeople" value="' + esc(v("rsPeople", "8")) + '"></label><label class="f">Total CHF<input class="t" type="number" min="0" step="0.05" data-k="rsTotal" value="' + esc(v("rsTotal")) + '"></label></div>' +
-    '<label class="btn ghost file">' + CAM + (UI.rsFile ? "Quittung gewählt ✓" : "Quittung fotografieren") + '<input type="file" accept="image/*" capture="environment" data-c="receipt" aria-label="Quittung fotografieren"></label>' +
+    (UI.rsFile ? '<span class="sm b">Quittung gewählt ✓</span>' : "") +
+    '<div class="g2"><label class="btn ghost file">' + CAM + 'Fotografieren<input type="file" accept="image/*" capture="environment" data-c="receipt" aria-label="Quittung fotografieren"></label><label class="btn ghost file">Bild hochladen<input type="file" accept="image/*" data-c="receipt" aria-label="Quittung hochladen"></label></div>' +
+    (UI.rsFile ? (UI.rsOcr == "laeuft" ? laden("Quittung wird gelesen …") : '<button type="button" class="btn ghost" data-a="ocr">Quittung auslesen</button>') : "") +
+    (UI.rsOcr == "fertig" ? '<span class="sm" data-test="ocr">Ausgelesen. Bitte kurz prüfen und korrigieren.</span>' : UI.rsOcr == "nichts" ? '<span class="sm" data-test="ocr">Kein Wein und kein Mineral erkannt. Bitte von Hand eintragen.</span>' : UI.rsOcr == "fehler" ? '<span class="sm" data-test="ocr">Auslesen hat nicht geklappt. Bitte von Hand eintragen.</span>' : "") +
+    '<div class="g2"><label class="f">Wein total (dl)<input class="t" type="number" min="0" step="0.5" data-k="rsWein" value="' + esc(v("rsWein", "0")) + '"></label><label class="f">Mineral (Stück)<input class="t" type="number" min="0" data-k="rsMin" value="' + esc(v("rsMin", "0")) + '"></label></div>' +
+    '<span class="xs mu">Eine Flasche hat 7,5 dl, eine Magnum 15 dl. Der Wein zählt zu gleichen Teilen für alle Anwesenden.</span>' +
     '<div class="row"><button class="btn grow"' + (BUSY ? " disabled" : "") + '>Speichern</button><button type="button" class="btn ghost" data-a="ui" data-k="newResto" data-v="">Abbrechen</button></div></form>';
 }
 var CRIT = [["preis", "Preis-Leistung"], ["gesellig", "Geselligkeit"], ["willkommen", "Willkommen, auch wenn du betrunken bist"]];
@@ -956,6 +1003,7 @@ function restoView(r) {
     return '<div class="row"><span style="width:52px;height:64px;flex:0 0 52px;border-radius:8px;overflow:hidden;background:var(--bg);border:1px dashed var(--ln2);display:flex;align-items:center;justify-content:center">' + (x.receipt_path ? img(x.receipt_path, "Quittung") : '<span class="xs mu">–</span>') + "</span>" +
       '<span class="grow col" style="gap:2px"><b class="sm">' + esc(fDay(x.visited_on)) + '</b><span class="xs mu">' + x.people + " Personen · " + esc(nm(x.created_by)) + '</span></span><span class="col" style="gap:0;align-items:flex-end"><b class="sm">' + chf(x.total_chf) + '</b><span class="xs mu">' + chf(Math.round(x.total_chf / x.people)) + " p.P.</span></span></div>";
   }).join("") + "</div>" : '<span class="empty">Noch kein Besuch erfasst.</span>') + "</section>";
+  if (isAdmin()) h += '<button class="btn ghost" data-a="delresto" data-id="' + r.id + '">Beiz löschen</button>';
   return h + "</main>";
 }
 
@@ -963,14 +1011,16 @@ function restoView(r) {
 function eventView(e) {
   var me = uid(), s = rsvp(e.id, me), past = new Date(e.starts_at).getTime() < now();
   var R = D.rsvps.filter(function (r) { return r.event_id == e.id });
-  var h = '<div class="top"><button class="back" data-a="close" aria-label="Zurück">' + BACK + '</button><span style="font:900 28px/1.1 var(--hf)">' + esc(e.title) + '</span><span class="sm mu">' + esc(fDate(e.starts_at, true)) + (e.location ? " · " + esc(e.location) : "") + "</span>" +
+  var h = '<div class="top"><button class="back" data-a="close" aria-label="Zurück">' + BACK + '</button><span style="font:900 28px/1.1 var(--hf)">' + esc(e.title) + '</span><span class="sm mu">' + esc(fDate(e.starts_at, true)) + (ortText(e) ? " · " + esc(ortText(e)) : "") + "</span>" +
     '<span class="sm b">' + (e.organizer_id ? "Organisation: " + esc(nm(e.organizer_id)) : '<span style="color:var(--orange)">Organisator gesucht</span>') + "</span></div><main>";
   h += '<div class="row wrap"><button class="pill ' + (s == "in" ? "on" : "") + '" data-a="rsvp" data-id="' + e.id + '" data-v="in">Bin dabei</button><button class="pill ' + (s == "out" ? "out" : "") + '" data-a="abmelden" data-id="' + e.id + '">Abmelden</button>' +
     (s == "virtual" ? '<span class="chip v">Virtuell dabei · Magnum spendiert</span>' : "") + "</div>";
+  if (darfAendern(e)) h += '<details class="card" data-offen="evEditOpen"' + (UI.evEditOpen ? " open" : "") + '><summary>Anlass anpassen</summary>' + eventEdit(e) + "</details>";
   h += beizTermin(e);
   var grp = [["in", "Dabei"], ["virtual", "Virtuell dabei"], ["out", "Abgemeldet"]];
   h += '<section class="card">' + grp.map(function (g) { var L = R.filter(function (r) { return r.status == g[0] }); return L.length ? '<div class="col"><span class="lbl">' + g[1] + " (" + L.length + ')</span><div class="chips">' + L.map(function (r) { return '<span class="chip' + (g[0] == "virtual" ? " v" : "") + '">' + esc(nm(r.member_id)) + "</span>" }).join("") + "</div></div>" : "" }).join("") +
     (R.length ? "" : '<span class="empty">Noch niemand angemeldet.</span>') + "</section>";
+  h += gaesteBox("event", e.id);
   // Magnums des Abends mit Gasttrinkern pro Magnum
   var M = D.magnums.filter(function (m) { return m.event_id == e.id }).sort(function (a, b) { return a.created_at < b.created_at ? -1 : 1 });
   var gAll = D.magnum_guests.filter(function (g) { return M.some(function (m) { return m.id == g.magnum_id }) });
@@ -984,7 +1034,6 @@ function eventView(e) {
     '<form class="row" data-s="magnum" data-id="' + e.id + '"><input class="t" data-k="mWine" value="' + esc(v("mWine")) + '" placeholder="Wein, z.B. Cornalin 2019" maxlength="80" aria-label="Welche Magnum"><button class="btn"' + (v("mWine").trim() ? "" : " disabled") + ">Erfassen</button></form></section>";
   h += rides(e);
   if (isAdmin() && new Date(e.starts_at).getTime() < now()) h += anwesenheit(e);
-  if (darfAendern(e)) h += UI.evEdit == e.id ? eventEdit(e) : '<button class="btn ghost" data-a="ui" data-k="evEdit" data-v="' + e.id + '">Anlass anpassen</button>';
   if (e.created_by == me || isAdmin()) h += '<button class="btn ghost" data-a="delevent" data-id="' + e.id + '">Anlass löschen</button>';
   return h + "</main>";
 }
@@ -1103,6 +1152,10 @@ var ACT = {
   },
   deltrip: function (d) { if (!confirm("Reise wirklich löschen?")) return; OV = null; after(sb.from("trips").delete().eq("id", d.id), "Reise gelöscht") },
   kartweg: function (d) { after(sb.from("card_members").delete().eq("card_id", d.id).eq("member_id", d.m), "Von der Karte genommen") },
+  delresto: function (d) { if (!confirm("Beiz mit allen Besuchen und Bewertungen löschen?")) return; OV = null; after(sb.from("restaurants").delete().eq("id", d.id), "Beiz gelöscht") },
+  gastweg: function (d) { after(sb.from("gaeste").delete().eq("id", d.id), "Gast ausgetragen") },
+  sicht: function () { ALS_MITGLIED = !ALS_MITGLIED; lsSet("mg_als_mitglied", ALS_MITGLIED ? "1" : "0"); toast(ALS_MITGLIED ? "Du siehst die App jetzt als Mitglied" : "Admin-Ansicht"); render() },
+  ocr: function () { if (UI.rsFile) quittungErkennen(UI.rsFile) },
   anw: function (d) { after(sb.rpc("admin_set_rsvp", { p_event: d.id, p_member: d.m, p_status: d.v || null }), "Anwesenheit von " + nm(d.m) + " gespeichert") },
   delevent: function (d) { if (!confirm("Anlass wirklich löschen?")) return; OV = null; after(sb.from("events").delete().eq("id", d.id), "Anlass gelöscht") },
   delcard: function (d) { if (!confirm("Karte wirklich löschen?")) return; OV = null; after(sb.from("cards").delete().eq("id", d.id), "Karte gelöscht") },
@@ -1189,37 +1242,42 @@ var SUBMIT = {
       });
     });
   },
+  gast: function (f) {
+    var id = f.getAttribute("data-id"), art = f.getAttribute("data-f"), n = v("gast" + id).trim(); if (!n) return;
+    var o = { name: n, added_by: uid() }; o[art == "event" ? "event_id" : "trip_id"] = id;
+    after(sb.from("gaeste").insert(o), n + " ist als Gast eingetragen").then(function () { UI["gast" + id] = null; render() });
+  },
   pastevent: function () {
-    var at = new Date(v("paAt")); if (!v("paTitle").trim() || isNaN(at)) return toast("Bitte Titel und Datum angeben");
+    var at = ausDatumZeit("pa"); if (!v("paTitle").trim() || isNaN(at)) return toast("Bitte Titel und Datum angeben");
     if (at.getTime() >= now()) return toast("Das Datum muss in der Vergangenheit liegen");
     var org = v("paOrg");
-    after(sb.from("events").insert({ title: v("paTitle").trim(), starts_at: at.toISOString(), location: v("paLoc").trim() || null, created_by: uid() }).select().single().then(function (r) { if (r.error || !org) return r; return sb.rpc("set_organizer", { p_event: r.data.id, p_member: org }) }), "Anlass erfasst · Anwesenheit trägst du in den Details nach").then(function () { UI.newPast = UI.paTitle = UI.paAt = UI.paLoc = UI.paOrg = null; render() });
+    after(sb.from("events").insert({ title: v("paTitle").trim(), starts_at: at.toISOString(), location: v("paLoc").trim() || null, ortschaft: v("paOrt").trim() || null, created_by: uid() }).select().single().then(function (r) { if (r.error || !org) return r; return sb.rpc("set_organizer", { p_event: r.data.id, p_member: org }) }), "Anlass erfasst · Anwesenheit trägst du in den Details nach").then(function () { UI.newPast = UI.paTitle = UI.paDate = UI.paTime = UI.paLoc = UI.paOrt = UI.paOrg = null; render() });
   },
   evedit: function (f) {
-    var id = f.getAttribute("data-id"), e = D.events.find(function (x) { return x.id == id }), at = new Date(v("edAt", lokalZeit(e.starts_at))), t = v("edTitle", e.title).trim();
+    var id = f.getAttribute("data-id"), e = D.events.find(function (x) { return x.id == id }), at = ausDatumZeit("ed", e.starts_at), t = v("edTitle", e.title).trim();
     if (!t || isNaN(at)) return toast("Bitte Name und Datum angeben");
     // Trägt der Abend noch den automatischen Namen, wandert er mit dem Datum mit
     if (t == magnumName(e.starts_at)) t = magnumName(at.toISOString());
     var org = v("edOrg", e.organizer_id || "");
-    after(sb.from("events").update({ title: t, starts_at: at.toISOString(), location: v("edLoc", e.location || "").trim() || null }).eq("id", id).then(function (r) {
+    after(sb.from("events").update({ title: t, starts_at: at.toISOString(), location: v("edLoc", e.location || "").trim() || null, ortschaft: v("edOrt", e.ortschaft || "").trim() || null }).eq("id", id).then(function (r) {
       if (r.error || org == (e.organizer_id || "")) return r;
       return sb.rpc("set_organizer", { p_event: id, p_member: org || null });
-    }), "Anlass angepasst").then(function () { UI.evEdit = UI.edTitle = UI.edAt = UI.edLoc = UI.edOrg = null; render() });
+    }), "Anlass angepasst").then(function () { UI.evEditOpen = UI.edTitle = UI.edDate = UI.edTime = UI.edLoc = UI.edOrt = UI.edOrg = null; render() });
   },
   event: function () {
-    var at = new Date(v("evAt")); if (!v("evTitle").trim() || isNaN(at)) return toast("Bitte Titel und Datum angeben");
+    var at = new Date(v("evDate") + "T" + v("evTime", "19:00")); if (!v("evTitle").trim() || isNaN(at)) return toast("Bitte Titel und Datum angeben");
     var org = !!UI.evOrg;
-    after(sb.from("events").insert({ title: v("evTitle").trim(), starts_at: at.toISOString(), location: v("evLoc").trim() || null, created_by: uid() }).select().single().then(function (r) {
+    after(sb.from("events").insert({ title: v("evTitle").trim(), starts_at: at.toISOString(), location: v("evLoc").trim() || null, ortschaft: v("evOrt").trim() || null, created_by: uid() }).select().single().then(function (r) {
       if (r.error || !org) return r;
       return sb.rpc("claim_organizer", { p_event: r.data.id });
-    }), "Anlass erfasst" + (org ? " · du organisierst ihn" : "")).then(function () { UI.newEv = UI.evTitle = UI.evAt = UI.evLoc = UI.evOrg = null; render() });
+    }), "Anlass erfasst" + (org ? " · du organisierst ihn" : "")).then(function () { UI.newEv = UI.evTitle = UI.evDate = UI.evTime = UI.evLoc = UI.evOrt = UI.evOrg = null; render() });
   },
   saying: function () { var t = v("spText").trim(); if (!t) return; after(sb.from("sayings").insert({ text: t, author_id: uid() }), "Spruch eingereicht · die meisten Prosts machen ihn zum Spruch des Tages").then(function () { UI.spText = null; UI.spForm = null; render() }) },
   post: function () { var t = v("postText").trim(); if (!t) return; after(post(t)).then(function () { UI.postText = null; render() }) },
   trip: function () {
     if (!v("trTitle").trim() || !v("trFrom")) return toast("Bitte Ziel und Datum angeben");
     var title = v("trTitle").trim();
-    after(sb.from("trips").insert({ title: title, starts_on: v("trFrom"), ends_on: v("trTo") || null, program: v("trProg").trim() || null, seats: Math.max(1, Math.min(50, +v("trSeats", 12) || 12)), color: v("trColor", COLORS[0]), created_by: uid() })
+    after(sb.from("trips").insert({ title: title, starts_on: v("trFrom"), ends_on: v("trTo") || null, program: v("trProg").trim() || null, color: v("trColor", COLORS[0]), created_by: uid() })
       .then(function (r) { if (r.error) return r; return post("hat die Reise nach " + title + " eröffnet. Wer kommt mit?") }), "Reise erfasst").then(function () { ["newTrip", "trTitle", "trFrom", "trTo", "trProg", "trSeats", "trColor"].forEach(function (k) { UI[k] = null }); render() });
   },
   sacceri: function (f) { var t = v("sacPick"); if (!t) return; after(sb.rpc("propose_sacceri", { p_trip: f.getAttribute("data-id"), p_target: t }), "Antrag gestellt: " + nm(t) + " als De Sacceri").then(function () { UI.sacPick = null; render() }) },
@@ -1270,10 +1328,10 @@ var SUBMIT = {
     var mk = rid ? Promise.resolve(rid) : pos.then(function (o) { return sb.from("restaurants").insert({ name: name, place: v("rsPlace").trim() || null, lat: o ? o.lat : null, lng: o ? o.lng : null, created_by: uid() }).select().single() }).then(function (r) { if (r.error) throw r.error; return r.data.id });
     mk.then(function (id) {
       return (file ? upload("receipts", file) : Promise.resolve(null)).then(function (path) {
-        return sb.from("restaurant_visits").insert({ restaurant_id: id, event_id: ev.id || null, visited_on: v("rsDate", ev.starts_at ? localDay(ev.starts_at) : today()), people: Math.max(1, +v("rsPeople", 8) || 1), total_chf: Math.max(0, +v("rsTotal") || 0), receipt_path: path, created_by: uid() }).then(function (r) { if (r.error) throw r.error; return id });
+        return sb.from("restaurant_visits").insert({ restaurant_id: id, event_id: ev.id || null, visited_on: v("rsDate", ev.starts_at ? localDay(ev.starts_at) : today()), wein_dl: Math.max(0, +v("rsWein") || 0), mineral: Math.max(0, Math.round(+v("rsMin") || 0)), people: Math.max(1, +v("rsPeople", 8) || 1), total_chf: Math.max(0, +v("rsTotal") || 0), receipt_path: path, created_by: uid() }).then(function (r) { if (r.error) throw r.error; return id });
       });
     }).then(function (id) {
-      BUSY = false; ["newResto", "rsId", "rsName", "rsPlace", "rsDate", "rsPeople", "rsTotal", "rsFile", "rsLat", "rsLng"].forEach(function (k) { UI[k] = null });
+      BUSY = false; ["newResto", "rsId", "rsName", "rsPlace", "rsDate", "rsPeople", "rsTotal", "rsFile", "rsLat", "rsLng", "rsOcr", "rsWein", "rsMin"].forEach(function (k) { UI[k] = null });
       toast("Besuch gespeichert · jetzt bewerten!"); OV = { t: "resto", id: id }; return loadAll().then(render);
     }).catch(function (e) { BUSY = false; toast(errText(e)); render() });
   }

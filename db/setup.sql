@@ -230,6 +230,7 @@ create table if not exists public.events (
   created_at    timestamptz not null default now()
 );
 alter table public.events enable row level security;
+alter table public.events add column if not exists ortschaft text check (length(ortschaft) <= 80);
 
 -- Keine erfundenen Anlässe in der Vergangenheit, der Organisator kommt nur über claim_organizer.
 -- Vergangenes trägt der Admin nach.
@@ -373,6 +374,9 @@ end $$;
 
 -- Beiz und Quittung gehören zum Termin
 alter table public.restaurant_visits add column if not exists event_id uuid references public.events(id) on delete set null;
+-- Von der Quittung: Wein in Dezilitern und Mineral in Stück. Der Wein zählt zu gleichen Teilen für alle Anwesenden.
+alter table public.restaurant_visits add column if not exists wein_dl numeric(6,1) not null default 0 check (wein_dl >= 0);
+alter table public.restaurant_visits add column if not exists mineral int not null default 0 check (mineral >= 0);
 
 -- Organisator setzen oder entfernen: Admin, wer den Anlass erfasst hat oder ihn organisiert. Vergangenes nur der Admin.
 create or replace function public.set_organizer(p_event uuid, p_member uuid) returns void
@@ -484,7 +488,7 @@ create table if not exists public.trip_participants (
 );
 alter table public.trip_participants enable row level security;
 
--- Mitreisen bis und mit Starttag und nur, solange Plätze frei sind. Die Sperre lässt parallele Anmeldungen warten.
+-- Mitreisen bis und mit Starttag. Eine Obergrenze für Mitreisende gibt es nicht.
 create or replace function public.check_trip_participant() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare v_start date; v_seats int;
@@ -492,9 +496,6 @@ begin
   if public.uid() is null or public.is_admin() then return new; end if;
   select starts_on, seats into v_start, v_seats from public.trips where id = new.trip_id for update;
   if v_start < public.heute() then raise exception 'Die Reise hat schon begonnen'; end if;
-  if (select count(*) from public.trip_participants where trip_id = new.trip_id) >= v_seats then
-    raise exception 'Die Reise ist ausgebucht';
-  end if;
   return new;
 end $$;
 drop trigger if exists trip_participant_check on public.trip_participants;
@@ -509,6 +510,18 @@ create table if not exists public.trip_photos (
   created_at  timestamptz not null default now()
 );
 alter table public.trip_photos enable row level security;
+
+-- Gäste bei Anlässen und Reisen: nur ein Name, kein Konto
+create table if not exists public.gaeste (
+  id         uuid primary key default gen_random_uuid(),
+  event_id   uuid references public.events(id) on delete cascade,
+  trip_id    uuid references public.trips(id) on delete cascade,
+  name       text not null check (length(trim(name)) between 1 and 60),
+  added_by   uuid default public.uid() references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  check (num_nonnulls(event_id, trip_id) = 1)
+);
+alter table public.gaeste enable row level security;
 
 -- ───────────── Prost-Wand ─────────────
 create table if not exists public.posts (
@@ -788,7 +801,7 @@ begin
   foreach t in array array['settings', 'profiles', 'admin_log', 'restaurants', 'restaurant_visits',
     'restaurant_ratings', 'events', 'rsvps', 'magnums', 'magnum_guests', 'rides', 'ride_passengers', 'trips',
     'trip_participants', 'trip_photos', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
-    'sayings', 'saying_prosts', 'feedback', 'sync_stand', 'card_members']
+    'sayings', 'saying_prosts', 'feedback', 'sync_stand', 'card_members', 'gaeste']
   loop
     execute format('drop policy if exists "Mitglieder lesen" on public.%I', t);
     execute format('create policy "Mitglieder lesen" on public.%I for select to authenticated using (public.is_member())', t);
@@ -821,7 +834,7 @@ begin
   for r in select * from (values
     ('restaurants', 'created_by'), ('restaurant_visits', 'created_by'), ('events', 'created_by'),
     ('magnums', 'brought_by'), ('magnum_guests', 'added_by'), ('trip_photos', 'uploaded_by'),
-    ('cards', 'created_by'), ('sayings', 'author_id'), ('posts', 'author_id')
+    ('cards', 'created_by'), ('gaeste', 'added_by'), ('sayings', 'author_id'), ('posts', 'author_id')
   ) as x(tbl, col)
   loop
     execute format('drop policy if exists "Mitglieder anlegen" on public.%I', r.tbl);
@@ -868,7 +881,7 @@ grant update (display_name, fav_wine, specialty) on public.profiles to authentic
 
 -- Anlässe: Organisator nur über claim_organizer (beim Anlegen siehe check_event)
 revoke update on public.events from authenticated;
-grant update (title, starts_at, location) on public.events to authenticated;
+grant update (title, starts_at, location, ortschaft) on public.events to authenticated;
 
 -- Anmeldungen: "redeemed" setzt nur die Kasse. Der Schlüssel muss in der Liste stehen, weil ein Upsert
 -- über die API alle gesendeten Spalten aktualisiert (check_rsvp lässt ihn nicht ändern).
@@ -928,7 +941,7 @@ declare t text;
 begin
   foreach t in array array['profiles', 'events', 'rsvps', 'magnums', 'magnum_guests', 'rides', 'ride_passengers',
     'trips', 'trip_participants', 'trip_photos', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
-    'sayings', 'saying_prosts', 'card_members', 'restaurants', 'restaurant_visits', 'restaurant_ratings', 'feedback', 'admin_log']
+    'sayings', 'saying_prosts', 'card_members', 'gaeste', 'restaurants', 'restaurant_visits', 'restaurant_ratings', 'feedback', 'admin_log']
   loop
     execute format('drop trigger if exists sync_bump on public.%I', t);
     execute format('create trigger sync_bump after insert or update or delete on public.%I for each statement execute function public.sync_bump()', t);

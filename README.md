@@ -9,9 +9,9 @@ Aufgebaut wie die App **Herren Inter** (InterChampionship), als Backend aber [Ne
 | Bereich | Inhalt |
 |---|---|
 | 🍷 Termine | Begrüssung je nach Lage, am Tag nach einem Anlass für alle, die dabei waren: „Hast du Kopfweh?“ oder „Hallo Brummschädel“, nach drei verpassten Anlässen „Komm mal wieder“. Spruch des Tages, eigener Rang mit Punkten, Streak und errechneter Trinkfestigkeit, Club-Ziel, die **nächsten drei Magnum-Abende** (letzter Freitag im Monat, automatisch angelegt, Name und Datum anpassbar), **Duell des Monats Android gegen iPhone**, nächste Anlässe mit „Bin dabei“ / „Abmelden“. Beim Abmelden: **„Ich kann nicht, möchte aber virtuell dabei sein und bezahle eine Magnum“** (Streak bleibt, Magnum geht in die Kasse). „Ich organisiere den Abend“, einen künftigen Abend kann jedes Mitglied jederzeit übernehmen. Magnum-Kasse, Magnum-Abend mit hüpfenden Weingläsern, „Mein Abend“ (Getränke fotografieren), Prost-Wand |
-| Anlass-Details | Beiz und Quittung pro Termin, Wer dabei ist, Organisator (im Anlass anpassbar), **Magnums des Abends mit Gasttrinkern pro Magnum**, Heimweg/Fahrservice: Mitfahrer bewerten den Fahrer (3 Kriterien) und verteilen 10–50 Punkte |
-| ✈️ Reisen | Reisen erfassen, mitreisen, **OK und Kassier** eintragen, **Auszeichnung „De Sacceri“**: Antrag durch ein Mitglied, ⅔-Mehrheit der Anwesenden. Beste Bilder hochladen: 3 sichtbar, der Rest wird zur **Collage-Karte unter „Legendär“** |
-| 👥 Club | Saison-Rangliste (gleiche Punkte = gleicher Rang), Mitgliederprofile mit Gerät, Rollen Mitglied und Administrator, **Spitznamen** (Vorschlag + zweite Unterstützung + ⅔-Mehrheit), Einladungen, Verbesserungsvorschläge (→ GitHub-Issue), Administration |
+| Anlass-Details | „Anlass anpassen“ direkt unter der An- und Abmeldung (Datum und Zeit getrennt, Beiz und Ortschaft), Gäste, Beiz und Quittung pro Termin (fotografieren oder hochladen), Wer dabei ist, Organisator (im Anlass anpassbar), **Magnums des Abends mit Gasttrinkern pro Magnum**, Heimweg/Fahrservice: Mitfahrer bewerten den Fahrer (3 Kriterien) und verteilen 10–50 Punkte |
+| ✈️ Reisen | Reisen erfassen, mitreisen ohne Obergrenze, Gäste eintragen, **OK und Kassier** eintragen, **Auszeichnung „De Sacceri“**: Antrag durch ein Mitglied, ⅔-Mehrheit der Anwesenden. Beste Bilder hochladen: 3 sichtbar, der Rest wird zur **Collage-Karte unter „Legendär“** |
+| 👥 Club | Saison-Rangliste (gleiche Punkte = gleicher Rang), Mitgliederprofile mit Gerät, Rollen Mitglied und Administrator (der Admin kann die App zum Testen als Mitglied ansehen), **Spitznamen** (Vorschlag + zweite Unterstützung + ⅔-Mehrheit), Einladungen, Verbesserungsvorschläge (→ GitHub-Issue), Administration |
 | 🃏 Karten | Sammelkarten Magic Moment, Legendär, „Klug war’s nicht, aber geil“, Sacceri- und Collage-Karten, geheime Karten (Trophäe, Location, Club) zum Freischalten |
 | 📊 Statistik | **Karte der Beizen** (OpenStreetMap, ohne Schlüssel), Kennzahlen, Teilnahme pro Anlass, Beizen mit Quittungsfoto, Kosten pro Kopf, Bewertung (Preis-Leistung, Geselligkeit, „Willkommen, auch wenn du betrunken bist“), Link zu Google Maps |
 
@@ -24,7 +24,7 @@ Aufgebaut wie die App **Herren Inter** (InterChampionship), als Backend aber [Ne
 - **Streak:** Anlässe in Folge (dabei oder virtuell). „Nur abmelden“ setzt sie auf 0, der **Rekord** bleibt stehen.
 - **Duell des Monats:** Anwesenheit in Prozent, Android gegen iPhone (das Gerät wird bei der Registrierung erkannt, ändern kann es nur der Administrator). Es zählt nur, wer wirklich dabei war. Wer im Vormonat verloren hat, bringt die nächste Magnum; das zeigt die App nur an.
 - **Effekte:** Am Anlasstag fliegen gefüllte Weingläser durchs Bild, an besonderen Tagen Emojis (Samichlaus, Halloween, Ostern usw.). Im Advent trägt das Glas eine Mütze, an manchen Wintertagen schneit es. Bei „Bewegung reduzieren“ bewegt sich nichts.
-- **Trinkfestigkeit:** Ø Getränke pro Abend aus den fotografierten Getränken (Wein, Bier, Schnaps 1, Magnum-Glas 1,5, Wasser 0). Die App schlägt „Wein“ vor, man korrigiert mit einem Tipp. Eine automatische Bilderkennung ist noch nicht eingebaut.
+- **Trinkfestigkeit:** Ø Getränke pro Abend aus den Quittungen (der Wein zählt zu gleichen Teilen für alle Anwesenden, 1 dl ist ein Glas) und den fotografierten Getränken, am gleichen Abend zählt der höhere Wert. Getränkefotos: (Wein, Bier, Schnaps 1, Magnum-Glas 1,5, Wasser 0). Die App schlägt „Wein“ vor, man korrigiert mit einem Tipp. Quittungen liest eine Texterkennung direkt auf dem Handy aus, kostenlos und ohne dass das Foto das Gerät verlässt. Das Ergebnis lässt sich vor dem Speichern korrigieren.
 
 ## Projektstruktur
 
@@ -114,5 +114,4 @@ Demo-Konten: `ot@magnum.test` (Admin, iPhone), `beat@magnum.test` (Android), `ch
 
 - Push-Nachrichten vor Anlässen (wie bei Herren Inter mit VAPID, hier als Route der Function `api`)
 - Deutsche Mails: Neon verschickt Passwort-Mails auf Englisch. Eigene Texte gehen über einen Webhook und eigenen Mailversand.
-- Bilderkennung für Getränkefotos
 - Teilen-Knöpfe für die WhatsApp-Gruppe

@@ -78,7 +78,8 @@ test.describe("Termine", () => {
     await login(page);
     await page.getByRole("button", { name: "+ Anlass erfassen" }).click();
     await page.fill("[data-k=evTitle]", "Spargel-Abend");
-    await page.fill("[data-k=evAt]", "2026-11-20T19:00");
+    await page.fill("[data-k=evDate]", "2026-11-20");
+    await page.fill("[data-k=evTime]", "19:00");
     await page.fill("[data-k=evLoc]", "Wil");
     await page.getByRole("button", { name: "Anlass erfassen" }).click();
     await expect(event(page, "Spargel-Abend")).toContainText("Wil");
