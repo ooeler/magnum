@@ -41,7 +41,7 @@
       ],
       rsvps: [], magnums: [{ id: "m-1", event_id: "e-1", wine: "Cornalin 2019", brought_by: M.kurt, created_at: iso(-2) }],
       magnum_guests: [{ id: "g-1", magnum_id: "m-1", name: "Peter (Gast von Kurt)", added_by: M.kurt, created_at: iso(-2) }],
-      rides: [{ id: "r-1", event_id: "e-1", driver_id: M.jurg, direction: "Richtung Wil", seats: 3, created_at: iso(-1) }], ride_passengers: [], card_members: [], gaeste: [],
+      rides: [{ id: "r-1", event_id: "e-1", driver_id: M.jurg, direction: "Richtung Wil", seats: 3, created_at: iso(-1) }], ride_passengers: [], card_members: [], gaeste: [], karte_der_woche: [],
       trips: [
         { id: "t-bordeaux", title: "Bordeaux", starts_on: day(-60), ends_on: day(-57), program: "Saint-Émilion, Médoc, Austern in Arcachon", seats: 12, color: "#5A1F2E", ok_id: M.chris, kassier_id: M.beat, sacceri_id: M.dani, created_by: M.chris, created_at: iso(-200) },
         { id: "t-wallis", title: "Wallis", starts_on: day(190), ends_on: day(192), program: "Weinwanderung Sierre–Salgesch, Raclette", seats: 12, color: "#6E2433", ok_id: M.chris, kassier_id: null, sacceri_id: null, created_by: M.chris, created_at: iso(-20) }
@@ -109,7 +109,7 @@
   var COLS = { profiles: ["display_name", "fav_wine", "specialty"], trips: ["title", "starts_on", "ends_on", "program", "seats", "color", "ok_id", "kassier_id"],
     events: ["title", "starts_at", "location", "ortschaft"], ride_passengers: ["stars_safe", "stars_punctual", "stars_mood", "points_given", "rated_at"],
     rsvps: ["event_id", "member_id", "status", "updated_at"], posts: ["text"], sayings: ["text"] };
-  var READONLY = ["settings", "proposals", "ballots", "admin_log", "feedback"];
+  var READONLY = ["karte_der_woche", "settings", "proposals", "ballots", "admin_log", "feedback"];
   var CASCADE = { events: [["rsvps", "event_id"], ["magnums", "event_id"], ["rides", "event_id"], ["gaeste", "event_id"]], magnums: [["magnum_guests", "magnum_id"]], rides: [["ride_passengers", "ride_id"]],
     cards: [["card_members", "card_id"]], trips: [["gaeste", "trip_id"], ["trip_participants", "trip_id"], ["trip_photos", "trip_id"], ["proposals", "trip_id"]], posts: [["post_prosts", "post_id"]], sayings: [["saying_prosts", "saying_id"]],
     restaurants: [["restaurant_visits", "restaurant_id"], ["restaurant_ratings", "restaurant_id"]], proposals: [["ballots", "proposal_id"]] };

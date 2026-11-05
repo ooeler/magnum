@@ -709,6 +709,36 @@ create table if not exists public.card_members (
 );
 alter table public.card_members enable row level security;
 
+-- ───────────── Push-Nachrichten und Karte der Woche ─────────────
+-- Nur für die Function "api": Schlüssel, Abos und was schon verschickt wurde. Keine Policy, kein Zugriff über die App.
+create table if not exists public.push_config (
+  id          int primary key default 1 check (id = 1),
+  public_key  text not null,
+  private_key text not null
+);
+alter table public.push_config enable row level security;
+create table if not exists public.push_abos (
+  endpoint   text primary key,
+  member_id  uuid not null references public.profiles(id) on delete cascade,
+  p256dh     text not null,
+  auth       text not null,
+  created_at timestamptz not null default now()
+);
+alter table public.push_abos enable row level security;
+create table if not exists public.push_log (
+  art     text not null,
+  ref     text not null,
+  sent_at timestamptz not null default now(),
+  primary key (art, ref)
+);
+alter table public.push_log enable row level security;
+-- Jede Woche wird eine Sammelkarte aufgedeckt
+create table if not exists public.karte_der_woche (
+  woche   date primary key,
+  card_id uuid not null references public.cards(id) on delete cascade
+);
+alter table public.karte_der_woche enable row level security;
+
 -- ───────────── Getränkefotos (Trinkfestigkeit) ─────────────
 create table if not exists public.drinks (
   id         uuid primary key default gen_random_uuid(),
@@ -791,7 +821,8 @@ end $$;
 -- Die Data API läuft als Rolle "authenticated". Was sie darf, regeln danach Spalten-Rechte und Policies.
 grant usage on schema public to anonymous, authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
-revoke all on table public.invites, public.magnum_serie from anonymous, authenticated;
+revoke all on table public.invites, public.magnum_serie, public.push_config, public.push_abos, public.push_log from anonymous, authenticated;
+revoke insert, update, delete on public.karte_der_woche from authenticated;
 grant select on public.app_status to anonymous;
 
 -- Lesen: alle Mitglieder (Einladungen nie direkt, nur über die Edge Function)
@@ -801,7 +832,7 @@ begin
   foreach t in array array['settings', 'profiles', 'admin_log', 'restaurants', 'restaurant_visits',
     'restaurant_ratings', 'events', 'rsvps', 'magnums', 'magnum_guests', 'rides', 'ride_passengers', 'trips',
     'trip_participants', 'trip_photos', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
-    'sayings', 'saying_prosts', 'feedback', 'sync_stand', 'card_members', 'gaeste']
+    'sayings', 'saying_prosts', 'feedback', 'sync_stand', 'card_members', 'gaeste', 'karte_der_woche']
   loop
     execute format('drop policy if exists "Mitglieder lesen" on public.%I', t);
     execute format('create policy "Mitglieder lesen" on public.%I for select to authenticated using (public.is_member())', t);
@@ -941,7 +972,7 @@ declare t text;
 begin
   foreach t in array array['profiles', 'events', 'rsvps', 'magnums', 'magnum_guests', 'rides', 'ride_passengers',
     'trips', 'trip_participants', 'trip_photos', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
-    'sayings', 'saying_prosts', 'card_members', 'gaeste', 'restaurants', 'restaurant_visits', 'restaurant_ratings', 'feedback', 'admin_log']
+    'sayings', 'saying_prosts', 'card_members', 'gaeste', 'karte_der_woche', 'restaurants', 'restaurant_visits', 'restaurant_ratings', 'feedback', 'admin_log']
   loop
     execute format('drop trigger if exists sync_bump on public.%I', t);
     execute format('create trigger sync_bump after insert or update or delete on public.%I for each statement execute function public.sync_bump()', t);
@@ -967,7 +998,7 @@ language plpgsql stable set search_path = public as $$
 declare rest text[]; frei text[]; fertig text[] := '{}';
 begin
   select array_agg(c.relname::text) into rest from pg_class c join pg_namespace n on n.oid = c.relnamespace
-  where n.nspname = 'public' and c.relkind = 'r' and c.relname not in ('backups', 'schema_migrations', 'app_status', 'sync_stand');
+  where n.nspname = 'public' and c.relkind = 'r' and c.relname not in ('backups', 'schema_migrations', 'app_status', 'sync_stand', 'push_config', 'push_abos', 'push_log');
   while cardinality(rest) > 0 loop
     select array_agg(t) into frei from unnest(rest) t
     where not exists (

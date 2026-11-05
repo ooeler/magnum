@@ -14,6 +14,16 @@ self.addEventListener("activate", function (e) {
 
 // App-Dateien: zuerst Netz (für Updates), offline aus dem Cache. Schriften: Cache zuerst.
 // Anfragen an Neon (andere Domain, auch Fotos) werden nie gecacht.
+// Push-Nachrichten: Erinnerungen und Karte der Woche
+self.addEventListener("push", function (e) {
+  var d = {}; try { d = e.data.json() } catch (x) {}
+  e.waitUntil(self.registration.showNotification(d.title || "Magnum", { body: d.body || "", icon: "icon-192.png", badge: "icon-192.png", data: { url: d.url || "./" } }));
+});
+self.addEventListener("notificationclick", function (e) {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: "window" }).then(function (L) { return L.length ? L[0].focus() : self.clients.openWindow(e.notification.data.url) }));
+});
+
 self.addEventListener("fetch", function (e) {
   var r = e.request;
   if (r.method != "GET") return;
