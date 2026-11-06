@@ -6,7 +6,7 @@
 // Vorschlag /feedback         Vorschlag speichern, /feedback-export für GitHub Actions (feedback-issues.yml)
 // Fotos     /fotos, /fotos/links  privater Speicher: nur JPEG bis 5 MB, nur Mitglieder
 // Backup    /backup           täglicher Function Trigger (neon.ts), legt auch die nächsten Magnum-Abende an
-// Push      /push/*, /taeglich  Abo speichern, täglich: Erinnerung 7 Tage vor dem Anlass, montags die Karte der Woche
+// Push      /push/*, /taeglich  Abo speichern, Test-Push, täglich: Erinnerung 7 Tage vor dem Anlass, montags die Karte der Woche
 import { attachDatabasePool } from "@neon/functions";
 import { parseTriggerDelivery } from "@neon/functions/triggers";
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
@@ -241,11 +241,14 @@ const schluessel = async () => {
   await q("insert into public.push_config (id, public_key, private_key) values (1, $1, $2) on conflict (id) do nothing", [n.publicKey, n.privateKey]);
   return (await q("select public_key, private_key from public.push_config where id = 1"))[0];
 };
-const senden = async (titel: string, text: string, url = "./") => {
+// Ohne "nur" an alle Abos, sonst nur an die Geräte dieses Mitglieds
+const senden = async (titel: string, text: string, url = "./", nur: string | null = null) => {
   const k = await schluessel();
-  webpush.setVapidDetails(APP_URL, k.public_key, k.private_key);
+  // Web-Push verlangt eine https-Adresse als Absender; Testbranches laufen mit http://localhost
+  webpush.setVapidDetails(APP_URL.startsWith("https://") ? APP_URL : "https://github.com/ooeler/magnum", k.public_key, k.private_key);
   let n = 0;
-  for (const a of await q("select endpoint, p256dh, auth from public.push_abos")) {
+  const abos = nur ? await q("select endpoint, p256dh, auth from public.push_abos where member_id = $1", [nur]) : await q("select endpoint, p256dh, auth from public.push_abos");
+  for (const a of abos) {
     try {
       await webpush.sendNotification({ endpoint: a.endpoint, keys: { p256dh: a.p256dh, auth: a.auth } }, JSON.stringify({ title: titel, body: text, url }), { TTL: 86400 });
       n++;
@@ -275,6 +278,15 @@ app.post("/push/abmelden", async (c) => {
   const b = await c.req.json().catch(() => ({}));
   await q("delete from public.push_abos where endpoint = $1 and member_id = $2", [String(b.endpoint ?? ""), m.id]);
   return c.json({ ok: true });
+});
+
+// Test-Push an die eigenen Geräte, höchstens einmal pro Minute
+app.post("/push/test", async (c) => {
+  const m = await member(c.req.raw);
+  if (!m) return c.json({ error: "Kein Mitglied" }, 403);
+  if (!(await einmal("test", m.id + "@" + new Date().toISOString().slice(0, 16)))) return c.json({ error: "Bitte eine Minute warten." }, 429);
+  const n = await senden("Magnum", "Test-Push: Es funktioniert! 🍷", "./", m.id);
+  return c.json({ ok: true, geraete: n });
 });
 
 // Täglich: Erinnerung 7 Tage vor jedem Anlass, montags wird eine Sammelkarte aufgedeckt

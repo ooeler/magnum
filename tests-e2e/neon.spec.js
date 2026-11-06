@@ -142,7 +142,7 @@ test("Magnum-Serie: drei Abende, Name aus dem Datum, Anpassen", async () => {
   expect(uebernahme.s, JSON.stringify(uebernahme.j)).toBeLessThan(300);
 });
 
-test("Push: Schlüssel, Abo nur für Mitglieder, Tageslauf nur vom Trigger", async () => {
+test("Push: Schlüssel, Abo und Test-Push nur für Mitglieder, Tageslauf nur vom Trigger", async () => {
   const k = await (await fetch(API + "/push/key")).json();
   expect(k.key.length).toBeGreaterThan(40);
   const abo = { endpoint: "https://push.example.test/" + zufall(), keys: { p256dh: "B".repeat(60), auth: "a".repeat(22) } };
@@ -152,6 +152,13 @@ test("Push: Schlüssel, Abo nur für Mitglieder, Tageslauf nur vom Trigger", asy
   expect((await daten(B.token, "/push_abos?select=*")).s).toBeGreaterThanOrEqual(400);
   expect((await daten(B.token, "/push_config?select=*")).s).toBeGreaterThanOrEqual(400);
   expect((await post("/taeglich", {})).s).toBe(401);
+  expect((await post("/push/test", {})).s).toBe(403);
+  const t = await post("/push/test", {}, bearer(B.token));
+  expect(t.s, JSON.stringify(t.j)).toBe(200);
+  expect(typeof t.j.geraete).toBe("number");
+  // zweiter Test-Push in derselben Minute wird abgelehnt (post() würde bei 429 warten, darum direkt)
+  const nochmal = await fetch(API + "/push/test", { method: "POST", headers: { "content-type": "application/json", origin: ORIGIN, ...bearer(B.token) }, body: "{}" });
+  expect(nochmal.status).toBe(429);
   expect((await post("/push/abmelden", { endpoint: abo.endpoint }, bearer(B.token))).s).toBe(200);
 });
 
