@@ -478,4 +478,36 @@ select pg_temp.check((select count(*) from x) = 0, 'Fremde nehmen niemanden von 
 reset role;
 select pg_temp.als('');
 
+-- 23) Videokarten: verdeckt, gezogen am Abend, nie die eigene, eine pro Abend
+insert into public.events (id, title, starts_at) values ('20000000-0000-0000-0000-000000000003', 'Oktober-Magnum', now() - interval '1 hour');
+insert into public.rsvps (event_id, member_id, status) values
+  ('20000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-00000000000b', 'virtual'),
+  ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000b', 'in')
+  on conflict (event_id, member_id) do update set status = excluded.status;
+set role authenticated;
+select pg_temp.als('C');
+insert into public.video_karten (id, title, path) values
+  ('60000000-0000-0000-0000-000000000001', 'Korken', 'videos/00000000-0000-0000-0000-00000000000c/1.webm'),
+  ('60000000-0000-0000-0000-000000000002', 'Tanz', 'videos/00000000-0000-0000-0000-00000000000c/2.mp4');
+select pg_temp.als('B');
+insert into public.video_karten (id, title, path) values ('60000000-0000-0000-0000-000000000003', 'Eigenes', 'videos/00000000-0000-0000-0000-00000000000b/3.webm');
+select pg_temp.verboten($q$insert into public.video_karten (title, path) values ('Fremd', 'videos/00000000-0000-0000-0000-00000000000c/9.webm')$q$, 'Video nur im eigenen Ordner');
+select pg_temp.check((select count(*) from public.video_karten) = 1, 'Fremde Videokarten bleiben verdeckt');
+select pg_temp.check(public.video_bestand() = 3, 'Bestand zählt alle Videokarten');
+select pg_temp.verboten($q$select public.karte_ziehen('20000000-0000-0000-0000-000000000001')$q$, 'Ziehen erst am Abend selbst');
+select pg_temp.verboten($q$insert into public.video_ziehungen (event_id, member_id, karte_id) values ('20000000-0000-0000-0000-000000000003', public.uid(), '60000000-0000-0000-0000-000000000001')$q$, 'Ziehen nur über karte_ziehen');
+select pg_temp.check(public.karte_ziehen('20000000-0000-0000-0000-000000000003') in ('60000000-0000-0000-0000-000000000001', '60000000-0000-0000-0000-000000000002'), 'Virtuell dabei zieht eine fremde Karte');
+select pg_temp.check((select count(*) from public.video_karten) = 2, 'Gezogene Karte ist danach sichtbar');
+select pg_temp.verboten($q$select public.karte_ziehen('20000000-0000-0000-0000-000000000003')$q$, 'Nur eine Karte pro Abend');
+select pg_temp.als('D');
+select pg_temp.verboten($q$select public.karte_ziehen('20000000-0000-0000-0000-000000000003')$q$, 'Wer nicht dabei ist, zieht nicht');
+select pg_temp.check((select count(*) from public.video_ziehungen) = 1, 'Alle sehen, wer wie viele Karten hat');
+select pg_temp.als('C');
+with x as (delete from public.video_karten where id in (select karte_id from public.video_ziehungen) returning 1)
+select pg_temp.check((select count(*) from x) = 0, 'Gezogene Karte löscht der Ersteller nicht mehr');
+with x as (delete from public.video_karten where id not in (select karte_id from public.video_ziehungen) returning 1)
+select pg_temp.check((select count(*) from x) = 1, 'Ungezogene eigene Karte löschbar');
+reset role;
+select pg_temp.als('');
+
 select 'ALLE DB-TESTS GRÜN' as ergebnis;

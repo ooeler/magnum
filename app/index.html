@@ -157,11 +157,11 @@ details summary{cursor:pointer;font-weight:700;list-style:none}details summary::
 // ═══════════════════════════════════════════════════════════════════════
 var C = window.MG_CONFIG || {}, sb = null, ME = null, PRF = null, PREV = null, MAINT = false, READY = false;
 var TABLES = ["settings", "profiles", "events", "rsvps", "magnums", "magnum_guests", "rides", "ride_passengers", "trips",
-  "trip_participants", "trip_photos", "proposals", "ballots", "posts", "post_prosts", "cards", "drinks", "sayings", "card_members", "gaeste", "karte_der_woche",
+  "trip_participants", "trip_photos", "proposals", "ballots", "posts", "post_prosts", "cards", "drinks", "sayings", "card_members", "gaeste", "karte_der_woche", "video_karten", "video_ziehungen",
   "saying_prosts", "restaurants", "restaurant_visits", "restaurant_ratings", "feedback", "admin_log"];
 var D = {}; TABLES.forEach(function (t) { D[t] = [] });
 var TAB = lsGet("mg_tab") || "termine", OV = null, SH = null, UI = {}, AUTH = { mode: "login" }, INVITE = null, INVLIST = null, NEWLINK = null, BUSY = false;
-var URLS = {}, WANT = {}, CACHE = null, CH = null;
+var URLS = {}, WANT = {}, CACHE = null, CH = null, VB = 0;
 
 function lsGet(k) { try { return localStorage.getItem(k) } catch (e) { return null } }
 function lsSet(k, v) { try { localStorage.setItem(k, v) } catch (e) {} }
@@ -305,7 +305,7 @@ function fetchUrls() {
   sb.storage.from("photos").createSignedUrls(ps, 3600).then(function (r) {
     (r.data || []).forEach(function (x) {
       if (!x.signedUrl) return; URLS[x.path] = x.signedUrl;
-      document.querySelectorAll("img[data-p]").forEach(function (i) { if (i.getAttribute("data-p") == x.path) i.src = x.signedUrl });
+      document.querySelectorAll("img[data-p],video[data-p]").forEach(function (i) { if (i.getAttribute("data-p") == x.path) i.src = x.signedUrl });
     });
   });
 }
@@ -321,6 +321,105 @@ function shrink(file) {
     }).catch(function () { res(file) });
   });
 }
+// ═════════════ Videokarten ═════════════
+// Längere Videos kürzt die App auf die ersten 7 Sekunden und verkleinert sie (max. 720 px). Läuft auf dem Gerät, kostet nichts.
+var VIDEO_S = 7, VIDEO_MAX = 12 * 1024 * 1024;
+function videoFormat() {
+  if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return null;
+  return ["video/mp4;codecs=avc1,mp4a", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].filter(function (t) { return MediaRecorder.isTypeSupported(t) })[0] || null;
+}
+// Muss direkt aus dem Tipp heraus starten: iPhone spielt Videos mit Ton nur nach einer Berührung ab
+function videoKuerzen(file) {
+  return new Promise(function (ok, fail) {
+    var url = URL.createObjectURL(file), v = document.createElement("video"), fertig = false, AC = window.AudioContext || window.webkitAudioContext, ac = null;
+    try { ac = AC ? new AC() : null } catch (e) {}
+    v.playsInline = true; v.preload = "auto"; v.src = url;
+    var spielt = v.play().catch(function () { v.muted = true; return v.play() });
+    function ende(f, x) { if (fertig) return; fertig = true; try { v.pause() } catch (e) {} URL.revokeObjectURL(url); if (ac && ac.close) ac.close().catch(function () {}); f(x) }
+    v.onerror = function () { ende(fail, new Error("Dieses Video kann das Gerät nicht lesen.")) };
+    v.onloadedmetadata = function () {
+      var dauer = v.duration, typ = videoFormat();
+      // Kurz, klein und in einem Format, das alle abspielen: unverändert hochladen
+      if (isFinite(dauer) && dauer <= VIDEO_S + 0.3 && file.size <= VIDEO_MAX && /^video\/(mp4|webm)$/.test(file.type)) return ende(ok, file);
+      if (!typ || !v.videoWidth) {
+        if (!isFinite(dauer) || dauer > VIDEO_S + 0.3) return ende(fail, new Error("Höchstens 7 Sekunden. Bitte kürzer filmen."));
+        return file.size <= VIDEO_MAX ? ende(ok, file) : ende(fail, new Error("Das Video ist zu gross."));
+      }
+      var k = Math.min(1, 720 / Math.max(v.videoWidth, v.videoHeight)), c = document.createElement("canvas");
+      c.width = Math.round(v.videoWidth * k / 2) * 2; c.height = Math.round(v.videoHeight * k / 2) * 2;
+      var g = c.getContext("2d"), strom = c.captureStream(30), teile = [];
+      if (ac && !v.muted) try { var quelle = ac.createMediaElementSource(v), ziel = ac.createMediaStreamDestination(); quelle.connect(ziel); ziel.stream.getAudioTracks().forEach(function (t) { strom.addTrack(t) }); if (ac.resume) ac.resume() } catch (e) {}
+      var rec = new MediaRecorder(strom, { mimeType: typ, videoBitsPerSecond: 2500000, audioBitsPerSecond: 96000 });
+      rec.ondataavailable = function (e) { if (e.data && e.data.size) teile.push(e.data) };
+      rec.onstop = function () { var b = new Blob(teile, { type: typ.split(";")[0] }); b.size > VIDEO_MAX ? ende(fail, new Error("Das Video ist zu gross.")) : ende(ok, b) };
+      function stopp() { if (rec.state != "inactive") rec.stop() }
+      function malen() {
+        if (fertig || rec.state == "inactive") return;
+        g.drawImage(v, 0, 0, c.width, c.height);
+        if (v.currentTime >= VIDEO_S || v.ended) return stopp();
+        requestAnimationFrame(malen);
+      }
+      v.onended = stopp;
+      spielt.then(function () {
+        v.pause(); v.currentTime = 0;
+        v.onseeked = function () { v.onseeked = null; v.play().then(function () { rec.start(250); malen() }).catch(function () { ende(fail, new Error("Das Video liess sich nicht abspielen.")) }) };
+      }).catch(function () { ende(fail, new Error("Das Video liess sich nicht abspielen.")) });
+    };
+  });
+}
+function vid(path, auto) {
+  var u = URLS[path]; if (!u) WANT[path] = 1;
+  return '<video data-p="' + esc(path) + '"' + (u ? ' src="' + esc(u) + '"' : "") + ' controls playsinline preload="metadata"' + (auto ? " autoplay" : "") + ' style="width:100%;max-height:60vh;border-radius:12px;background:#000"></video>';
+}
+function videoKarte(id) { return D.video_karten.find(function (k) { return k.id == id }) }
+function meineVideos(mid) { var ids = {}; D.video_ziehungen.forEach(function (z) { if (z.member_id == mid) ids[z.karte_id] = 1 }); return Object.keys(ids) }
+function ziehEnde(e) { var d = new Date(e.starts_at); d.setDate(d.getDate() + 1); d.setHours(12, 0, 0, 0); return d.getTime() }
+function ziehbar() {
+  var t = now(), me = uid();
+  return D.events.filter(function (e) {
+    var a = new Date(e.starts_at).getTime();
+    return t >= a && t <= ziehEnde(e) && ["in", "virtual"].indexOf(rsvp(e.id, me)) >= 0 && !D.video_ziehungen.some(function (z) { return z.event_id == e.id && z.member_id == me });
+  });
+}
+function ziehBox() {
+  return ziehbar().map(function (e) {
+    return '<section class="card gold" aria-label="Karte ziehen"><span class="lbl">' + esc(e.title) + '</span><span class="mid">🎬 Deine Magnum-Karte wartet</span><span class="sm mu">Eine Videokarte aus dem verdeckten Stapel, nur für alle, die heute dabei sind. Ziehen bis morgen um 12 Uhr.</span>' +
+      '<button class="btn" data-a="ziehen" data-id="' + e.id + '"' + (BUSY ? " disabled" : "") + ">Karte ziehen</button></section>";
+  }).join("");
+}
+function videoBereich() {
+  var me = uid(), mine = meineVideos(me), n = Math.max(VB, mine.length), pct = n ? Math.round(mine.length / n * 100) : 0;
+  var h = '<section class="card" aria-label="Videokarten"><div class="row sb"><span class="b" style="font-size:15px">🎬 Videokarten</span><span class="sm b" data-test="video-stand">' + mine.length + " von " + n + " · " + pct + " %</span></div>" +
+    '<div class="bar"><i style="width:' + pct + '%"></i></div><span class="xs mu">Verdeckt im Stapel. Am Magnum-Abend zieht jede Person, die dabei ist, eine Karte.</span>';
+  if (mine.length) h += '<div class="kgrid">' + mine.map(function (id) {
+    var k = videoKarte(id); if (!k) return "";
+    return '<button class="kc" style="--c:#B79CE0;min-height:0" data-a="ov" data-t="video" data-id="' + k.id + '"><span class="r">Videokarte</span><span class="cimg" style="min-height:70px"><b style="font-size:30px">🎬</b></span><b style="font-size:14px;line-height:1.25">' + esc(k.title) + "</b></button>";
+  }).join("") + "</div>";
+  var eigene = D.video_karten.filter(function (k) { return k.created_by == me });
+  if (eigene.length) h += '<span class="sm mu" data-test="video-eigene">Von dir im Stapel: ' + eigene.length + "</span>";
+  if (isAdmin() && D.video_karten.length) h += '<details><summary class="sm">Alle Videokarten verwalten (' + D.video_karten.length + ')</summary><div class="lst" style="margin-top:8px">' + D.video_karten.map(function (k) {
+    var z = D.video_ziehungen.filter(function (x) { return x.karte_id == k.id }).length;
+    return '<button type="button" class="row sb" style="background:none;border:0;border-top:1px solid var(--ln);width:100%;text-align:left;color:var(--tx)" data-a="ov" data-t="video" data-id="' + k.id + '"><span class="grow"><b class="sm">' + esc(k.title) + '</b><br><span class="xs mu">' + esc(nm(k.created_by)) + " · " + z + " Mal gezogen</span></span></button>";
+  }).join("") + "</div></details>";
+  h += UI.newVideo ? videoForm() : '<button class="btn dash" data-a="ui" data-k="newVideo" data-v="1">+ Videokarte hochladen</button>';
+  return h + "</section>";
+}
+function videoForm() {
+  return '<form class="col" data-s="vkarte" style="gap:10px"><label class="f">Titel<input class="t" data-k="vkTitle" value="' + esc(v("vkTitle")) + '" maxlength="80" required placeholder="z.B. Korken knallt"></label>' +
+    '<div class="g2"><label class="btn ghost file">' + CAM + "Filmen" + '<input type="file" accept="video/*" capture="environment" data-c="vkfile" aria-label="Video filmen"></label>' +
+    '<label class="btn ghost file">Video wählen<input type="file" accept="video/*" data-c="vkfile" aria-label="Video wählen"></label></div>' +
+    (UI.vkFile ? '<span class="sm" data-test="video-gewaehlt">Video gewählt ✓ ' + esc(UI.vkFile.name || "") + "</span>" : '<span class="xs mu">Höchstens 7 Sekunden. Längere Videos kürzt die App auf die ersten 7 Sekunden.</span>') +
+    (UI.vkStatus ? '<span class="sm" data-test="video-status">' + esc(UI.vkStatus) + "</span>" : "") +
+    '<div class="row"><button class="btn grow"' + (BUSY || !UI.vkFile || !v("vkTitle").trim() ? " disabled" : "") + '>In den Stapel legen</button><button type="button" class="btn ghost" data-a="ui" data-k="newVideo" data-v="">Abbrechen</button></div></form>';
+}
+function videoView(k) {
+  var Z = D.video_ziehungen.filter(function (z) { return z.karte_id == k.id }), meine = Z.find(function (z) { return z.member_id == uid() });
+  var ev = meine && D.events.find(function (e) { return e.id == meine.event_id });
+  var loeschen = isAdmin() || (k.created_by == uid() && !Z.length);
+  return '<div class="top"><button class="back" data-a="close" aria-label="Zurück">' + BACK + '</button></div><main><article class="kc" style="--c:#B79CE0;min-height:0"><span class="r">Videokarte</span>' + vid(k.path, true) +
+    '<span style="font:900 24px/1.15 var(--hf)">' + esc(k.title) + '</span><span class="sm mu">Von ' + esc(nm(k.created_by)) + (ev ? " · gezogen am " + esc(ev.title) : k.created_by == uid() ? " · liegt im Stapel" : "") + "</span></article>" +
+    (loeschen ? '<button class="btn ghost" data-a="delvideo" data-id="' + k.id + '">Videokarte löschen</button>' : "") + "</main>";
+}
 function upload(area, file) {
   if (!/^image\//.test(file.type || "")) return Promise.reject(new Error("Bitte ein Bild wählen."));
   var path = area + "/" + uid() + "/" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + ".jpg";
@@ -334,6 +433,8 @@ function loadAll() {
   return Promise.all(TABLES.map(function (t) { return sb.from(t).select("*") })).then(function (rs) {
     rs.forEach(function (r, i) { if (!r.error) D[TABLES[i]] = r.data || [] });
     PRF = pr(uid());
+    // Wie viele Videokarten es gibt, auch die verdeckten
+    return sb.rpc("video_bestand").then(function (r) { if (r && !r.error) VB = Number(r.data) || 0 });
   });
 }
 var RT = null;
@@ -550,7 +651,7 @@ function duell() {
 }
 function termine() {
   var me = uid(), s = stats(me), b = board(), place = (b.find(function (x) { return x.id == me }) || {}).place;
-  var h = spruch() + karteDerWoche();
+  var h = ziehBox() + spruch() + karteDerWoche();
   h += '<section class="card gold" aria-label="Dein Rang"><div class="row sb"><div class="col" style="gap:2px"><span class="lbl">Dein Rang</span><span class="big" style="font-size:22px;color:var(--ac)">' + esc(s.rank.name) + '</span></div>' +
     '<div class="col" style="gap:0;align-items:flex-end"><span class="big" data-test="punkte">' + s.points + '</span><span class="xs mu">Punkte</span></div></div>' +
     '<div class="col"><div class="bar"><i style="width:' + s.pct + '%"></i></div><span class="sm mu">' + (s.next ? "Noch " + (s.next.min - s.points) + " Punkte bis «" + esc(s.next.name) + "»" : "Höchster Rang erreicht") + "</span></div>" +
@@ -791,7 +892,7 @@ function installCard() {
 function club() {
   var me = uid(), B = board(), st = S();
   var h = "<h2>Saison-Rangliste</h2><ol class=\"card lst\" aria-label=\"Rangliste\">" + B.map(function (x) {
-    return '<li class="row' + (x.id == me ? " me" : "") + '"><span class="rk' + (x.place <= 3 ? " g" + x.place : "") + '">' + (x.showNo ? x.place : "") + '</span><span class="grow col" style="gap:1px"><b class="sm">' + (x.place == 1 && x.s.points > 0 ? '<span data-test="krone" aria-label="Führt die Saison">👑 </span>' : "") + esc(nm(x.id)) + (pr(x.id).nickname ? ' <span class="nick">«' + esc(pr(x.id).nickname) + "»</span>" : "") + '</b><span class="xs mu">' + esc(x.s.rank.name) + " · Streak " + x.s.streak + '</span></span><b class="sm">' + x.s.points + "</b></li>";
+    return '<li class="row' + (x.id == me ? " me" : "") + '"><span class="rk' + (x.place <= 3 ? " g" + x.place : "") + '">' + (x.showNo ? x.place : "") + '</span><span class="grow col" style="gap:1px"><b class="sm">' + (x.place == 1 && x.s.points > 0 ? '<span data-test="krone" aria-label="Führt die Saison">👑 </span>' : "") + esc(nm(x.id)) + (pr(x.id).nickname ? ' <span class="nick">«' + esc(pr(x.id).nickname) + "»</span>" : "") + '</b><span class="xs mu">' + esc(x.s.rank.name) + " · Streak " + x.s.streak + (meineVideos(x.id).length ? ' · <span data-test="video-zahl">🎬 ' + meineVideos(x.id).length + "</span>" : "") + '</span></span><b class="sm">' + x.s.points + "</b></li>";
   }).join("") + "</ol>" + whatsapp(teilenRangliste(), "Rangliste in WhatsApp teilen", "pill");
   h += '<details class="card"><summary>So gibt es Punkte</summary><div class="lst" style="margin-top:10px">' + POINTS.map(function (p) { return '<div class="row sb sm"><span>' + esc(p[0]) + '</span><b>+' + p[1] + "</b></div>" }).join("") +
     '<div class="sm mu">Ränge: ' + RANKS.map(function (r) { return esc(r.name) + " ab " + r.min }).join(" · ") + "</div></div></details>";
@@ -895,7 +996,7 @@ function allCards() {
 }
 function karten() {
   var all = allCards(), f = UI.kf || "alle", L = all.filter(function (c) { return f == "alle" || c.r == f });
-  var h = '<div class="row sb"><h2>Sammelkarten</h2><span class="sm mu">' + L.length + " von " + all.length + " Karten</span></div>";
+  var h = videoBereich() + '<div class="row sb"><h2>Sammelkarten</h2><span class="sm mu">' + L.length + " von " + all.length + " Karten</span></div>";
   h += '<div class="chips">' + [["alle", "Alle", "#F3EBDD"]].concat(Object.keys(RAR).map(function (k) { return [k, RAR[k][0], RAR[k][1]] })).map(function (x) {
     var on = f == x[0]; return '<button class="pill sm" style="border-color:' + (on ? x[2] : "var(--ln2)") + ";background:" + (on ? x[2] : "transparent") + ";color:" + (on ? "#1B1416" : x[2]) + '" data-a="setui" data-k="kf" data-v="' + x[0] + '" aria-pressed="' + on + '">' + esc(x[1]) + "</button>";
   }).join("") + "</div>";
@@ -1116,6 +1217,7 @@ function overlay() {
   else if (o.t == "member") x = pr(o.id), x = x && memberView(x);
   else if (o.t == "resto") x = D.restaurants.find(function (e) { return e.id == o.id }), x = x && restoView(x);
   else if (o.t == "card") x = allCards().find(function (c) { return c.id == o.id }), x = x && cardView(x);
+  else if (o.t == "video") x = videoKarte(o.id), x = x && videoView(x);
   if (!x) { OV = null; return "" }
   return '<div id="ov" role="dialog" aria-modal="true">' + x + "</div>";
 }
@@ -1208,6 +1310,14 @@ var ACT = {
       });
     }).catch(function () { toast("Push-Nachrichten haben nicht geklappt") }).then(render);
   },
+  ziehen: function (d) {
+    if (BUSY) return; BUSY = true; render();
+    sb.rpc("karte_ziehen", { p_event: d.id }).then(function (r) {
+      BUSY = false; if (r.error) throw r.error;
+      return after(null, "Deine Karte ist gezogen 🎬").then(function () { OV = { t: "video", id: r.data }; render() });
+    }).catch(function (e) { BUSY = false; toast(errText(e)); render() });
+  },
+  delvideo: function (d) { if (!confirm("Videokarte wirklich löschen?")) return; OV = null; after(sb.from("video_karten").delete().eq("id", d.id), "Videokarte gelöscht") },
   pushtest: function () {
     sb.functions.invoke("push/test", { body: {} }).then(function (r) {
       return fnErr(r).then(function (e) {
@@ -1279,6 +1389,25 @@ function loadInvites() {
 }
 
 var SUBMIT = {
+  vkarte: function () {
+    var f = UI.vkFile, t = v("vkTitle").trim();
+    if (!t) return toast("Bitte einen Titel angeben"); if (!f) return toast("Bitte ein Video wählen");
+    if (!/^video\//.test(f.type || "")) return toast("Bitte ein Video wählen");
+    var kuerzen = videoKuerzen(f); // sofort, solange der Tipp noch gilt
+    BUSY = true; UI.vkStatus = "Video wird vorbereitet (bis 7 Sekunden) …"; render();
+    kuerzen.then(function (blob) {
+      UI.vkStatus = "Wird hochgeladen …"; render();
+      var webm = /webm/.test(blob.type || ""), path = "videos/" + uid() + "/" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + (webm ? ".webm" : ".mp4");
+      return sb.storage.from("photos").upload(path, blob, { contentType: webm ? "video/webm" : "video/mp4", upsert: false }).then(function (r) {
+        if (r.error) throw r.error;
+        return sb.from("video_karten").insert({ title: t, path: path, created_by: uid() });
+      });
+    }).then(function (r) {
+      BUSY = false; UI.vkStatus = null; if (r && r.error) throw r.error;
+      ["newVideo", "vkTitle", "vkFile"].forEach(function (k) { UI[k] = null });
+      return after(null, "Die Videokarte liegt verdeckt im Stapel");
+    }).catch(function (e) { BUSY = false; UI.vkStatus = null; toast(errText(e)); render() });
+  },
   login: function (f) {
     AUTH.err = null;
     sb.auth.signInWithPassword({ email: f.email.value.trim(), password: f.pw.value }).then(function (r) {
@@ -1412,6 +1541,7 @@ var CHANGE = {
     fs.reduce(function (p, f) { return p.then(function () { return upload("trips", f).then(function (path) { return sb.from("trip_photos").insert({ trip_id: id, path: path, uploaded_by: uid() }) }) }) }, Promise.resolve())
       .then(function () { return after(null, fs.length + " Bild" + (fs.length > 1 ? "er" : "") + " hochgeladen") }).catch(function (e) { toast(errText(e)) });
   },
+  vkfile: function (el) { UI.vkFile = el.files && el.files[0] || null; render() },
   cardphoto: function (el) { UI.cdFile = el.files && el.files[0] || null; render() },
   receipt: function (el) { UI.rsFile = el.files && el.files[0] || null; render() },
   kartdazu: function (el) {

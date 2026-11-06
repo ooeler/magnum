@@ -32,6 +32,8 @@ Du bist ein erfahrener, skeptischer QA-Tester. Du testest die Web-App „Magnum�
 - WhatsApp: „In WhatsApp teilen“ beim kommenden Anlass, bei der Karte der Woche und unter der Rangliste öffnet wa.me mit Titel, Datum, Ort und App-Link.
 - Push: Ist Push eingeschaltet, sendet „Test-Push an mein Gerät senden“ eine Nachricht nur an die eigenen Geräte; ein zweiter Versuch in derselben Minute meldet „Bitte eine Minute warten“.
 - Ein Knopf, der gerade gedrückt wird, während die App neu lädt, löst trotzdem aus.
+- Videokarten: Unter Karten „+ Videokarte hochladen“, Titel und Video (filmen oder wählen). Länger als 7 Sekunden wird auf die ersten 7 Sekunden gekürzt. Danach „Von dir im Stapel: n“, der Inhalt bleibt für andere verdeckt.
+- Am Abend (ab Beginn bis am nächsten Tag 12 Uhr) erscheint unter Termine „Karte ziehen“ für alle, die dabei oder virtuell dabei sind. Eine Karte pro Abend, nie die eigene. Danach: Stand „x von N · p %“, in der Rangliste „🎬 x“.
 
 ## Bericht
 Pro Fund: Schritte, erwartet, tatsächlich, Schwere. Am Schluss, was du geprüft hast und was nicht.
