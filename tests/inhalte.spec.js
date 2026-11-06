@@ -1,7 +1,7 @@
 // Inhalte: Reisen, Löschen, Kasse, Prost-Wand, Fahrangebote und Fotos.
 const fs = require("fs");
 const path = require("path");
-const { test, expect, login, tab, BEAT } = require("./fixtures");
+const { test, expect, login, tab, as, BEAT, CHRIS } = require("./fixtures");
 
 const BILD = path.join(__dirname, "..", "app", "icon-192.png");
 const PNG = fs.readFileSync(BILD);
@@ -301,6 +301,34 @@ test.describe("Anlässe anpassen", () => {
 });
 
 test.describe("Beiz, Karte und Organisator", () => {
+  test("Der Organisator ist immer dabei und kann sich nicht abmelden", async ({ page }) => {
+    await page.goto("/");
+    await as(page, BEAT.email, "sb.rpc('claim_organizer', { p_event: 'e-2' })");
+    await login(page, BEAT);
+    const ev = page.locator("article.ev", { hasText: "Chlaus-Magnum" });
+    await expect(ev.locator("[data-test=org-dabei]")).toHaveText("Als Organisator immer dabei");
+    await expect(ev.getByRole("button", { name: "Abmelden" })).toHaveCount(0);
+    for (const st of ["out", "virtual"]) {
+      const r = await page.evaluate((st) => window.__mg.asId("u-beat", (sb) => sb.from("rsvps").upsert({ event_id: "e-2", member_id: "u-beat", status: st })), st);
+      expect(r.error.message).toContain("Organisator ist immer dabei");
+    }
+    const d = await page.evaluate(() => window.__mg.asId("u-beat", (sb) => sb.from("rsvps").delete().eq("event_id", "e-2").eq("member_id", "u-beat")));
+    expect(d.error.message).toContain("Organisator ist immer dabei");
+    // Nach dem Abgeben geht Abmelden wieder
+    await page.evaluate(() => window.__mg.asId("u-beat", (sb) => sb.rpc("set_organizer", { p_event: "e-2", p_member: null })));
+    const ok = await page.evaluate(() => window.__mg.asId("u-beat", (sb) => sb.from("rsvps").upsert({ event_id: "e-2", member_id: "u-beat", status: "out" })));
+    expect(ok.error).toBeNull();
+  });
+
+  test("Vergangener Anlass: der Organisator zählt als dabei, auch ohne Anmeldung", async ({ page }) => {
+    await page.goto("/");
+    await page.evaluate(() => { const d = window.__mg.db(); d.rsvps = d.rsvps.filter((r) => !(r.event_id == "e-past2" && r.member_id == "u-chris")) });
+    await login(page, CHRIS);
+    await page.locator("summary", { hasText: "Vergangene Anlässe" }).click();
+    await page.locator('[data-a="ov"][data-t="event"][data-id="e-past2"]').click();
+    await expect(page.locator("[data-test=war-dabei]")).toHaveText("Du warst dabei");
+  });
+
   test("Quittung gehört zum Termin, nicht in die Statistik", async ({ page }) => {
     await login(page);
     await tab(page, "Statistik");
