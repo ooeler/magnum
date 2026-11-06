@@ -152,24 +152,24 @@ test.describe("Termine", () => {
 });
 
 test.describe("Reisen", () => {
-  test("Sacceri: Antrag, ⅔-Mehrheit der Anwesenden, jede Stimme zählt gleich", async ({ page }) => {
+  test("Sacceri: Antrag, ⅔-Mehrheit der übrigen Mitreisenden, jede Stimme zählt gleich", async ({ page }) => {
     await login(page);
     await tab(page, "Reisen");
     await page.locator(".trip", { hasText: "Wallis" }).click();
     const s = card(page, "Auszeichnung De Sacceri");
-    // Mitreisende: Ot, Beat, Chris, Dani → total 4, nötig 3
-    await expect(s).toContainText("3 von 4 Stimmen");
+    // Mitreisende: Ot, Beat, Chris, Dani; die vorgeschlagene Person stimmt nicht mit → total 3, nötig 2
+    await expect(s).toContainText("2 von 3 Stimmen");
     await s.locator("select[data-k=sacPick]").selectOption({ label: "Chris «Navi»" });
     await s.getByRole("button", { name: "Auszeichnung beantragen" }).click();
-    await expect(s.locator("[data-test=tally]")).toHaveText("Ja 1 · Nein 0 · offen 3 · nötig 3");
+    await expect(s.locator("[data-test=tally]")).toHaveText("Ja 1 · Nein 0 · offen 2 · nötig 2");
     await expect(s).toContainText("Deine Stimme ist abgegeben");
-    await as(page, BEAT.email, "sb.rpc('cast_ballot', { p_proposal: window.__mg.db().proposals.find(p => p.status == 'open').id, p_yes: true })");
-    await expect(s.locator("[data-test=tally]")).toHaveText("Ja 2 · Nein 0 · offen 2 · nötig 3");
-    await expect(s).toContainText("Beat · Ja");
+    await as(page, BEAT.email, "sb.rpc('cast_ballot', { p_proposal: window.__mg.db().proposals.find(p => p.status == 'open').id, p_yes: false })");
+    await expect(s.locator("[data-test=tally]")).toHaveText("Ja 1 · Nein 1 · offen 1 · nötig 2");
+    await expect(s).toContainText("Beat · Nein");
     // Dani hat im Test kein Login – Stimme direkt über die ID
     await page.evaluate(() => window.__mg.asId("u-dani", (sb) => sb.rpc("cast_ballot", { p_proposal: window.__mg.db().proposals.find((p) => p.status == "open").id, p_yes: true })));
     await expect(s.locator("[data-test=sacceri]")).toHaveText("Chris");
-    await expect(card(page, "Auszeichnung De Sacceri")).toContainText("mit 3 von 4 Stimmen");
+    await expect(card(page, "Auszeichnung De Sacceri")).toContainText("mit 2 von 3 Stimmen");
   });
 
   test("OK und Kassier eintragen, mitreisen, Bilder: 3 sichtbar, Rest als Collage", async ({ page }) => {

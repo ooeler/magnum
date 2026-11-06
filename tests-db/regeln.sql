@@ -104,15 +104,24 @@ select pg_temp.check((select device from public.profiles where display_name = 'D
 select pg_temp.check((select count(*) from public.admin_log) = 1, 'Änderung im Admin-Protokoll');
 select public.admin_set_device('00000000-0000-0000-0000-00000000000d', 'iphone');
 
--- 7) Sacceri: Antrag + ⅔ der Anwesenden, jede Stimme zählt gleich
---    A, B, C, D → total 4, nötig 3
+-- 7) Sacceri: Antrag + ⅔ der übrigen Mitreisenden, jede Stimme zählt gleich
+--    A, B, C, D; C ist vorgeschlagen und stimmt nicht mit → A, B, D: total 3, nötig 2
 select pg_temp.als('A');
 select public.propose_sacceri('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000c');
-select pg_temp.check((select status from public.proposals where kind = 'sacceri') = 'open', 'Antrag offen nach Ja des Antragstellers (1 von 3)');
+select pg_temp.check((select status from public.proposals where kind = 'sacceri') = 'open', 'Antrag offen nach Ja des Antragstellers (1 von 2)');
+select pg_temp.check((select count(*) from public.eligible_voters((select id from public.proposals where kind = 'sacceri'))) = 3, 'Stimmberechtigt sind 3, ohne die vorgeschlagene Person');
+select pg_temp.als('C');
+do $$ begin
+  perform public.cast_ballot((select id from public.proposals where kind = 'sacceri'), true);
+  raise exception 'FEHLER: vorgeschlagene Person stimmte über sich selbst ab';
+exception when raise_exception then
+  if sqlerrm like 'FEHLER%' then raise; end if; raise notice 'ok – keine Stimme über sich selbst';
+end $$;
 select pg_temp.als('B');
-select pg_temp.check(public.cast_ballot((select id from public.proposals where kind = 'sacceri'), true) = 'open', 'Android-Ja zählt einfach → 2 von 3, noch offen');
+select pg_temp.check(public.cast_ballot((select id from public.proposals where kind = 'sacceri'), false) = 'open', 'Nein zählt einfach → 1 Ja, 1 Nein, noch offen');
 select pg_temp.als('D');
-select pg_temp.check(public.cast_ballot((select id from public.proposals where kind = 'sacceri'), true) = 'passed', '3 von 3 → Auszeichnung verliehen');
+select pg_temp.check(public.cast_ballot((select id from public.proposals where kind = 'sacceri'), true) = 'passed', '2 von 3 → Auszeichnung verliehen');
+select pg_temp.check((select total_weight from public.proposals where kind = 'sacceri') = 3, 'Gezählt wird ohne die vorgeschlagene Person');
 select pg_temp.check((select sacceri_id from public.trips) = '00000000-0000-0000-0000-00000000000c', 'Sacceri bei der Reise eingetragen');
 select pg_temp.check((select count(*) from public.posts where text like '%Sacceri%') = 1, 'Meldung auf der Prost-Wand');
 do $$ begin
@@ -172,6 +181,21 @@ do $$ begin
 exception when raise_exception then
   if sqlerrm like 'FEHLER%' then raise; end if; raise notice 'ok – den eigenen Abend nicht nochmals';
 end $$;
+
+-- 9b) Der Organisator ist immer dabei: abmelden erst nach dem Abgeben
+do $$ begin
+  update public.rsvps set status = 'out' where member_id = public.uid() and event_id = '20000000-0000-0000-0000-000000000001';
+  raise exception 'FEHLER: Organisator konnte sich abmelden';
+exception when raise_exception then
+  if sqlerrm like 'FEHLER%' then raise; end if; raise notice 'ok – Organisator meldet sich nicht ab';
+end $$;
+do $$ begin
+  delete from public.rsvps where member_id = public.uid() and event_id = '20000000-0000-0000-0000-000000000001';
+  raise exception 'FEHLER: Organisator konnte seine Anmeldung löschen';
+exception when raise_exception then
+  if sqlerrm like 'FEHLER%' then raise; end if; raise notice 'ok – Organisator löscht seine Anmeldung nicht';
+end $$;
+select public.set_organizer('20000000-0000-0000-0000-000000000001', null);
 
 -- 10) Virtuell dabei + Magnum-Kasse (nur Admin öffnet)
 update public.rsvps set status = 'virtual' where member_id = public.uid();
@@ -351,8 +375,9 @@ insert into public.trip_participants (trip_id) values ('10000000-0000-0000-0000-
 update public.trips set ok_id = public.uid() where id = '10000000-0000-0000-0000-000000000002';
 select pg_temp.check((select ok_id from public.trips where id = '10000000-0000-0000-0000-000000000002') = public.uid(), 'OK auf fremder Reise eintragen geht');
 
--- Stimmberechtigt ist, wer beim Antrag mitreist: Beitritt danach zählt nicht
-select pg_temp.als('C');
+-- Stimmberechtigt ist, wer beim Antrag mitreist: Beitritt danach zählt nicht.
+-- A reist nicht mit und stellt den Antrag für B; stimmberechtigt ist nur C.
+select pg_temp.als('A');
 select public.propose_sacceri('10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-00000000000b');
 reset role;
 select pg_temp.als('');
@@ -361,8 +386,8 @@ set role authenticated;
 select pg_temp.als('D');
 insert into public.trip_participants (trip_id) values ('10000000-0000-0000-0000-000000000002');
 select pg_temp.verboten($q$select public.cast_ballot((select id from public.proposals where status = 'open' and kind = 'sacceri'), true)$q$, 'Beitritt nach dem Antrag gibt keine Stimme');
--- Abgelehnt: C und B stimmen, nötig 2. Ein Nein macht die Mehrheit unmöglich
-select pg_temp.als('B');
+-- Abgelehnt: nur C stimmt, nötig 1. Ein Nein macht die Mehrheit unmöglich
+select pg_temp.als('C');
 select pg_temp.check(public.cast_ballot((select id from public.proposals where status = 'open' and kind = 'sacceri'), false) = 'rejected', 'Nein macht die Mehrheit unmöglich → abgelehnt');
 
 -- Vorbei ist vorbei: keine Anmeldung, keine Abmeldung, keine Mitfahrt, kein Mitreisen

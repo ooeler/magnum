@@ -212,7 +212,7 @@ var KINDS = [["wein", "Wein"], ["magnum", "Magnum-Glas"], ["bier", "Bier"], ["sc
 function rankOf(p) { var r = RANKS[0]; RANKS.forEach(function (x) { if (p >= x.min) r = x }); return r }
 function pastEvents() { var t = now(); return D.events.filter(function (e) { return new Date(e.starts_at).getTime() < t }).sort(byDate).reverse() }
 function upcoming() { var t = now() - 6 * 3600e3; return D.events.filter(function (e) { return new Date(e.starts_at).getTime() >= t }).sort(byDate) }
-function rsvp(eid, mid) { var r = D.rsvps.find(function (x) { return x.event_id == eid && x.member_id == mid }); return r ? r.status : null }
+function rsvp(eid, mid) { var e = D.events.find(function (x) { return x.id == eid }); if (e && mid && e.organizer_id == mid) return "in"; var r = D.rsvps.find(function (x) { return x.event_id == eid && x.member_id == mid }); return r ? r.status : null }
 
 function stats(id) {
   CACHE = CACHE || {};
@@ -278,7 +278,7 @@ function segs(n, h) { var s = ""; for (var i = 1; i <= 5; i++) s += '<i class="'
 
 // ═════════════ Abstimmungen (Spiegel der Datenbank-Regel, nur zur Anzeige) ═════════════
 function eligible(p) {
-  if (p.kind == "sacceri") return p.voters || D.trip_participants.filter(function (t) { return t.trip_id == p.trip_id }).map(function (t) { return t.member_id });
+  if (p.kind == "sacceri") return (p.voters || D.trip_participants.filter(function (t) { return t.trip_id == p.trip_id }).map(function (t) { return t.member_id })).filter(function (v) { return v != p.target_id });
   return D.profiles.filter(function (x) { return x.id != p.target_id }).map(function (x) { return x.id });
 }
 function tally(p) {
@@ -722,7 +722,7 @@ function eventCard(e) {
       : '<span class="sm b" style="color:var(--orange)">Organisator gesucht</span><button class="btn dash" style="align-self:flex-start;min-height:40px" data-a="organize" data-id="' + e.id + '">Ich organisiere den Abend · +40</button>') +
     (s == "virtual" ? '<span class="chip v" style="align-self:flex-start">Virtuell dabei · 1 Magnum spendiert</span>' : "") +
     '<div class="row wrap"><button class="pill ' + (s == "in" ? "on" : "") + '" data-a="rsvp" data-id="' + e.id + '" data-v="in" aria-pressed="' + (s == "in") + '">Bin dabei</button>' +
-    '<button class="pill ' + (s == "out" ? "out" : "") + '" data-a="abmelden" data-id="' + e.id + '">Abmelden</button>' +
+    (e.organizer_id == me ? '<span class="chip" data-test="org-dabei">Als Organisator immer dabei</span>' : '<button class="pill ' + (s == "out" ? "out" : "") + '" data-a="abmelden" data-id="' + e.id + '">Abmelden</button>') +
     '<button class="pill" style="border-color:var(--ac)" data-a="ov" data-t="event" data-id="' + e.id + '">Details</button></div></div></article>';
 }
 function datumZeit(p, iso, zeit) {
@@ -867,9 +867,9 @@ function tripView(tr) {
 function sacceri(tr, part) {
   var me = uid(), p = D.proposals.filter(function (x) { return x.kind == "sacceri" && x.trip_id == tr.id }).sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1 });
   var open = p.filter(function (x) { return x.status == "open" })[0], last = p.filter(function (x) { return x.status == "rejected" })[0];
-  var tot = part.length;
+  var tot = open ? tally(open).total : Math.max(0, part.length - 1);
   var h = '<section class="card gold" aria-label="Auszeichnung De Sacceri"><div class="row"><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true" fill="none" stroke="#E8B95A" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M7 3h12v6a6 6 0 0 1-12 0z"/><path d="M7 5H3c0 4 2 6 4 6M19 5h4c0 4-2 6-4 6M13 15v4M8 23h10M10 19h6"/></svg>' +
-    '<div class="col" style="gap:1px"><span class="b" style="font-size:15px">Auszeichnung «De Sacceri»</span><span class="sm mu">Antrag durch ein Mitglied · ⅔ der Anwesenden: ' + Math.ceil(tot * 2 / 3) + " von " + tot + " Stimmen</span></div></div>";
+    '<div class="col" style="gap:1px"><span class="b" style="font-size:15px">Auszeichnung «De Sacceri»</span><span class="sm mu">Antrag durch ein Mitglied · ⅔ der übrigen Mitreisenden: ' + Math.ceil(tot * 2 / 3) + " von " + tot + " Stimmen</span></div></div>";
   if (tr.sacceri_id) {
     var w = p.filter(function (x) { return x.status == "passed" })[0];
     return h + '<div class="tile" style="align-items:center;text-align:center;padding:16px"><span class="lbl">Ausgezeichnet</span><b style="font-size:28px;color:var(--ac)" data-test="sacceri">' + esc(nm(tr.sacceri_id)) + "</b>" + (w ? "<span>mit " + w.yes_weight + " von " + w.total_weight + " Stimmen</span>" : "") + "</div></section>";
@@ -879,7 +879,7 @@ function sacceri(tr, part) {
     h += '<div class="tile" style="padding:12px"><span class="lbl">Abstimmung läuft</span><b style="font-size:22px">' + esc(nm(open.target_id)) + "</b><span>beantragt von " + esc(nm(open.proposed_by)) + "</span></div>" +
       '<div class="bar teal" style="height:10px"><i style="width:' + Math.min(100, Math.round(100 * t.yes / Math.max(1, t.need))) + '%"></i></div><span class="sm b" data-test="tally">Ja ' + t.yes + " · Nein " + t.no + " · offen " + t.open + " · nötig " + t.need + "</span>" + voteChips(t);
     if (t.voters.indexOf(me) >= 0 && mine == null) h += '<div class="g2"><button class="btn teal" data-a="vote" data-id="' + open.id + '" data-v="1">Ja, verdient</button><button class="btn ghost" data-a="vote" data-id="' + open.id + '" data-v="0">Nein</button></div>';
-    else h += '<span class="sm mu">' + (t.voters.indexOf(me) < 0 ? "Nur Mitreisende stimmen ab." : "Deine Stimme ist abgegeben. Warten auf die anderen.") + "</span>";
+    else h += '<span class="sm mu">' + (open.target_id == me ? "Über dich stimmen die anderen Mitreisenden ab." : t.voters.indexOf(me) < 0 ? "Nur Mitreisende stimmen ab." : "Deine Stimme ist abgegeben. Warten auf die anderen.") + "</span>";
     return h + "</section>";
   }
   if (last) h += '<span class="sm" style="color:var(--orange)">Letzter Antrag für ' + esc(nm(last.target_id)) + " abgelehnt (" + last.yes_weight + " von " + last.total_weight + " Stimmen).</span>";
@@ -1163,7 +1163,7 @@ function eventView(e) {
   var h = '<div class="top"><button class="back" data-a="close" aria-label="Zurück">' + BACK + '</button><span style="font:900 28px/1.1 var(--hf)">' + esc(e.title) + '</span><span class="sm mu">' + esc(fDate(e.starts_at, true)) + (ortText(e) ? " · " + esc(ortText(e)) : "") + "</span>" +
     '<span class="sm b">' + (e.organizer_id ? "Organisation: " + esc(nm(e.organizer_id)) : '<span style="color:var(--orange)">Organisator gesucht</span>') + "</span></div><main>";
   if (past) h += s ? '<div class="row wrap"><span class="chip" data-test="war-dabei">' + ({ in: "Du warst dabei", virtual: "Virtuell dabei", out: "Abgemeldet" })[s] + "</span></div>" : "";
-  else h += '<div class="row wrap"><button class="pill ' + (s == "in" ? "on" : "") + '" data-a="rsvp" data-id="' + e.id + '" data-v="in">Bin dabei</button><button class="pill ' + (s == "out" ? "out" : "") + '" data-a="abmelden" data-id="' + e.id + '">Abmelden</button>' +
+  else h += '<div class="row wrap"><button class="pill ' + (s == "in" ? "on" : "") + '" data-a="rsvp" data-id="' + e.id + '" data-v="in">Bin dabei</button>' + (e.organizer_id == me ? '<span class="chip" data-test="org-dabei">Als Organisator immer dabei</span>' : '<button class="pill ' + (s == "out" ? "out" : "") + '" data-a="abmelden" data-id="' + e.id + '">Abmelden</button>') +
     (s == "virtual" ? '<span class="chip v">Virtuell dabei · Magnum spendiert</span>' : "") + "</div>";
   if (!past) h += whatsapp(teilenAnlass(e), "In WhatsApp teilen");
   if (darfAendern(e)) h += '<details class="card" data-offen="evEditOpen"' + (UI.evEditOpen ? " open" : "") + '><summary>Anlass anpassen</summary>' + eventEdit(e) + "</details>";

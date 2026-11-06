@@ -148,6 +148,7 @@
     if (t == "rsvps") {
       if (old && !loeschen && r.event_id != old.event_id) return "Der Anlass lässt sich nicht ändern";
       if (tag(eventOf(d, r.event_id).starts_at) < day(0)) return "Der Anlass ist vorbei, die Anmeldung ist geschlossen";
+      if (eventOf(d, r.event_id).organizer_id == r.member_id && (loeschen || r.status != "in")) return "Der Organisator ist immer dabei. Gib den Abend zuerst ab.";
     }
     if (t == "trips") {
       if ((!old || r.starts_on != old.starts_on) && r.starts_on < day(0)) return "Eine Reise kann nicht in der Vergangenheit liegen";
@@ -251,7 +252,7 @@
 
   // ───────────── Datenbank-Funktionen ─────────────
   function eligible(d, p) {
-    if (p.kind == "sacceri") return p.voters || [];
+    if (p.kind == "sacceri") return (p.voters || []).filter(function (v) { return v != p.target_id });
     return d.profiles.filter(function (x) { return x.id != p.target_id }).map(function (x) { return x.id });
   }
   function resolve(d, p) {
@@ -294,6 +295,8 @@
       var e = d.events.find(function (x) { return x.id == a.p_event }); if (!e) throw "Anlass nicht gefunden";
       if (!(admin(d) || e.created_by == u || e.organizer_id == u)) throw "Das dürfen nur Organisator und Administrator";
       e.organizer_id = a.p_member;
+      if (a.p_member) { var r = d.rsvps.find(function (x) { return x.event_id == e.id && x.member_id == a.p_member });
+        if (r) r.status = "in"; else d.rsvps.push({ event_id: e.id, member_id: a.p_member, status: "in", redeemed: false, updated_at: new Date().toISOString() }) }
     },
     admin_set_rsvp: function (d, u, a) {
       if (!admin(d)) throw "Nur der Administrator trägt Anwesenheit nach";

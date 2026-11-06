@@ -260,15 +260,19 @@ create table if not exists public.rsvps (
 alter table public.rsvps enable row level security;
 
 -- An- und abmelden bis und mit Anlasstag. Danach gilt die Anwesenheit (Punkte, Streak, Kasse).
+-- Der Organisator ist immer dabei: Abmelden geht erst, wenn er den Abend abgegeben hat.
 create or replace function public.check_rsvp() returns trigger
 language plpgsql security definer set search_path = public as $$
-declare v_tag date;
+declare v_tag date; v_org uuid;
 begin
   if public.uid() is not null and not public.is_admin() then
     if tg_op = 'UPDATE' and new.event_id <> old.event_id then raise exception 'Der Anlass lässt sich nicht ändern'; end if;
-    select (starts_at at time zone 'Europe/Zurich')::date into v_tag from public.events
+    select (starts_at at time zone 'Europe/Zurich')::date, organizer_id into v_tag, v_org from public.events
      where id = case when tg_op = 'DELETE' then old.event_id else new.event_id end;
     if v_tag < public.heute() then raise exception 'Der Anlass ist vorbei, die Anmeldung ist geschlossen'; end if;
+    if (tg_op = 'DELETE' and old.member_id = v_org) or (tg_op <> 'DELETE' and new.member_id = v_org and new.status <> 'in') then
+      raise exception 'Der Organisator ist immer dabei. Gib den Abend zuerst ab.';
+    end if;
   end if;
   if tg_op = 'DELETE' then return old; end if;
   return new;
@@ -276,6 +280,10 @@ end $$;
 drop trigger if exists rsvp_check on public.rsvps;
 create trigger rsvp_check before insert or update or delete on public.rsvps
   for each row execute function public.check_rsvp();
+-- Bestehende Anlässe nachziehen: Wer organisiert (hat), war dabei
+insert into public.rsvps (event_id, member_id, status)
+select id, organizer_id, 'in' from public.events where organizer_id is not null
+on conflict (event_id, member_id) do update set status = 'in', updated_at = now() where public.rsvps.status <> 'in';
 
 -- Die Ämtli pro Anlass gibt es nicht mehr, es braucht nur den Organisator
 drop table if exists public.event_aemtli;
@@ -579,11 +587,11 @@ create table if not exists public.ballots (
 );
 alter table public.ballots enable row level security;
 
--- Stimmberechtigt: Sacceri → die Mitreisenden beim Antrag; Spitzname → alle ausser der Person selbst
+-- Stimmberechtigt: Sacceri → die Mitreisenden beim Antrag ausser der vorgeschlagenen Person; Spitzname → alle ausser der Person selbst
 create or replace function public.eligible_voters(p_proposal uuid) returns setof uuid
 language sql stable security definer set search_path = public as $$
-  select unnest(p.voters) from public.proposals p
-   where p.id = p_proposal and p.kind = 'sacceri'
+  select v from public.proposals p, unnest(p.voters) v
+   where p.id = p_proposal and p.kind = 'sacceri' and v <> p.target_id
   union
   select pr.id from public.proposals p join public.profiles pr on pr.id <> p.target_id
    where p.id = p_proposal and p.kind = 'nickname'

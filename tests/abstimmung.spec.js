@@ -81,10 +81,24 @@ test.describe("Sacceri", () => {
     await page.goto("/");
     await as(page, OT.email, "sb.rpc('propose_sacceri', { p_trip: 't-wallis', p_target: 'u-chris' })");
     const s = await wallis(page, BEAT);
-    await s.getByRole("button", { name: "Ja, verdient" }).click();
+    await s.getByRole("button", { name: "Nein" }).click();
     await expect(toast(page)).toContainText("Stimme abgegeben");
-    await expect(s.locator("[data-test=tally]")).toHaveText("Ja 2 · Nein 0 · offen 2 · nötig 3");
+    await expect(s.locator("[data-test=tally]")).toHaveText("Ja 1 · Nein 1 · offen 1 · nötig 2");
     await expect(s).toContainText("Deine Stimme ist abgegeben");
+  });
+
+  test("Die vorgeschlagene Person stimmt nicht über sich selbst ab", async ({ page }) => {
+    await page.goto("/");
+    await as(page, OT.email, "sb.rpc('propose_sacceri', { p_trip: 't-wallis', p_target: 'u-chris' })");
+    const s = await wallis(page, CHRIS);
+    await expect(s).toContainText("Über dich stimmen die anderen Mitreisenden ab.");
+    await expect(s.getByRole("button", { name: "Ja, verdient" })).toHaveCount(0);
+    await expect(s.locator("[data-test=tally]")).toHaveText("Ja 1 · Nein 0 · offen 2 · nötig 2");
+    const r = await page.evaluate(() => {
+      const id = window.__mg.db().proposals.find((p) => p.kind == "sacceri" && p.status == "open").id;
+      return window.__mg.asId("u-chris", (sb) => sb.rpc("cast_ballot", { p_proposal: id, p_yes: true }));
+    });
+    expect(r.error.message).toContain("nicht stimmberechtigt");
   });
 
   test("Nicht-Mitreisende stimmen nicht mit", async ({ page }) => {
