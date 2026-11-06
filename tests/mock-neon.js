@@ -41,7 +41,7 @@
       ],
       rsvps: [], magnums: [{ id: "m-1", event_id: "e-1", wine: "Cornalin 2019", brought_by: M.kurt, created_at: iso(-2) }],
       magnum_guests: [{ id: "g-1", magnum_id: "m-1", name: "Peter (Gast von Kurt)", added_by: M.kurt, created_at: iso(-2) }],
-      rides: [{ id: "r-1", event_id: "e-1", driver_id: M.jurg, direction: "Richtung Wil", seats: 3, created_at: iso(-1) }], ride_passengers: [], card_members: [], gaeste: [], karte_der_woche: [],
+      rides: [{ id: "r-1", event_id: "e-1", driver_id: M.jurg, direction: "Richtung Wil", seats: 3, created_at: iso(-1) }], ride_passengers: [], card_members: [], gaeste: [], karte_der_woche: [], video_karten: [], video_ziehungen: [],
       trips: [
         { id: "t-bordeaux", title: "Bordeaux", starts_on: day(-60), ends_on: day(-57), program: "Saint-Émilion, Médoc, Austern in Arcachon", seats: 12, color: "#5A1F2E", ok_id: M.chris, kassier_id: M.beat, sacceri_id: M.dani, created_by: M.chris, created_at: iso(-200) },
         { id: "t-wallis", title: "Wallis", starts_on: day(190), ends_on: day(192), program: "Weinwanderung Sierre–Salgesch, Raclette", seats: 12, color: "#6E2433", ok_id: M.chris, kassier_id: null, sacceri_id: null, created_by: M.chris, created_at: iso(-20) }
@@ -102,15 +102,15 @@
   // ───────────── Regeln (Spiegel von db/setup.sql) ─────────────
   var OWNER = { restaurant_ratings: "member_id", rsvps: "member_id", trip_participants: "member_id", drinks: "member_id", saying_prosts: "member_id", post_prosts: "member_id",
     ride_passengers: "passenger_id", rides: "driver_id", restaurants: "created_by", restaurant_visits: "created_by", events: "created_by", magnums: "brought_by", magnum_guests: "added_by",
-    trip_photos: "uploaded_by", cards: "created_by", gaeste: "added_by", sayings: "author_id", posts: "author_id", trips: "created_by" };
+    trip_photos: "uploaded_by", cards: "created_by", video_karten: "created_by", gaeste: "added_by", sayings: "author_id", posts: "author_id", trips: "created_by" };
   var PK = { card_members: ["card_id", "member_id"], rsvps: ["event_id", "member_id"], restaurant_ratings: ["restaurant_id", "member_id"], trip_participants: ["trip_id", "member_id"], saying_prosts: ["saying_id", "member_id"],
     post_prosts: ["post_id", "member_id"], ride_passengers: ["ride_id", "passenger_id"], ballots: ["proposal_id", "voter_id"] };
   var PERSONAL = ["restaurant_ratings", "rsvps", "trip_participants", "drinks", "saying_prosts", "post_prosts", "ride_passengers", "rides"];
   var COLS = { profiles: ["display_name", "fav_wine", "specialty"], trips: ["title", "starts_on", "ends_on", "program", "seats", "color", "ok_id", "kassier_id"],
     events: ["title", "starts_at", "location", "ortschaft"], ride_passengers: ["stars_safe", "stars_punctual", "stars_mood", "points_given", "rated_at"],
     rsvps: ["event_id", "member_id", "status", "updated_at"], posts: ["text"], sayings: ["text"] };
-  var READONLY = ["karte_der_woche", "settings", "proposals", "ballots", "admin_log", "feedback"];
-  var CASCADE = { events: [["rsvps", "event_id"], ["magnums", "event_id"], ["rides", "event_id"], ["gaeste", "event_id"]], magnums: [["magnum_guests", "magnum_id"]], rides: [["ride_passengers", "ride_id"]],
+  var READONLY = ["karte_der_woche", "video_ziehungen", "settings", "proposals", "ballots", "admin_log", "feedback"];
+  var CASCADE = { events: [["rsvps", "event_id"], ["magnums", "event_id"], ["rides", "event_id"], ["gaeste", "event_id"], ["video_ziehungen", "event_id"]], video_karten: [["video_ziehungen", "karte_id"]], magnums: [["magnum_guests", "magnum_id"]], rides: [["ride_passengers", "ride_id"]],
     cards: [["card_members", "card_id"]], trips: [["gaeste", "trip_id"], ["trip_participants", "trip_id"], ["trip_photos", "trip_id"], ["proposals", "trip_id"]], posts: [["post_prosts", "post_id"]], sayings: [["saying_prosts", "saying_id"]],
     restaurants: [["restaurant_visits", "restaurant_id"], ["restaurant_ratings", "restaurant_id"]], proposals: [["ballots", "proposal_id"]] };
   var AS = null; // Tests: als andere Person handeln (window.__mg.as)
@@ -119,6 +119,7 @@
   function admin(d) { var u = me(), p = d.profiles.find(function (x) { return x.id == u }); return !!(p && p.is_admin) }
   var RLS = function (t) { return fail('new row violates row-level security policy for table "' + t + '"', "42501") };
   function notify() { try { localStorage.setItem("__mg_ping", String(Date.now())) } catch (e) {} CH.forEach(function (c) { setTimeout(function () { c.cb({ table: "*" }) }, 50) }) }
+  function videoSichtbar(d, k) { return admin(d) || k.created_by == me() || d.video_ziehungen.some(function (z) { return z.karte_id == k.id && z.member_id == me() }) }
   function pkMatch(t, a, b) { var k = PK[t] || ["id"]; return k.every(function (c) { return a[c] == b[c] }) }
   function removeCascade(d, t, row) {
     (CASCADE[t] || []).forEach(function (c) {
@@ -191,7 +192,7 @@
     if (t == "app_status" && q.op == "select") return Promise.resolve(shape(q, d.app_status.filter(function (r) { return match(q, r) })));
     if (!u) return fail("JWT expired");
     if (!d[t]) return fail('relation "public.' + t + '" does not exist');
-    if (q.op == "select") return Promise.resolve(shape(q, member(d) ? d[t].filter(function (r) { return match(q, r) }) : []));
+    if (q.op == "select") return Promise.resolve(shape(q, member(d) ? d[t].filter(function (r) { return match(q, r) && (t != "video_karten" || videoSichtbar(d, r)) }) : []));
     if (d.app_status[0].maintenance) return fail("Datenbank nicht erreichbar");
     if (!member(d) || READONLY.indexOf(t) >= 0) return RLS(t);
     var own = OWNER[t], out = [];
@@ -202,6 +203,7 @@
         if (own && r[own] == null) r[own] = u;
         if (own && r[own] != u) return RLS(t);
         if (t == "trips" && r.sacceri_id) return RLS(t);
+        if (t == "video_karten" && String(r.path || "").indexOf("videos/" + u + "/") != 0) return RLS(t);
         if (t == "card_members" && !(admin(d) || d.cards.some(function (c) { return c.id == r.card_id && c.created_by == u }))) return RLS(t);
         if (t == "rsvps" && "redeemed" in r) return fail("permission denied for table rsvps", "42501");
         var ex = d[t].find(function (x) { return pkMatch(t, x, r) && (PK[t] || r.id) });
@@ -234,7 +236,7 @@
     }
     if (q.op == "delete") {
       for (var k = 0; k < hit.length; k++) {
-        var r2 = hit[k], darf = t == "card_members" ? (admin(d) || d.cards.some(function (c) { return c.id == r2.card_id && c.created_by == u })) : t == "trips" ? (r2.created_by == u || admin(d)) : own && (r2[own] == u || admin(d));
+        var r2 = hit[k], darf = t == "video_karten" ? (admin(d) || (r2.created_by == u && !d.video_ziehungen.some(function (z) { return z.karte_id == r2.id }))) : t == "card_members" ? (admin(d) || d.cards.some(function (c) { return c.id == r2.card_id && c.created_by == u })) : t == "trips" ? (r2.created_by == u || admin(d)) : own && (r2[own] == u || admin(d));
         if (!darf) continue;
         var e3 = t == "rsvps" ? checkRow(d, t, r2, r2, true) : null; if (e3) return fail(e3);
         d[t] = d[t].filter(function (x) { return x !== r2 }); removeCascade(d, t, r2); out.push(r2);
@@ -270,6 +272,21 @@
   var RPC = {
     me: function (d, u) { var p = d.profiles.find(function (x) { return x.id == u }); if (!p) return null; var prev = p.last_seen; p.last_seen = new Date().toISOString(); return { id: u, is_admin: p.is_admin, prev_seen: prev } },
     magnum_termine: function () { return 0 },
+    video_bestand: function (d) { return d.video_karten.length },
+    karte_ziehen: function (d, u, a) {
+      var e = d.events.find(function (x) { return x.id == a.p_event }); if (!e) throw "Anlass nicht gefunden";
+      var start = new Date(e.starts_at), ende = new Date(start); ende.setDate(ende.getDate() + 1); ende.setHours(12, 0, 0, 0);
+      if (Date.now() < start.getTime()) throw "Karten gibt es erst am Abend selbst";
+      if (Date.now() > ende.getTime()) throw "Ziehen ging bis am nächsten Mittag";
+      if (!d.rsvps.some(function (x) { return x.event_id == e.id && x.member_id == u && (x.status == "in" || x.status == "virtual") })) throw "Karten gibt es nur für alle, die dabei sind";
+      if (d.video_ziehungen.some(function (z) { return z.event_id == e.id && z.member_id == u })) throw "Du hast deine Karte für diesen Abend schon gezogen";
+      var L = d.video_karten.filter(function (k) { return k.created_by != u && !d.video_ziehungen.some(function (z) { return z.karte_id == k.id && z.member_id == u }) });
+      if (!L.length) throw "Keine neue Karte im Stapel. Lade eine hoch!";
+      var frei = L.filter(function (k) { return !d.video_ziehungen.some(function (z) { return z.karte_id == k.id && z.event_id == e.id }) }), W = frei.length ? frei : L;
+      var k = W[Math.floor(Math.random() * W.length)];
+      d.video_ziehungen.push({ event_id: e.id, member_id: u, karte_id: k.id, gezogen_at: new Date().toISOString() });
+      return k.id;
+    },
     set_organizer: function (d, u, a) {
       var e = d.events.find(function (x) { return x.id == a.p_event }); if (!e) throw "Anlass nicht gefunden";
       if (!(admin(d) || e.created_by == u || e.organizer_id == u)) throw "Das dürfen nur Organisator und Administrator";
@@ -339,6 +356,8 @@
     if (!RPC[fn]) return fail("function " + fn + " does not exist");
     if (fn != "me" && !member(d)) return fail("Nur Mitglieder");
     if (fn == "me" && window.__mg_warten) return new Promise(function (ok2) { window.__mg_weiter = function () { window.__mg_warten = false; ok2(rpc(fn, a)) } });
+    // Nur lesende Funktionen melden keine Änderung (sonst lädt die App endlos neu)
+    if (fn == "video_bestand") return ok(RPC[fn](d, u, a || {}));
     try { var r = RPC[fn](d, u, a || {}); save(d); notify(); return ok(r === undefined ? null : r) } catch (e) { return fail(String(e.message || e)) }
   }
 
@@ -389,19 +408,26 @@
   };
 
   // ───────────── Fotos ─────────────
-  var FILES = get(FILESK) || {};
+  var FILES = get(FILESK) || {}, VIDS = {};
   var COLORS = ["#6E2433", "#8A5A3C", "#3D4A2E", "#5A3E5E", "#7A2E2E", "#4A5A6E", "#9A6A2A", "#3E2A2E"];
   function placeholder(p) { var i = 0; for (var k = 0; k < p.length; k++) i += p.charCodeAt(k); return "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="' + COLORS[i % COLORS.length] + '"/></svg>') }
   var storage = { from: function () { return {
     upload: function (path, blob) {
       var u = me(); if (!u) return fail("JWT expired");
-      if (path.split("/")[1] != u || ["drinks", "trips", "cards", "receipts"].indexOf(path.split("/")[0]) < 0) return RLS("objects");
+      if (path.split("/")[1] != u || ["drinks", "trips", "cards", "receipts", "videos"].indexOf(path.split("/")[0]) < 0) return RLS("objects");
+      if (path.indexOf("videos/") == 0) { if (!/\.(mp4|webm)$/.test(path) || blob.size > 12 * 1024 * 1024) return fail("Nur MP4- oder WebM-Videos."); window.__mg_videos = window.__mg_videos || {}; window.__mg_videos[path] = blob; VIDS[path] = URL.createObjectURL(blob); return ok({ path: path }) }
       return new Promise(function (res) {
         var fr = new FileReader(); fr.onload = function () { FILES[path] = fr.result; try { localStorage.setItem(FILESK, JSON.stringify(FILES)) } catch (e) {} res({ data: { path: path }, error: null }) };
         fr.onerror = function () { res({ data: null, error: { message: "Upload fehlgeschlagen" } }) }; fr.readAsDataURL(blob);
       });
     },
-    createSignedUrls: function (paths) { return me() ? ok(paths.map(function (p) { return { path: p, signedUrl: FILES[p] || placeholder(p), error: null } })) : fail("JWT expired") }
+    createSignedUrls: function (paths) {
+      if (!me()) return fail("JWT expired");
+      var d = db();
+      // Verdeckte Videos: Link nur für Berechtigte (wie /fotos/links)
+      return ok(paths.filter(function (p) { if (p.indexOf("videos/") != 0) return true; var k = d.video_karten.find(function (x) { return x.path == p }); return k && videoSichtbar(d, k) })
+        .map(function (p) { return { path: p, signedUrl: VIDS[p] || FILES[p] || placeholder(p), error: null } }));
+    }
   } } };
 
   // ───────────── Login & Live-Sync ─────────────

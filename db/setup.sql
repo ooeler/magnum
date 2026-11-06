@@ -802,6 +802,61 @@ create table if not exists public.feedback (
 create index if not exists feedback_status on public.feedback (status, created_at);
 alter table public.feedback enable row level security;
 
+-- ───────────── Videokarten: verdeckter Stapel, gezogen wird am Magnum-Abend ─────────────
+-- Hochladen dürfen alle. Sehen darf ein Video nur, wer es hochgeladen oder gezogen hat, und der Admin.
+create table if not exists public.video_karten (
+  id         uuid primary key default gen_random_uuid(),
+  title      text not null check (length(trim(title)) between 1 and 80),
+  path       text not null unique check (path ~ '^videos/[0-9a-f-]{36}/[A-Za-z0-9._-]{1,80}\.(mp4|webm)$'),
+  created_by uuid default public.uid() references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+alter table public.video_karten enable row level security;
+-- Eine Karte pro Person und Anlass. Nur über karte_ziehen().
+create table if not exists public.video_ziehungen (
+  event_id   uuid not null references public.events(id) on delete cascade,
+  member_id  uuid not null references public.profiles(id) on delete cascade,
+  karte_id   uuid not null references public.video_karten(id) on delete cascade,
+  gezogen_at timestamptz not null default now(),
+  primary key (event_id, member_id)
+);
+alter table public.video_ziehungen enable row level security;
+
+-- Wie viele Videokarten es gibt (auch die verdeckten), damit alle ihren Anteil sehen
+create or replace function public.video_bestand() returns int
+language sql stable security definer set search_path = public as $$
+  select case when public.is_member() then (select count(*)::int from public.video_karten) else 0 end
+$$;
+
+-- Ziehen: vom Beginn des Anlasses bis am nächsten Tag um 12 Uhr, wer dabei oder virtuell dabei ist.
+-- Nie die eigene, nie eine schon gezogene; am gleichen Abend möglichst nicht dieselbe wie jemand anderes.
+create or replace function public.karte_ziehen(p_event uuid) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare v_start timestamptz; v_ende timestamptz; v_karte uuid;
+begin
+  if not public.is_member() then raise exception 'Nur Mitglieder'; end if;
+  select starts_at into v_start from public.events where id = p_event;
+  if v_start is null then raise exception 'Anlass nicht gefunden'; end if;
+  v_ende := (((v_start at time zone 'Europe/Zurich')::date + 1) + time '12:00') at time zone 'Europe/Zurich';
+  if now() < v_start then raise exception 'Karten gibt es erst am Abend selbst'; end if;
+  if now() > v_ende then raise exception 'Ziehen ging bis am nächsten Mittag'; end if;
+  if not exists (select 1 from public.rsvps where event_id = p_event and member_id = public.uid() and status in ('in', 'virtual')) then
+    raise exception 'Karten gibt es nur für alle, die dabei sind';
+  end if;
+  if exists (select 1 from public.video_ziehungen where event_id = p_event and member_id = public.uid()) then
+    raise exception 'Du hast deine Karte für diesen Abend schon gezogen';
+  end if;
+  perform pg_advisory_xact_lock(hashtext('karte_ziehen:' || p_event));
+  select k.id into v_karte from public.video_karten k
+   where k.created_by is distinct from public.uid()
+     and not exists (select 1 from public.video_ziehungen z where z.karte_id = k.id and z.member_id = public.uid())
+   order by exists (select 1 from public.video_ziehungen z where z.karte_id = k.id and z.event_id = p_event), random()
+   limit 1;
+  if v_karte is null then raise exception 'Keine neue Karte im Stapel. Lade eine hoch!'; end if;
+  insert into public.video_ziehungen (event_id, member_id, karte_id) values (p_event, public.uid(), v_karte);
+  return v_karte;
+end $$;
+
 -- Live-Sync: Jede Änderung erhöht den Stand, die offene App fragt danach (app/client.js)
 create table if not exists public.sync_stand (
   id    int primary key default 1 check (id = 1),
@@ -823,6 +878,8 @@ grant usage on schema public to anonymous, authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 revoke all on table public.invites, public.magnum_serie, public.push_config, public.push_abos, public.push_log from anonymous, authenticated;
 revoke insert, update, delete on public.karte_der_woche from authenticated;
+revoke insert, update, delete on public.video_ziehungen from authenticated;
+revoke update on public.video_karten from authenticated;
 grant select on public.app_status to anonymous;
 
 -- Lesen: alle Mitglieder (Einladungen nie direkt, nur über die Edge Function)
@@ -832,7 +889,7 @@ begin
   foreach t in array array['settings', 'profiles', 'admin_log', 'restaurants', 'restaurant_visits',
     'restaurant_ratings', 'events', 'rsvps', 'magnums', 'magnum_guests', 'rides', 'ride_passengers', 'trips',
     'trip_participants', 'trip_photos', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
-    'sayings', 'saying_prosts', 'feedback', 'sync_stand', 'card_members', 'gaeste', 'karte_der_woche']
+    'sayings', 'saying_prosts', 'feedback', 'sync_stand', 'card_members', 'gaeste', 'karte_der_woche', 'video_ziehungen']
   loop
     execute format('drop policy if exists "Mitglieder lesen" on public.%I', t);
     execute format('create policy "Mitglieder lesen" on public.%I for select to authenticated using (public.is_member())', t);
@@ -885,6 +942,19 @@ create policy "Karte eintragen" on public.card_members for insert to authenticat
 create policy "Karte austragen" on public.card_members for delete to authenticated using (
   public.is_admin() or exists (select 1 from public.cards c where c.id = card_id and c.created_by = public.uid()));
 revoke update on public.card_members from authenticated;
+
+-- Videokarten: Inhalt nur für wer sie hochgeladen oder gezogen hat und den Admin.
+-- Löschen: der Admin immer, wer hochgeladen hat nur, solange niemand sie gezogen hat.
+drop policy if exists "Video sehen" on public.video_karten;
+drop policy if exists "Video hochladen" on public.video_karten;
+drop policy if exists "Video löschen" on public.video_karten;
+create policy "Video sehen" on public.video_karten for select to authenticated using (
+  public.is_member() and (created_by = public.uid() or public.is_admin()
+    or exists (select 1 from public.video_ziehungen z where z.karte_id = id and z.member_id = public.uid())));
+create policy "Video hochladen" on public.video_karten for insert to authenticated with check (
+  public.is_member() and created_by = public.uid() and path like 'videos/' || public.uid()::text || '/%');
+create policy "Video löschen" on public.video_karten for delete to authenticated using (
+  public.is_admin() or (created_by = public.uid() and not exists (select 1 from public.video_ziehungen z where z.karte_id = id)));
 
 -- Anlässe: Auch wer organisiert, passt Name, Datum und Ort an
 drop policy if exists "Ersteller ändern" on public.events;
@@ -960,10 +1030,13 @@ revoke execute on function public.check_rsvp() from public, anonymous, authentic
 revoke execute on function public.check_trip() from public, anonymous, authenticated;
 revoke execute on function public.check_trip_participant() from public, anonymous, authenticated;
 revoke execute on function public.set_created_at() from public, anonymous, authenticated;
+revoke execute on function public.video_bestand() from public, anonymous;
+revoke execute on function public.karte_ziehen(uuid) from public, anonymous;
 grant execute on function public.is_member(), public.is_admin(), public.me(), public.magnum_termine(), public.admin_set_rsvp(uuid, uuid, text),
   public.admin_set_device(uuid, text), public.admin_set_role(uuid, text), public.admin_set_admin(uuid, boolean), public.claim_organizer(uuid), public.set_organizer(uuid, uuid),
   public.open_magnum_kasse(), public.eligible_voters(uuid), public.propose_sacceri(uuid, uuid),
-  public.propose_nickname(uuid, text), public.second_proposal(uuid), public.cast_ballot(uuid, boolean)
+  public.propose_nickname(uuid, text), public.second_proposal(uuid), public.cast_ballot(uuid, boolean),
+  public.video_bestand(), public.karte_ziehen(uuid)
   to authenticated;
 
 -- ═════════════ Live-Sync: Änderungen melden ═════════════
@@ -972,7 +1045,7 @@ declare t text;
 begin
   foreach t in array array['profiles', 'events', 'rsvps', 'magnums', 'magnum_guests', 'rides', 'ride_passengers',
     'trips', 'trip_participants', 'trip_photos', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
-    'sayings', 'saying_prosts', 'card_members', 'gaeste', 'karte_der_woche', 'restaurants', 'restaurant_visits', 'restaurant_ratings', 'feedback', 'admin_log']
+    'sayings', 'saying_prosts', 'card_members', 'gaeste', 'karte_der_woche', 'video_karten', 'video_ziehungen', 'restaurants', 'restaurant_visits', 'restaurant_ratings', 'feedback', 'admin_log']
   loop
     execute format('drop trigger if exists sync_bump on public.%I', t);
     execute format('create trigger sync_bump after insert or update or delete on public.%I for each statement execute function public.sync_bump()', t);

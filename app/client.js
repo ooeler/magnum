@@ -90,9 +90,9 @@
     };
 
     var storage = { from: function () { return {
-      upload: function (pfad, blob) {
+      upload: function (pfad, blob, o) {
         return mitLogin(function (kopf) {
-          return fetch(cfg.api + "/fotos?pfad=" + encodeURIComponent(pfad), { method: "POST", headers: Object.assign({ "Content-Type": "image/jpeg" }, kopf), body: blob }).then(function (r) {
+          return fetch(cfg.api + "/fotos?pfad=" + encodeURIComponent(pfad), { method: "POST", headers: Object.assign({ "Content-Type": (o && o.contentType) || "image/jpeg" }, kopf), body: blob }).then(function (r) {
             return r.json().catch(function () { return null }).then(function (j) { return r.ok ? { data: j, error: null } : { data: null, error: fehler(j, r) } });
           });
         });

@@ -144,6 +144,22 @@ base.test.describe("Sicherheit (statisch)", () => {
     expect(() => F.checkFoto(`drinks/${id}/a.jpg`, id, new Uint8Array(F.MAX_FOTO + 1).fill(0xff))).toThrow("gross");
   });
 
+  base.test("Videokarten: nur MP4/WebM bis 12 MB, nur der eigene Ordner", async () => {
+    const F = await import("../functions/fotos.mjs");
+    const id = "00000000-0000-0000-0000-00000000000a";
+    const webm = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0, 0]), mp4 = new Uint8Array([0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0]);
+    expect(() => F.checkVideo(`videos/${id}/a.webm`, id, webm)).not.toThrow();
+    expect(() => F.checkVideo(`videos/${id}/a.mp4`, id, mp4)).not.toThrow();
+    expect(() => F.checkVideo(`videos/${id}/a.mp4`, id, webm)).toThrow("MP4");
+    expect(() => F.checkVideo(`videos/00000000-0000-0000-0000-00000000000b/a.webm`, id, webm)).toThrow("eigenen Ordner");
+    expect(() => F.checkVideo(`videos/${id}/a.mov`, id, mp4)).toThrow("Speicherort");
+    expect(() => F.checkVideo(`videos/${id}/a.webm`, id, new Uint8Array(F.MAX_VIDEO + 1))).toThrow("gross");
+    // Ein Video geht nicht als Foto durch und umgekehrt
+    expect(() => F.checkFoto(`videos/${id}/a.webm`, id, webm)).toThrow("Speicherort");
+    expect(F.istVideo(`cards/${id}/a.jpg`)).toBe(false);
+    expect(F.videoTyp(`videos/${id}/a.webm`)).toBe("video/webm");
+  });
+
   base.test("Keine Secrets im Repository", () => {
     let files;
     try { files = execSync("git ls-files", { cwd: root, encoding: "utf8" }).split("\n").filter(Boolean) } catch { base.test.skip(); return }

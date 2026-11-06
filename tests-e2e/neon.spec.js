@@ -185,6 +185,35 @@ test("Fotos: nur eigener Ordner, nur JPEG, nur Mitglieder", async () => {
   expect((await post("/fotos/links", { paths: [p] })).s).toBe(403);
 });
 
+test("Videokarten: verdeckt bis gezogen, Link erst danach", async () => {
+  const hoch = (pfad, body, t, typ) => fetch(`${API}/fotos?pfad=${encodeURIComponent(pfad)}`, { method: "POST", headers: { "content-type": typ, ...bearer(t) }, body });
+  const WEBM = Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81, 0x01]);
+  A.id = JSON.parse(Buffer.from(A.token.split(".")[1], "base64url")).sub;
+  const p = `videos/${A.id}/${zufall()}.webm`;
+  expect((await hoch(`videos/${A.id}/x.webm`, WEBM, B.token, "video/webm")).status).toBe(400);
+  expect((await hoch(p, JPEG, A.token, "video/webm")).status).toBe(400);
+  const ok = await hoch(p, WEBM, A.token, "video/webm");
+  expect(ok.status, await ok.clone().text()).toBe(200);
+  const k = await daten(A.token, "/video_karten", { method: "POST", headers: { prefer: "return=representation" }, body: JSON.stringify({ title: "Korken", path: p }) });
+  expect(k.s, JSON.stringify(k.j)).toBeLessThan(300);
+  // B sieht die Karte nicht und bekommt keinen Link, kennt aber den Bestand
+  expect((await daten(B.token, "/video_karten?select=*")).j).toEqual([]);
+  expect((await daten(B.token, "/rpc/video_bestand", { method: "POST", body: "{}" })).j).toBe(1);
+  expect((await post("/fotos/links", { paths: [p] }, bearer(B.token))).j.items).toEqual([]);
+  // Am Abend: B ist dabei und zieht
+  const [e] = (await db.query("insert into public.events (title, starts_at) values ('Video-Abend', now() - interval '1 hour') returning id")).rows;
+  await db.query("insert into public.rsvps (event_id, member_id, status) values ($1, $2, 'in')", [e.id, B.id]);
+  const z = await daten(B.token, "/rpc/karte_ziehen", { method: "POST", body: JSON.stringify({ p_event: e.id }) });
+  expect(z.s, JSON.stringify(z.j)).toBe(200);
+  expect(z.j).toBe(k.j[0].id);
+  expect((await daten(B.token, "/rpc/karte_ziehen", { method: "POST", body: JSON.stringify({ p_event: e.id }) })).s).toBeGreaterThanOrEqual(400);
+  const l = await post("/fotos/links", { paths: [p] }, bearer(B.token));
+  expect(l.j.items.length).toBe(1);
+  const f = await fetch(l.j.items[0].signedUrl);
+  expect(f.status).toBe(200);
+  expect(f.headers.get("content-type")).toContain("video/webm");
+});
+
 test("Vorschlag, Export nur mit Secret, Sicherung nur vom Trigger", async () => {
   const f = await post("/feedback", { kind: "idee", title: "Mehr Magnum", text: "Hallo" }, bearer(B.token));
   expect(f.s, JSON.stringify(f.j)).toBe(200);

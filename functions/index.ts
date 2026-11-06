@@ -4,7 +4,7 @@
 // Status    /status           Wartungsseite, ohne Login
 // Einladung /invite           Links statt Mail
 // Vorschlag /feedback         Vorschlag speichern, /feedback-export für GitHub Actions (feedback-issues.yml)
-// Fotos     /fotos, /fotos/links  privater Speicher: nur JPEG bis 5 MB, nur Mitglieder
+// Fotos     /fotos, /fotos/links  privater Speicher: JPEG bis 5 MB, Videokarten MP4/WebM bis 12 MB, nur Mitglieder
 // Backup    /backup           täglicher Function Trigger (neon.ts), legt auch die nächsten Magnum-Abende an
 // Push      /push/*, /taeglich  Abo speichern, Test-Push, täglich: Erinnerung 7 Tage vor dem Anlass, montags die Karte der Woche
 import { attachDatabasePool } from "@neon/functions";
@@ -15,7 +15,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { Pool } from "pg";
-import { checkFoto, checkPfad, MAX_FOTO } from "./fotos.mjs";
+import { checkFoto, checkPfad, checkVideo, istVideo, MAX_FOTO, MAX_VIDEO, videoTyp } from "./fotos.mjs";
 import { checkJoin, checkToken, hashToken, INVITE_DAYS, joinError, newToken } from "./invite.mjs";
 import webpush from "web-push";
 import { checkAbo, erinnerungen, karteWaehlen, tagZuerich, wochenStart } from "./push.mjs";
@@ -205,17 +205,26 @@ app.post("/feedback-export", async (c) => {
 app.post("/fotos", async (c) => {
   const m = await member(c.req.raw);
   if (!m) return c.json({ error: "Kein Mitglied" }, 403);
-  if (Number(c.req.header("content-length") || 0) > MAX_FOTO) return c.json({ error: "Das Bild ist zu gross." }, 413);
+  const pfad = c.req.query("pfad") ?? "", video = istVideo(pfad);
+  if (Number(c.req.header("content-length") || 0) > (video ? MAX_VIDEO : MAX_FOTO)) return c.json({ error: video ? "Das Video ist zu gross." : "Das Bild ist zu gross." }, 413);
   const data = new Uint8Array(await c.req.arrayBuffer());
-  try { checkFoto(c.req.query("pfad"), m.id, data) } catch (e) { return c.json({ error: (e as Error).message }, 400) }
-  await s3.send(new PutObjectCommand({ Bucket: BUCKET, Key: c.req.query("pfad"), Body: data, ContentType: "image/jpeg" }));
-  return c.json({ path: c.req.query("pfad") });
+  try { if (video) checkVideo(pfad, m.id, data); else checkFoto(pfad, m.id, data) } catch (e) { return c.json({ error: (e as Error).message }, 400) }
+  await s3.send(new PutObjectCommand({ Bucket: BUCKET, Key: pfad, Body: data, ContentType: video ? videoTyp(pfad) : "image/jpeg" }));
+  return c.json({ path: pfad });
 });
 app.post("/fotos/links", async (c) => {
   const m = await member(c.req.raw);
   if (!m) return c.json({ error: "Kein Mitglied" }, 403);
   const b = await c.req.json().catch(() => ({}));
-  const paths: string[] = (Array.isArray(b.paths) ? b.paths : []).filter(checkPfad).slice(0, 200);
+  let paths: string[] = (Array.isArray(b.paths) ? b.paths : []).filter(checkPfad).slice(0, 200);
+  // Verdeckte Videokarten: Link nur für wer sie hochgeladen oder gezogen hat und den Admin
+  const videos = paths.filter(istVideo);
+  if (videos.length) {
+    const frei = new Set((await q(`select k.path from public.video_karten k where k.path = any($1) and (k.created_by = $2
+      or exists (select 1 from public.video_ziehungen z where z.karte_id = k.id and z.member_id = $2)
+      or exists (select 1 from public.profiles p where p.id = $2 and p.is_admin))`, [videos, m.id])).map((r: { path: string }) => r.path));
+    paths = paths.filter((p) => !istVideo(p) || frei.has(p));
+  }
   const links = await Promise.all(paths.map(async (path) => ({
     path, signedUrl: await getSignedUrl(s3, new GetObjectCommand({ Bucket: BUCKET, Key: path }), { expiresIn: 3600 }),
   })));
