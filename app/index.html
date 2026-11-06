@@ -26,7 +26,7 @@ header{padding:calc(14px + env(safe-area-inset-top,0px)) 18px 14px;display:flex;
 header .sub{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--mu);font-weight:600}
 header h1{margin:2px 0 0;font:900 30px/1 var(--hf);letter-spacing:-.5px}
 .hello{font-size:13px;color:var(--mu);margin-top:4px}
-main{padding:16px 14px 24px;display:flex;flex-direction:column;gap:14px;max-width:640px;margin:0 auto}
+main,.top{overflow-wrap:anywhere}main{padding:16px 14px 24px;display:flex;flex-direction:column;gap:14px;max-width:640px;margin:0 auto}
 h2{margin:6px 2px 0;font:700 22px var(--hf)}
 .card{background:var(--card);border:1px solid var(--ln);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px}
 .card.gold{border-color:var(--ac);background:#2B1F23}
@@ -161,7 +161,7 @@ var TABLES = ["settings", "profiles", "events", "rsvps", "magnums", "magnum_gues
   "saying_prosts", "restaurants", "restaurant_visits", "restaurant_ratings", "feedback", "admin_log"];
 var D = {}; TABLES.forEach(function (t) { D[t] = [] });
 var TAB = lsGet("mg_tab") || "termine", OV = null, SH = null, UI = {}, AUTH = { mode: "login" }, INVITE = null, INVLIST = null, NEWLINK = null, BUSY = false;
-var URLS = {}, WANT = {}, CACHE = null, CH = null, VB = 0;
+var URLS = {}, WANT = {}, CACHE = null, CH = null, VB = 0, VZ = 0;
 
 function lsGet(k) { try { return localStorage.getItem(k) } catch (e) { return null } }
 function lsSet(k, v) { try { localStorage.setItem(k, v) } catch (e) {} }
@@ -173,7 +173,7 @@ function today() { var d = new Date(); return d.getFullYear() + "-" + String(d.g
 function pr(id) { return D.profiles.find(function (p) { return p.id == id }) || null }
 function nm(id) { var p = pr(id); return p ? (p.display_name || "Mitglied") : "–" }
 function first(id) { return nm(id).split(" ")[0] }
-function ini(id) { return (nm(id).trim().charAt(0) || "?").toUpperCase() }
+function ini(id) { return (Array.from(nm(id).trim())[0] || "?").toUpperCase() }
 function deviceText(p) { return p.device == "android" ? "Android" : "iPhone" }
 var ICON_ANDROID = '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" fill="#7FC4B8"><path d="M6 10h12v7.5A1.5 1.5 0 0 1 16.5 19H7.5A1.5 1.5 0 0 1 6 17.5zM6 9a6 6 0 0 1 12 0zM8.6 3.2l1.2 2.1M15.4 3.2l-1.2 2.1" stroke="#7FC4B8" stroke-width="1.4"/><circle cx="9.5" cy="6.8" r=".8" fill="#1B1013"/><circle cx="14.5" cy="6.8" r=".8" fill="#1B1013"/></svg>';
 var ICON_IPHONE = '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" fill="#D9D1C7"><path d="M16.4 12.6c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.2-2.8.9-3.5.9s-1.8-.8-3-.8C6.9 7.4 5.4 8.3 4.6 9.8c-1.7 2.9-.4 7.2 1.2 9.6.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.1-.8s1.9.8 3.1.8c1.3 0 2.1-1.2 2.9-2.4.9-1.3 1.3-2.6 1.3-2.7-.1 0-2.6-1-2.8-4.1zM14.2 5.6c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1 .1 2.1-.6 2.8-1.4z"/></svg>';
@@ -376,6 +376,8 @@ function meineVideos(mid) { var ids = {}; D.video_ziehungen.forEach(function (z)
 function ziehEnde(e) { var d = new Date(e.starts_at); d.setDate(d.getDate() + 1); d.setHours(12, 0, 0, 0); return d.getTime() }
 function ziehbar() {
   var t = now(), me = uid();
+  // Ohne ziehbare Karte (leerer Stapel, nur eigene oder schon gezogene) keine Box
+  if (!VZ) return [];
   return D.events.filter(function (e) {
     var a = new Date(e.starts_at).getTime();
     return t >= a && t <= ziehEnde(e) && ["in", "virtual"].indexOf(rsvp(e.id, me)) >= 0 && !D.video_ziehungen.some(function (z) { return z.event_id == e.id && z.member_id == me });
@@ -434,14 +436,19 @@ function loadAll() {
     rs.forEach(function (r, i) { if (!r.error) D[TABLES[i]] = r.data || [] });
     PRF = pr(uid());
     // Wie viele Videokarten es gibt, auch die verdeckten
-    return sb.rpc("video_bestand").then(function (r) { if (r && !r.error) VB = Number(r.data) || 0 });
+    return Promise.all([sb.rpc("video_bestand"), sb.rpc("video_ziehbar")]).then(function (a) {
+      if (a[0] && !a[0].error) VB = Number(a[0].data) || 0;
+      if (a[1] && !a[1].error) VZ = Number(a[1].data) || 0;
+    });
   });
 }
 var RT = null;
 // Neu zeichnen nur in der App: Auf der Anmeldeseite und im Passwort-Formular würde es Eingaben löschen
 function liveBereit() { return READY && ME && AUTH.mode != "recovery" }
 function refresh() { clearTimeout(RT); RT = setTimeout(function () { if (liveBereit()) loadAll().then(function () { if (liveBereit()) render() }) }, 300) }
+var SENDEN = {}, FORM = null;
 function after(p, msg) {
+  var fo = FORM; FORM = null;
   return Promise.resolve(p).then(function (r) {
     if (r && r.error) throw r.error;
     if (msg) toast(msg);
@@ -449,7 +456,7 @@ function after(p, msg) {
   }).catch(function (e) {
     // Scheitert es, weil gerade ein Update läuft, zeigt die App die Update-Seite statt einer Fehlermeldung
     return wartung().then(function (mt) { if (!mt) toast(errText(e)); render() });
-  });
+  }).then(function (x) { if (fo) delete SENDEN[fo]; return x });
 }
 function wartung() {
   return sb.from("app_status").select("maintenance").eq("id", "main").maybeSingle().then(function (r) {
@@ -568,6 +575,7 @@ function render() {
   var app = document.getElementById("app"), ov = document.getElementById("ov"), sh = document.querySelector("#sh section");
   var keep = { main: window.scrollY, ov: ov ? ov.scrollTop : 0, sh: sh ? sh.scrollTop : 0 };
   var f = document.activeElement, fk = f && f.getAttribute && f.getAttribute("data-k"), fs = f && f.selectionStart;
+  var fa = !fk && f && f.getAttribute && f.getAttribute("data-a") ? ["data-a", "data-t", "data-id", "data-v"].map(function (x) { var w = f.getAttribute(x); return w ? "[" + x + '="' + w.replace(/["\\]/g, "") + '"]' : "" }).join("") : null;
   var html;
   if (!sb) html = authShell('<div class="card"><b>Noch nicht eingerichtet</b><span class="mu sm">In <code>config.js</code> fehlen die Neon-Adressen (siehe README).</span></div>');
   else if (MAINT) html = authShell('<div class="card">' + laden("Update wird eingespielt", "update") + '<span class="mu" style="text-align:center">Gleich geht es weiter. Die App lädt danach von selbst neu.</span></div>');
@@ -584,6 +592,7 @@ function render() {
   if (s2) s2.scrollTop = keep.sh;
   if (!o2 && !s2) window.scrollTo(0, keep.main);
   if (fk) { var n = document.querySelector('[data-k="' + fk + '"]'); if (n && n.tagName != "BUTTON") { n.focus(); try { if (fs != null) n.setSelectionRange(fs, fs) } catch (e) {} } }
+  else if (FOKUS || fa) { var n3 = null; try { n3 = document.querySelector(FOKUS || fa) } catch (e) {} if (n3) { n3.focus({ preventScroll: true }); FOKUS = null } }
   fetchUrls();
   if (READY && PRF) { fxStart(); karte() }
 }
@@ -664,7 +673,7 @@ function termine() {
   h += up.length ? up.map(eventCard).join("") : '<div class="card empty">Noch kein Anlass geplant. Organisiere den nächsten!</div>';
   h += UI.newEv ? eventForm() : '<button class="btn dash" data-a="ui" data-k="newEv" data-v="1">+ Anlass erfassen</button>';
   h += kasse() + meinAbend() + wand();
-  var past = pastEvents().slice(0, 24);
+  var past = pastEvents().filter(function (e) { return new Date(e.starts_at).getTime() < now() - 6 * 3600e3 }).slice(0, 24);
   if (past.length || isAdmin()) h += '<details class="card" data-offen="pastOpen"' + (UI.newPast || UI.pastOpen ? " open" : "") + '><summary>Vergangene Anlässe (' + past.length + ")</summary><div class=\"lst\" style=\"margin-top:10px\">" + past.map(function (e) {
     return '<button type="button" class="row sb" style="background:none;border:0;border-top:1px solid var(--ln);text-align:left;width:100%;color:var(--tx)" data-a="ov" data-t="event" data-id="' + e.id + '"><span class="grow"><b>' + esc(e.title) + '</b><br><span class="sm mu">' + esc(fDate(e.starts_at)) + '</span></span><span class="sm mu">' + D.rsvps.filter(function (r) { return r.event_id == e.id && r.status == "in" }).length + " dabei</span></button>";
   }).join("") + "</div>" + (isAdmin() ? (UI.newPast ? pastForm() : '<button class="btn dash" data-a="ui" data-k="newPast" data-v="1">+ Vergangenen Anlass erfassen</button>') : "") + "</details>";
@@ -775,10 +784,11 @@ function anwesenheit(e) {
     }).join("") + "</span></div>";
   }).join("") + "</div></section>";
 }
+function evStandard() { var d = new Date(now() + 7 * 864e5); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0") }
 function eventForm() {
-  var dflt = (function () { var d = new Date(now() + 7 * 864e5); d.setHours(19, 0, 0, 0); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0") + "T19:00" })();
+  var dflt = evStandard();
   return '<form class="card" data-s="event"><span class="mid">Neuer Anlass</span><label class="f">Titel<input class="t" data-k="evTitle" value="' + esc(v("evTitle")) + '" maxlength="80" required placeholder="z.B. Herbst-Stamm"></label>' +
-    '<div class="g2"><label class="f">Datum<input class="t" type="date" data-k="evDate" value="' + esc(v("evDate", dflt.slice(0, 10))) + '" required></label><label class="f">Zeit<input class="t" type="time" data-k="evTime" value="' + esc(v("evTime", "19:00")) + '" required></label></div>' + ortFelder("ev") +
+    '<div class="g2"><label class="f">Datum<input class="t" type="date" data-k="evDate" value="' + esc(v("evDate", dflt)) + '" required></label><label class="f">Zeit<input class="t" type="time" data-k="evTime" value="' + esc(v("evTime", "19:00")) + '" required></label></div>' + ortFelder("ev") +
     '<label class="row sm"><input type="checkbox" data-k="evOrg"' + (UI.evOrg ? " checked" : "") + "> Ich organisiere ihn (+40)</label>" +
     '<div class="row"><button class="btn grow">Anlass erfassen</button><button type="button" class="btn ghost" data-a="ui" data-k="newEv" data-v="">Abbrechen</button></div></form>';
 }
@@ -1047,11 +1057,11 @@ function rScore(id) {
 }
 function mapsUrl(r) { var q = r.lat != null && r.lng != null ? r.lat + "," + r.lng : r.name + " " + (r.place || ""); return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q) }
 function statistik() {
-  var yr = String(new Date().getFullYear()), past = pastEvents(), py = past.filter(function (e) { return e.starts_at.slice(0, 4) == yr });
+  var yr = String(new Date().getFullYear()), past = pastEvents(), py = past.filter(function (e) { return localDay(e.starts_at).slice(0, 4) == yr });
   var att = py.map(function (e) { return D.rsvps.filter(function (r) { return r.event_id == e.id && r.status == "in" }).length });
   var avg = att.length ? att.reduce(function (a, b) { return a + b }, 0) / att.length : 0;
   var tot = 0, ppl = 0; D.restaurant_visits.forEach(function (x) { tot += Number(x.total_chf); ppl += x.people });
-  var h = "<h2>Club-Statistik " + yr + '</h2><div class="g2">' + [[py.length, "Anlässe " + yr], [avg.toFixed(1).replace(".", ","), "Ø Teilnehmende"], [D.magnums.length, "Magnums erfasst"], [ppl ? chf(Math.round(tot / ppl)) : "–", "Ø pro Kopf im Restaurant"]]
+  var h = "<h2>Club-Statistik " + yr + '</h2><div class="g2">' + [[py.length, "Anlässe " + yr], [avg.toFixed(1).replace(".", ","), "Ø Teilnehmende"], [D.magnums.length, "Magnums erfasst"], [ppl ? chf(Math.round(tot / ppl * 20) / 20) : "–", "Ø pro Kopf im Restaurant"]]
     .map(function (k) { return '<div class="card" style="padding:12px;gap:2px"><span class="big" style="font-size:24px">' + esc(k[0]) + '</span><span class="sm mu">' + esc(k[1]) + "</span></div>" }).join("") + "</div>";
   var last = past.slice(0, 6).reverse();
   if (last.length) {
@@ -1140,7 +1150,7 @@ function restoView(r) {
   h += '<a class="btn" style="display:flex;align-items:center;justify-content:center;text-decoration:none" href="' + esc(mapsUrl(r)) + '" target="_blank" rel="noopener">In Google Maps öffnen</a>';
   h += '<section class="card"><span class="b" style="font-size:15px">Besuche</span>' + (V.length ? '<div class="lst">' + V.map(function (x) {
     return '<div class="row"><span style="width:52px;height:64px;flex:0 0 52px;border-radius:8px;overflow:hidden;background:var(--bg);border:1px dashed var(--ln2);display:flex;align-items:center;justify-content:center">' + (x.receipt_path ? img(x.receipt_path, "Quittung") : '<span class="xs mu">–</span>') + "</span>" +
-      '<span class="grow col" style="gap:2px"><b class="sm">' + esc(fDay(x.visited_on)) + '</b><span class="xs mu">' + x.people + " Personen · " + esc(nm(x.created_by)) + '</span></span><span class="col" style="gap:0;align-items:flex-end"><b class="sm">' + chf(x.total_chf) + '</b><span class="xs mu">' + chf(Math.round(x.total_chf / x.people)) + " p.P.</span></span></div>";
+      '<span class="grow col" style="gap:2px"><b class="sm">' + esc(fDay(x.visited_on)) + '</b><span class="xs mu">' + x.people + " Personen · " + esc(nm(x.created_by)) + '</span></span><span class="col" style="gap:0;align-items:flex-end"><b class="sm">' + chf(x.total_chf) + '</b><span class="xs mu">' + chf(Math.round(x.total_chf / x.people * 20) / 20) + " p.P.</span></span></div>";
   }).join("") + "</div>" : '<span class="empty">Noch kein Besuch erfasst.</span>') + "</section>";
   if (isAdmin()) h += '<button class="btn ghost" data-a="delresto" data-id="' + r.id + '">Beiz löschen</button>';
   return h + "</main>";
@@ -1152,7 +1162,8 @@ function eventView(e) {
   var R = D.rsvps.filter(function (r) { return r.event_id == e.id });
   var h = '<div class="top"><button class="back" data-a="close" aria-label="Zurück">' + BACK + '</button><span style="font:900 28px/1.1 var(--hf)">' + esc(e.title) + '</span><span class="sm mu">' + esc(fDate(e.starts_at, true)) + (ortText(e) ? " · " + esc(ortText(e)) : "") + "</span>" +
     '<span class="sm b">' + (e.organizer_id ? "Organisation: " + esc(nm(e.organizer_id)) : '<span style="color:var(--orange)">Organisator gesucht</span>') + "</span></div><main>";
-  h += '<div class="row wrap"><button class="pill ' + (s == "in" ? "on" : "") + '" data-a="rsvp" data-id="' + e.id + '" data-v="in">Bin dabei</button><button class="pill ' + (s == "out" ? "out" : "") + '" data-a="abmelden" data-id="' + e.id + '">Abmelden</button>' +
+  if (past) h += s ? '<div class="row wrap"><span class="chip" data-test="war-dabei">' + ({ in: "Du warst dabei", virtual: "Virtuell dabei", out: "Abgemeldet" })[s] + "</span></div>" : "";
+  else h += '<div class="row wrap"><button class="pill ' + (s == "in" ? "on" : "") + '" data-a="rsvp" data-id="' + e.id + '" data-v="in">Bin dabei</button><button class="pill ' + (s == "out" ? "out" : "") + '" data-a="abmelden" data-id="' + e.id + '">Abmelden</button>' +
     (s == "virtual" ? '<span class="chip v">Virtuell dabei · Magnum spendiert</span>' : "") + "</div>";
   if (!past) h += whatsapp(teilenAnlass(e), "In WhatsApp teilen");
   if (darfAendern(e)) h += '<details class="card" data-offen="evEditOpen"' + (UI.evEditOpen ? " open" : "") + '><summary>Anlass anpassen</summary>' + eventEdit(e) + "</details>";
@@ -1246,8 +1257,12 @@ var ACT = {
   install: function () { var p = INST; INST = null; if (p) p.prompt(); render() },
   ui: function (d) { UI[d.k] = d.v || null; render() },
   setui: function (d) { UI[d.k] = d.v; render() },
-  ov: function (d) { OV = { t: d.t, id: d.id }; UI.gOpen = null; UI.rideForm = null; render(); var o = document.getElementById("ov"); if (o) o.scrollTop = 0 },
-  close: function () { if (SH) SH = null; else OV = null; render() },
+  ov: function (d) {
+    if (!OV) ZURUECK = '[data-a="ov"][data-t="' + d.t + '"][data-id="' + d.id + '"]';
+    FOKUS = "#ov .back"; OV = { t: d.t, id: d.id }; UI.gOpen = null; UI.rideForm = null; render(); var o = document.getElementById("ov"); if (o) o.scrollTop = 0;
+    if (!(history.state && history.state.mgOv)) try { history.pushState({ mgOv: 1 }, "") } catch (e) {}
+  },
+  close: function () { if (!SH && OV && history.state && history.state.mgOv) { history.back(); return } zu() },
   authmode: function (d) { AUTH = { mode: d.v }; render() },
   noinvite: function () { INVITE = null; history.replaceState(null, "", location.pathname + location.search); render() },
   logout: function () { sb.auth.signOut() },
@@ -1267,7 +1282,7 @@ var ACT = {
   takeover: function (d) {
     var e = D.events.find(function (x) { return x.id == d.id }), alt = nm(e.organizer_id);
     if (!confirm("Abend von " + alt + " übernehmen?")) return;
-    after(sb.rpc("claim_organizer", { p_event: d.id }).then(function (r) { if (r.error) return r; return post("übernimmt «" + e.title + "» von " + alt + ". Danke!") }), "Du organisierst jetzt den Abend · +40 Punkte");
+    after(sb.rpc("claim_organizer", { p_event: d.id, p_bisher: e.organizer_id }).then(function (r) { if (r.error) return r; return post("übernimmt «" + e.title + "» von " + alt + ". Danke!") }), "Du organisierst jetzt den Abend · +40 Punkte");
   },
   organize: function (d) {
     var e = D.events.find(function (x) { return x.id == d.id });
@@ -1456,7 +1471,7 @@ var SUBMIT = {
     }), "Anlass angepasst").then(function () { UI.evEditOpen = UI.edTitle = UI.edDate = UI.edTime = UI.edLoc = UI.edOrt = UI.edOrg = null; render() });
   },
   event: function () {
-    var at = new Date(v("evDate") + "T" + v("evTime", "19:00")); if (!v("evTitle").trim() || isNaN(at)) return toast("Bitte Titel und Datum angeben");
+    var at = new Date(v("evDate", evStandard()) + "T" + v("evTime", "19:00")); if (!v("evTitle").trim() || isNaN(at)) return toast("Bitte Titel und Datum angeben");
     var org = !!UI.evOrg;
     after(sb.from("events").insert({ title: v("evTitle").trim(), starts_at: at.toISOString(), location: v("evLoc").trim() || null, ortschaft: v("evOrt").trim() || null, created_by: uid() }).select().single().then(function (r) {
       if (r.error || !org) return r;
@@ -1563,8 +1578,12 @@ document.addEventListener("click", function (e) {
   e.preventDefault(); f(el.dataset, el);
 });
 document.addEventListener("submit", function (e) {
-  var f = e.target, s = SUBMIT[f.getAttribute("data-s")]; if (!s) return;
-  e.preventDefault(); s(f);
+  var f = e.target, n = f.getAttribute("data-s"), s = SUBMIT[n]; if (!s) return;
+  e.preventDefault();
+  // Doppeltipp: Solange das Speichern läuft, zählt ein zweites Absenden nicht
+  if (SENDEN[n]) return;
+  SENDEN[n] = 1; FORM = n;
+  try { s(f) } finally { if (FORM) delete SENDEN[n]; FORM = null }
 });
 document.addEventListener("input", function (e) {
   var k = e.target.getAttribute && e.target.getAttribute("data-k"); if (!k) return;
@@ -1582,6 +1601,10 @@ document.addEventListener("change", function (e) {
 // Aufgeklappte Bereiche bleiben beim Neuzeichnen offen
 document.addEventListener("toggle", function (e) { var k = e.target.getAttribute && e.target.getAttribute("data-offen"); if (k) UI[k] = e.target.open }, true);
 document.addEventListener("keydown", function (e) { if (e.key == "Escape" && (SH || OV)) { ACT.close() } });
+// Zurück-Taste (Browser, Android) schliesst zuerst das offene Fenster
+var ZURUECK = null, FOKUS = null;
+function zu() { if (SH) SH = null; else { OV = null; FOKUS = ZURUECK; ZURUECK = null } render() }
+window.addEventListener("popstate", function () { if (SH || OV) zu() });
 
 // ═════════════ Start ═════════════
 function readInvite() {
@@ -1593,6 +1616,11 @@ function readInvite() {
   });
 }
 function start() {
+  if (window.top !== window.self) {
+    document.documentElement.style.display = "none";
+    try { window.top.location = location.href } catch (e) {}
+    return;
+  }
   if (!C.data || !C.api || !window.magnumDb) { render(); return }
   sb = window.magnumDb.createClient(C);
   wartung().then(function (mt) { if (mt) render() });

@@ -331,10 +331,18 @@ begin
 end $$;
 
 -- "Ich organisiere den Abend": Einen künftigen Abend kann jedes Mitglied jederzeit übernehmen, auch von jemand anderem
-create or replace function public.claim_organizer(p_event uuid) returns void
+-- p_bisher: wen die App als Organisator gezeigt hat. Hat inzwischen jemand anderes übernommen,
+-- wird niemand still verdrängt.
+drop function if exists public.claim_organizer(uuid);
+create or replace function public.claim_organizer(p_event uuid, p_bisher uuid default null) returns void
 language plpgsql security definer set search_path = public as $$
+declare v_org uuid;
 begin
   if not public.is_member() then raise exception 'Nur Mitglieder'; end if;
+  select organizer_id into v_org from public.events where id = p_event for update;
+  if v_org is distinct from p_bisher and v_org is distinct from public.uid() then
+    raise exception 'Inzwischen organisiert jemand anderes den Abend';
+  end if;
   update public.events set organizer_id = public.uid()
    where id = p_event and organizer_id is distinct from public.uid()
      and (starts_at at time zone 'Europe/Zurich')::date >= public.heute();
@@ -828,6 +836,14 @@ language sql stable security definer set search_path = public as $$
   select case when public.is_member() then (select count(*)::int from public.video_karten) else 0 end
 $$;
 
+-- Wie viele Karten ich noch ziehen könnte (nicht eigene, nicht schon gezogene)
+create or replace function public.video_ziehbar() returns int
+language sql stable security definer set search_path = public as $$
+  select case when public.is_member() then (select count(*)::int from public.video_karten k
+    where k.created_by is distinct from public.uid()
+      and not exists (select 1 from public.video_ziehungen z where z.karte_id = k.id and z.member_id = public.uid())) else 0 end
+$$;
+
 -- Ziehen: vom Beginn des Anlasses bis am nächsten Tag um 12 Uhr, wer dabei oder virtuell dabei ist.
 -- Nie die eigene, nie eine schon gezogene; am gleichen Abend möglichst nicht dieselbe wie jemand anderes.
 create or replace function public.karte_ziehen(p_event uuid) returns uuid
@@ -990,6 +1006,9 @@ revoke insert, update on public.rsvps from authenticated;
 grant insert (event_id, member_id, status, updated_at) on public.rsvps to authenticated;
 grant update (event_id, member_id, status, updated_at) on public.rsvps to authenticated;
 
+-- Fahrangebote ändert niemand nachträglich (sonst weniger Plätze als Mitfahrer); zurückziehen geht
+revoke update on public.rides from authenticated;
+
 -- Fahrten bewerten: Passagiere ändern nur die Bewertung, nicht die Fahrt
 revoke update on public.ride_passengers from authenticated;
 grant update (stars_safe, stars_punctual, stars_mood, points_given, rated_at) on public.ride_passengers to authenticated;
@@ -1007,7 +1026,7 @@ revoke execute on function public.me() from public, anonymous;
 revoke execute on function public.admin_set_device(uuid, text) from public, anonymous;
 revoke execute on function public.admin_set_role(uuid, text) from public, anonymous;
 revoke execute on function public.admin_set_admin(uuid, boolean) from public, anonymous;
-revoke execute on function public.claim_organizer(uuid) from public, anonymous;
+revoke execute on function public.claim_organizer(uuid, uuid) from public, anonymous;
 revoke execute on function public.set_organizer(uuid, uuid) from public, anonymous;
 revoke execute on function public.open_magnum_kasse() from public, anonymous;
 revoke execute on function public.eligible_voters(uuid) from public, anonymous;
@@ -1031,12 +1050,13 @@ revoke execute on function public.check_trip() from public, anonymous, authentic
 revoke execute on function public.check_trip_participant() from public, anonymous, authenticated;
 revoke execute on function public.set_created_at() from public, anonymous, authenticated;
 revoke execute on function public.video_bestand() from public, anonymous;
+revoke execute on function public.video_ziehbar() from public, anonymous;
 revoke execute on function public.karte_ziehen(uuid) from public, anonymous;
 grant execute on function public.is_member(), public.is_admin(), public.me(), public.magnum_termine(), public.admin_set_rsvp(uuid, uuid, text),
-  public.admin_set_device(uuid, text), public.admin_set_role(uuid, text), public.admin_set_admin(uuid, boolean), public.claim_organizer(uuid), public.set_organizer(uuid, uuid),
+  public.admin_set_device(uuid, text), public.admin_set_role(uuid, text), public.admin_set_admin(uuid, boolean), public.claim_organizer(uuid, uuid), public.set_organizer(uuid, uuid),
   public.open_magnum_kasse(), public.eligible_voters(uuid), public.propose_sacceri(uuid, uuid),
   public.propose_nickname(uuid, text), public.second_proposal(uuid), public.cast_ballot(uuid, boolean),
-  public.video_bestand(), public.karte_ziehen(uuid)
+  public.video_bestand(), public.video_ziehbar(), public.karte_ziehen(uuid)
   to authenticated;
 
 -- ═════════════ Live-Sync: Änderungen melden ═════════════
