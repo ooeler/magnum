@@ -10,6 +10,11 @@ export const DAILY_LIMIT = 5;
 
 // @-Erwähnungen entschärfen, damit niemand auf GitHub ungewollt angepingt wird.
 const noPing = (s) => s.replace(/@(?=\w)/g, "@​");
+// Das Repository ist öffentlich: Mail-Adressen und Telefonnummern verdecken (Daten ab 9 Ziffern)
+export const privat = (s) => s
+  .replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, "[Mail-Adresse entfernt]")
+  .replace(/(?:\+|\b)\d[\d ()/.-]{7,}\d/g, (m) => (m.replace(/\D/g, "").length >= 9 ? "[Nummer entfernt]" : m));
+const sauber = (s) => noPing(privat(s));
 
 export function buildIssue(input, now = new Date()) {
   const kind = KINDS[input?.kind] ? input.kind : null;
@@ -21,8 +26,8 @@ export function buildIssue(input, now = new Date()) {
   const date = new Intl.DateTimeFormat("de-CH", { timeZone: "Europe/Zurich", dateStyle: "medium" }).format(now);
   return {
     kind,
-    title: `${KINDS[kind].prefix} ${noPing(title)}`,
-    body: `${text ? noPing(text) : "_Keine Beschreibung._"}\n\n---\nEingereicht in der App am ${date}.`,
+    title: `${KINDS[kind].prefix} ${sauber(title)}`,
+    body: `${text ? sauber(text) : "_Keine Beschreibung._"}\n\n---\nEingereicht in der App am ${date}.`,
     labels: [KINDS[kind].label, "aus-der-app"],
   };
 }

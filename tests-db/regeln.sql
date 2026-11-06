@@ -157,7 +157,13 @@ select pg_temp.als('C');
 select public.claim_organizer('20000000-0000-0000-0000-000000000001');
 select pg_temp.check((select status from public.rsvps where member_id = public.uid()) = 'in', 'Organisator ist angemeldet');
 select pg_temp.als('D');
-select public.claim_organizer('20000000-0000-0000-0000-000000000001');
+do $$ begin
+  perform public.claim_organizer('20000000-0000-0000-0000-000000000001');
+  raise exception 'FEHLER: belegter Abend still übernommen';
+exception when raise_exception then
+  if sqlerrm like 'FEHLER%' then raise; end if; raise notice 'ok – belegten Abend nicht still übernehmen';
+end $$;
+select public.claim_organizer('20000000-0000-0000-0000-000000000001', (select organizer_id from public.events where id = '20000000-0000-0000-0000-000000000001'));
 select pg_temp.check((select organizer_id from public.events where id = '20000000-0000-0000-0000-000000000001') = public.uid(), 'Künftiger Abend lässt sich übernehmen');
 select pg_temp.check((select status from public.rsvps where member_id = public.uid() and event_id = '20000000-0000-0000-0000-000000000001') = 'in', 'Wer übernimmt, ist angemeldet');
 do $$ begin
@@ -494,11 +500,13 @@ insert into public.video_karten (id, title, path) values ('60000000-0000-0000-00
 select pg_temp.verboten($q$insert into public.video_karten (title, path) values ('Fremd', 'videos/00000000-0000-0000-0000-00000000000c/9.webm')$q$, 'Video nur im eigenen Ordner');
 select pg_temp.check((select count(*) from public.video_karten) = 1, 'Fremde Videokarten bleiben verdeckt');
 select pg_temp.check(public.video_bestand() = 3, 'Bestand zählt alle Videokarten');
+select pg_temp.check(public.video_ziehbar() = 2, 'Ziehbar sind nur fremde Karten');
 select pg_temp.verboten($q$select public.karte_ziehen('20000000-0000-0000-0000-000000000001')$q$, 'Ziehen erst am Abend selbst');
 select pg_temp.verboten($q$insert into public.video_ziehungen (event_id, member_id, karte_id) values ('20000000-0000-0000-0000-000000000003', public.uid(), '60000000-0000-0000-0000-000000000001')$q$, 'Ziehen nur über karte_ziehen');
 select pg_temp.check(public.karte_ziehen('20000000-0000-0000-0000-000000000003') in ('60000000-0000-0000-0000-000000000001', '60000000-0000-0000-0000-000000000002'), 'Virtuell dabei zieht eine fremde Karte');
 select pg_temp.check((select count(*) from public.video_karten) = 2, 'Gezogene Karte ist danach sichtbar');
 select pg_temp.verboten($q$select public.karte_ziehen('20000000-0000-0000-0000-000000000003')$q$, 'Nur eine Karte pro Abend');
+select pg_temp.check(public.video_ziehbar() = 1, 'Gezogene Karte ist nicht mehr ziehbar');
 select pg_temp.als('D');
 select pg_temp.verboten($q$select public.karte_ziehen('20000000-0000-0000-0000-000000000003')$q$, 'Wer nicht dabei ist, zieht nicht');
 select pg_temp.check((select count(*) from public.video_ziehungen) = 1, 'Alle sehen, wer wie viele Karten hat');

@@ -109,6 +109,12 @@ base.test.describe("Sicherheit (statisch)", () => {
     expect(i.labels).toEqual(["wunsch", "aus-der-app"]);
     expect(() => F.buildIssue({ kind: "x", title: "abc" })).toThrow();
     expect(() => F.buildIssue({ kind: "idee", title: "ab" })).toThrow("3–100");
+    // Selbst eingetippte Kontaktdaten landen nicht im öffentlichen Issue, Daten und Preise bleiben
+    const k = F.buildIssue({ kind: "idee", title: "Mail an beat.muster@gmx.ch", text: "Ruf an: +41 79 123 45 67 oder 079/123.45.67. Am 06.11.2026 für CHF 1200.50" });
+    expect(k.title).toBe("💡 Mail an [Mail-Adresse entfernt]");
+    expect(k.body).not.toMatch(/gmx|123 45|123\.45/);
+    expect(k.body).toContain("06.11.2026");
+    expect(k.body).toContain("CHF 1200.50");
   });
 
   base.test("Workflows: minimale Rechte, kein pull_request_target, Actions mit Commit-Hash", () => {

@@ -108,7 +108,7 @@
   var PERSONAL = ["restaurant_ratings", "rsvps", "trip_participants", "drinks", "saying_prosts", "post_prosts", "ride_passengers", "rides"];
   var COLS = { profiles: ["display_name", "fav_wine", "specialty"], trips: ["title", "starts_on", "ends_on", "program", "seats", "color", "ok_id", "kassier_id"],
     events: ["title", "starts_at", "location", "ortschaft"], ride_passengers: ["stars_safe", "stars_punctual", "stars_mood", "points_given", "rated_at"],
-    rsvps: ["event_id", "member_id", "status", "updated_at"], posts: ["text"], sayings: ["text"] };
+    rsvps: ["event_id", "member_id", "status", "updated_at"], posts: ["text"], sayings: ["text"], rides: [] };
   var READONLY = ["karte_der_woche", "video_ziehungen", "settings", "proposals", "ballots", "admin_log", "feedback"];
   var CASCADE = { events: [["rsvps", "event_id"], ["magnums", "event_id"], ["rides", "event_id"], ["gaeste", "event_id"], ["video_ziehungen", "event_id"]], video_karten: [["video_ziehungen", "karte_id"]], magnums: [["magnum_guests", "magnum_id"]], rides: [["ride_passengers", "ride_id"]],
     cards: [["card_members", "card_id"]], trips: [["gaeste", "trip_id"], ["trip_participants", "trip_id"], ["trip_photos", "trip_id"], ["proposals", "trip_id"]], posts: [["post_prosts", "post_id"]], sayings: [["saying_prosts", "saying_id"]],
@@ -208,6 +208,8 @@
         if (t == "rsvps" && "redeemed" in r) return fail("permission denied for table rsvps", "42501");
         var ex = d[t].find(function (x) { return pkMatch(t, x, r) && (PK[t] || r.id) });
         if (ex && q.op == "insert") return fail("duplicate key value violates unique constraint", "23505");
+        if (t == "rides" && q.op == "insert" && d.rides.some(function (x) { return x.event_id == r.event_id && x.driver_id == r.driver_id })) return fail("duplicate key value violates unique constraint", "23505");
+        if (t == "restaurant_visits" && !(r.people >= 1 && r.people <= 100)) return fail("new row violates check constraint", "23514");
         var bad = checkRow(d, t, r, ex); if (bad) return fail(bad);
         if (t == "posts" || t == "sayings") r.created_at = new Date().toISOString();
         if (t == "ride_passengers") { var e = checkRide(d, r, !ex); if (e) return fail(e) }
@@ -273,6 +275,7 @@
     me: function (d, u) { var p = d.profiles.find(function (x) { return x.id == u }); if (!p) return null; var prev = p.last_seen; p.last_seen = new Date().toISOString(); return { id: u, is_admin: p.is_admin, prev_seen: prev } },
     magnum_termine: function () { return 0 },
     video_bestand: function (d) { return d.video_karten.length },
+    video_ziehbar: function (d, u) { return d.video_karten.filter(function (k) { return k.created_by != u && !d.video_ziehungen.some(function (z) { return z.karte_id == k.id && z.member_id == u }) }).length },
     karte_ziehen: function (d, u, a) {
       var e = d.events.find(function (x) { return x.id == a.p_event }); if (!e) throw "Anlass nicht gefunden";
       var start = new Date(e.starts_at), ende = new Date(start); ende.setDate(ende.getDate() + 1); ende.setHours(12, 0, 0, 0);
@@ -298,7 +301,9 @@
       if (a.p_status) d.rsvps.push({ event_id: a.p_event, member_id: a.p_member, status: a.p_status, redeemed: false, updated_at: new Date().toISOString() });
     },
     claim_organizer: function (d, u, a) {
-      var e = d.events.find(function (x) { return x.id == a.p_event }); if (!e || e.organizer_id == u || tag(e.starts_at) < day(0)) throw "Der Anlass lässt sich nicht übernehmen";
+      var e = d.events.find(function (x) { return x.id == a.p_event });
+      if (e && e.organizer_id != u && (e.organizer_id || null) != (a.p_bisher || null)) throw "Inzwischen organisiert jemand anderes den Abend";
+      if (!e || e.organizer_id == u || tag(e.starts_at) < day(0)) throw "Der Anlass lässt sich nicht übernehmen";
       e.organizer_id = u; var r = d.rsvps.find(function (x) { return x.event_id == e.id && x.member_id == u });
       if (r) r.status = "in"; else d.rsvps.push({ event_id: e.id, member_id: u, status: "in", redeemed: false, updated_at: new Date().toISOString() });
     },
@@ -357,7 +362,7 @@
     if (fn != "me" && !member(d)) return fail("Nur Mitglieder");
     if (fn == "me" && window.__mg_warten) return new Promise(function (ok2) { window.__mg_weiter = function () { window.__mg_warten = false; ok2(rpc(fn, a)) } });
     // Nur lesende Funktionen melden keine Änderung (sonst lädt die App endlos neu)
-    if (fn == "video_bestand") return ok(RPC[fn](d, u, a || {}));
+    if (fn == "video_bestand" || fn == "video_ziehbar") return ok(RPC[fn](d, u, a || {}));
     try { var r = RPC[fn](d, u, a || {}); save(d); notify(); return ok(r === undefined ? null : r) } catch (e) { return fail(String(e.message || e)) }
   }
 

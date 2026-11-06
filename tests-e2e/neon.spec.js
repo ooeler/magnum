@@ -138,7 +138,10 @@ test("Magnum-Serie: drei Abende, Name aus dem Datum, Anpassen", async () => {
   expect((await daten(B.token, "/rpc/claim_organizer", { method: "POST", body: JSON.stringify({ p_event: e.id }) })).s).toBeLessThan(300);
   const u = await daten(B.token, `/events?id=eq.${e.id}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ title: "Grosser Abend" }) });
   expect(u.j[0].title).toBe("Grosser Abend");
-  const uebernahme = await daten(A.token, "/rpc/claim_organizer", { method: "POST", body: JSON.stringify({ p_event: e.id }) });
+  // Still verdrängen geht nicht, nur wer den bisherigen Organisator gesehen hat, übernimmt
+  expect((await daten(A.token, "/rpc/claim_organizer", { method: "POST", body: JSON.stringify({ p_event: e.id }) })).s).toBeGreaterThanOrEqual(400);
+  const bisher = (await daten(A.token, `/events?id=eq.${e.id}&select=organizer_id`)).j[0].organizer_id;
+  const uebernahme = await daten(A.token, "/rpc/claim_organizer", { method: "POST", body: JSON.stringify({ p_event: e.id, p_bisher: bisher }) });
   expect(uebernahme.s, JSON.stringify(uebernahme.j)).toBeLessThan(300);
 });
 
