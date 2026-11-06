@@ -2,7 +2,7 @@
 // Keine Abhängigkeit, die App liefert ihn selbst aus. Die Sitzung liegt im localStorage: Fremd-Cookies blockiert Safari.
 (function () {
   if (window.magnumDb) return; // Tests und Demo bringen ihren Nachbau mit
-  var KEY = "mg_sitzung", SYNC_MS = 30000, UPDATE_MS = 5000;
+  var KEY = "mg_sitzung", SYNC_MS = 30000, UPDATE_MS = 5000, RUHE_MS = 300000, RUHE_NACH = 180000;
   function createClient(cfg) {
     var S = lesen(), SUBS = [], RESET = null, CH = [];
     function lesen() { try { return JSON.parse(localStorage.getItem(KEY)) } catch (e) { return null } }
@@ -103,9 +103,11 @@
     } } };
 
     // Live-Sync: Jede Änderung erhöht sync_stand, die offene App fragt regelmässig danach und nur, solange sie sichtbar ist
-    var STAND = null, MAINT = null, UHR = null;
+    // Wer die App nicht bedient, löst nur noch selten eine Abfrage aus. So kann die Datenbank dazwischen schlafen.
+    var STAND = null, MAINT = null, UHR = null, BEDIENT = Date.now(), GEFRAGT = 0, WECKER = null;
     function pruefen() {
       if (document.hidden || !CH.length) return;
+      GEFRAGT = Date.now();
       new Q("app_status").run().then(function (r) {
         var mt = r.data && r.data.maintenance;
         if (r.data && MAINT !== null && mt !== MAINT) CH.forEach(function (c) { c.cb({ table: "app_status", new: { maintenance: mt } }) });
@@ -119,10 +121,17 @@
       });
     }
     // Während eines Updates schneller nachfragen, damit die App gleich zurück ist
-    function takt() { pruefen(); setTimeout(takt, MAINT ? UPDATE_MS : SYNC_MS) }
+    function abstand() { return MAINT ? UPDATE_MS : Date.now() - BEDIENT > RUHE_NACH ? RUHE_MS : SYNC_MS }
+    function takt() { pruefen(); WECKER = setTimeout(takt, abstand()) }
+    function bedient() {
+      BEDIENT = Date.now();
+      // Nach langer Ruhe sofort nachfragen und wieder im normalen Takt weiter
+      if (UHR && !document.hidden && Date.now() - GEFRAGT > SYNC_MS) { clearTimeout(WECKER); takt() }
+    }
+    ["pointerdown", "keydown", "scroll"].forEach(function (t) { document.addEventListener(t, bedient, { capture: true, passive: true }) });
     function channel() {
       var c = { on: function (a, b, cb) { c.cb = cb; return c }, subscribe: function () {
-        CH.push(c); if (!UHR) { UHR = true; document.addEventListener("visibilitychange", pruefen); takt() }
+        CH.push(c); if (!UHR) { UHR = true; document.addEventListener("visibilitychange", function () { if (!document.hidden) bedient() }); takt() }
         return c;
       } };
       return c;

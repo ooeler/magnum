@@ -258,3 +258,40 @@ test.describe("Push und Karte der Woche", () => {
     await expect(page.locator(".mem", { hasText: "Beat" }).locator("svg")).toHaveCount(1);
   });
 });
+
+test.describe("WhatsApp und Bedienung", () => {
+  test("Anlass, Karte der Woche und Rangliste lassen sich in WhatsApp teilen", async ({ page }) => {
+    await page.goto("/");
+    await page.evaluate(() => { const d = window.__mg.db(); d.karte_der_woche.push({ woche: "2026-10-26", card_id: "c-2" }); localStorage.setItem("__mg_db", JSON.stringify(d)) });
+    await login(page);
+    const text = async (l) => decodeURIComponent(new URL(await l.getAttribute("href")).searchParams.get("text"));
+    const karte = page.getByRole("link", { name: "Karte in WhatsApp teilen" });
+    expect(await text(karte)).toContain("Karte der Woche: Sonnenaufgang im Rebberg");
+    await page.locator("article.ev", { hasText: "Herbst-Stamm" }).getByRole("button", { name: "Details" }).click();
+    const anlass = page.locator("#ov").getByRole("link", { name: "In WhatsApp teilen" });
+    await expect(anlass).toHaveAttribute("href", /^https:\/\/wa\.me\/\?text=/);
+    await expect(anlass).toHaveAttribute("target", "_blank");
+    const t = await text(anlass);
+    expect(t).toContain("Herbst-Stamm");
+    expect(t).toContain("Pinte zum Hirschen");
+    expect(t).toContain("Organisation: Kurt");
+    expect(t).toContain("http://localhost:4183/");
+    await page.getByRole("button", { name: "Zurück" }).click();
+    await tab(page, "Club");
+    expect(await text(page.getByRole("link", { name: "Rangliste in WhatsApp teilen" }))).toMatch(/^🏆 Magnum Saison-Rangliste\n👑 /);
+  });
+
+  test("Neuzeichnen während eines Tipps verschluckt den Klick nicht", async ({ page }, info) => {
+    // WebKit lässt in der iPhone-Nachbildung ab und zu einen gehaltenen Mausklick fallen, auch ohne Neuzeichnen
+    test.skip(info.project.name == "iphone", "Maus-Halten in der WebKit-Nachbildung unzuverlässig");
+    await login(page);
+    await expect(page.locator("[data-test=punkte]")).toBeVisible();
+    const p = await page.evaluate(() => { const r = document.querySelector('nav button[data-v="club"]').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2] });
+    await page.mouse.move(p[0], p[1]);
+    await page.mouse.down();
+    await page.evaluate(() => render());
+    await page.mouse.up();
+    await expect(page.locator("nav button[aria-current=page]")).toContainText("Club");
+    await expect(page.locator("h2", { hasText: "Saison-Rangliste" })).toBeVisible();
+  });
+});
