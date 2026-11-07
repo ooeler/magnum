@@ -19,6 +19,11 @@ export function checkVideo(pfad, userId, data) {
   if (pfad.endsWith(".mp4") ? !mp4 : !webm) throw new Error("Nur MP4- oder WebM-Videos.");
 }
 
+// Aufräumen: Videodateien ohne Karte, älter als "tage" (so stört es kein Hochladen, das gerade läuft).
+// Ob eine Sicherung die Karte noch enthält, prüft die Function danach in der Datenbank.
+export const verwaisteVideos = (objekte, behalten, jetzt, tage = 2) =>
+  objekte.filter((o) => istVideo(o.Key) && !behalten.has(o.Key) && jetzt - new Date(o.LastModified).getTime() > tage * 864e5).map((o) => o.Key);
+
 export function checkFoto(pfad, userId, data) {
   if (!checkPfad(pfad) || istVideo(pfad)) throw new Error("Ungültiger Speicherort.");
   if (pfad.split("/")[1] != userId) throw new Error("Hochladen nur in den eigenen Ordner.");
