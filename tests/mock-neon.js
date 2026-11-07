@@ -420,7 +420,8 @@
   var COLORS = ["#6E2433", "#8A5A3C", "#3D4A2E", "#5A3E5E", "#7A2E2E", "#4A5A6E", "#9A6A2A", "#3E2A2E"];
   function placeholder(p) { var i = 0; for (var k = 0; k < p.length; k++) i += p.charCodeAt(k); return "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="' + COLORS[i % COLORS.length] + '"/></svg>') }
   var storage = { from: function () { return {
-    upload: function (path, blob) {
+    upload: function (path, blob, o) {
+      if (o && o.onProgress) o.onProgress(1);
       var u = me(); if (!u) return fail("JWT expired");
       if (path.split("/")[1] != u || ["drinks", "trips", "cards", "receipts", "videos"].indexOf(path.split("/")[0]) < 0) return RLS("objects");
       if (path.indexOf("videos/") == 0) { if (!/\.(mp4|webm)$/.test(path) || blob.size > 12 * 1024 * 1024) return fail("Nur MP4- oder WebM-Videos."); window.__mg_videos = window.__mg_videos || {}; window.__mg_videos[path] = blob; VIDS[path] = URL.createObjectURL(blob); return ok({ path: path }) }

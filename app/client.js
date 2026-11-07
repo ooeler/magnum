@@ -90,12 +90,33 @@
     };
 
     var storage = { from: function () { return {
+      // Hochladen mit Fortschritt (o.onProgress 0–1) und Zeitlimit. Ohne Netz, bei Zeitüberschreitung oder
+      // wenn der Server gerade aufwacht (5xx), versucht es die App bis zu dreimal.
       upload: function (pfad, blob, o) {
-        return mitLogin(function (kopf) {
-          return fetch(cfg.api + "/fotos?pfad=" + encodeURIComponent(pfad), { method: "POST", headers: Object.assign({ "Content-Type": (o && o.contentType) || "image/jpeg" }, kopf), body: blob }).then(function (r) {
-            return r.json().catch(function () { return null }).then(function (j) { return r.ok ? { data: j, error: null } : { data: null, error: fehler(j, r) } });
+        o = o || {};
+        function versuch(n) {
+          return mitLogin(function (kopf) {
+            return new Promise(function (res) {
+              var x = new XMLHttpRequest();
+              x.open("POST", cfg.api + "/fotos?pfad=" + encodeURIComponent(pfad));
+              x.setRequestHeader("Content-Type", o.contentType || "image/jpeg");
+              Object.keys(kopf).forEach(function (k) { x.setRequestHeader(k, kopf[k]) });
+              x.timeout = Math.max(60000, Math.round(blob.size / 40)); // mindestens 1 Minute, sonst ca. 40 kB/s
+              if (o.onProgress && x.upload) x.upload.onprogress = function (e) { if (e.lengthComputable) o.onProgress(e.loaded / e.total) };
+              x.onload = function () {
+                var j = null; try { j = JSON.parse(x.responseText) } catch (e) {}
+                res(x.status >= 200 && x.status < 300 ? { data: j, error: null } : { data: null, error: fehler(j, x) });
+              };
+              x.onerror = x.ontimeout = function () { res({ data: null, error: { message: "Keine Verbindung. Bitte nochmals versuchen.", status: 0 } }) };
+              x.send(blob);
+            });
+          }).then(function (r) {
+            var s = r.error ? r.error.status : 200;
+            if (n < 3 && (s == 0 || s == 408 || s == 429 || s >= 500)) return new Promise(function (w) { setTimeout(w, n * 2000) }).then(function () { return versuch(n + 1) });
+            return r;
           });
-        });
+        }
+        return versuch(1);
       },
       createSignedUrls: function (paths) {
         return mitLogin(function (kopf) { return api("/fotos/links", { paths: paths }, kopf) }).then(function (r) { return r.error ? r : { data: r.data.items, error: null } });
