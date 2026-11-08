@@ -309,16 +309,34 @@ function fetchUrls() {
     });
   });
 }
-// Bilder vor dem Hochladen verkleinern (max. 1600 px, JPEG) – spart Speicher und Datenvolumen
+// Bilder vor dem Hochladen verkleinern (max. 1600 px, JPEG) – spart Speicher und Datenvolumen.
+// Kann das Gerät ein Format nicht mit createImageBitmap lesen (z. B. HEIC), versucht es die App über ein <img>.
+var FOTO_MAX = 5 * 1024 * 1024;
+function istBild(f) { return /^image\//.test(f.type || "") || (!f.type && /\.(jpe?g|png|heic|heif|webp|gif)$/i.test(f.name || "")) }
 function shrink(file) {
-  return new Promise(function (res) {
-    if (!window.createImageBitmap) return res(file);
-    createImageBitmap(file).then(function (bm) {
-      var k = Math.min(1, 1600 / Math.max(bm.width, bm.height)), c = document.createElement("canvas");
-      c.width = Math.round(bm.width * k); c.height = Math.round(bm.height * k);
-      c.getContext("2d").drawImage(bm, 0, 0, c.width, c.height);
-      c.toBlob(function (b) { res(b || file) }, "image/jpeg", 0.82);
-    }).catch(function () { res(file) });
+  function perImg() {
+    return new Promise(function (ok, fail) {
+      var u = URL.createObjectURL(file), i = new Image();
+      i.onload = function () { URL.revokeObjectURL(u); ok(i) }; i.onerror = function () { URL.revokeObjectURL(u); fail(new Error("Bild nicht lesbar")) }; i.src = u;
+    });
+  }
+  function perUrl(c) {
+    try { var u = c.toDataURL("image/jpeg", 0.82), bin = atob(u.split(",")[1]), a = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return new Blob([a], { type: "image/jpeg" }) } catch (e) { return null }
+  }
+  var lesen = window.createImageBitmap ? createImageBitmap(file).catch(perImg) : perImg();
+  return lesen.then(function (bm) {
+    var w = bm.naturalWidth || bm.width, h = bm.naturalHeight || bm.height;
+    if (!w || !h) return null;
+    var k = Math.min(1, 1600 / Math.max(w, h)), c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+    c.getContext("2d").drawImage(bm, 0, 0, c.width, c.height);
+    if (bm.close) bm.close();
+    // toBlob liefert bei knappem Speicher manchmal nichts: dann über toDataURL
+    return new Promise(function (res) { c.toBlob(function (b) { res(b && b.size ? b : perUrl(c)) }, "image/jpeg", 0.82) });
+  }).catch(function () { return null }).then(function (b) {
+    if (b && b.size && b.type == "image/jpeg") return b;
+    if (file.type == "image/jpeg" && file.size <= FOTO_MAX) return file;
+    throw new Error("Dieses Bild kann das Gerät nicht umwandeln. Bitte ein anderes Foto wählen oder direkt fotografieren.");
   });
 }
 // ═════════════ Videokarten ═════════════
@@ -373,7 +391,16 @@ function vid(path, auto) {
 }
 function videoKarte(id) { return D.video_karten.find(function (k) { return k.id == id }) }
 function meineVideos(mid) { var ids = {}; D.video_ziehungen.forEach(function (z) { if (z.member_id == mid) ids[z.karte_id] = 1 }); return Object.keys(ids) }
-function ziehEnde(e) { var d = new Date(e.starts_at); d.setDate(d.getDate() + 1); d.setHours(12, 0, 0, 0); return d.getTime() }
+// Ziehen bis am Tag nach dem Anlass um 12 Uhr Zürcher Zeit (wie draw_video_karte), egal wo das Handy gerade ist
+function zuerich(t) {
+  var p = {}; new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Zurich", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" })
+    .formatToParts(new Date(t)).forEach(function (x) { p[x.type] = +x.value });
+  return p;
+}
+function ziehEnde(e) {
+  var z = zuerich(new Date(e.starts_at).getTime()), g = Date.UTC(z.year, z.month - 1, z.day + 1, 12), w = zuerich(g);
+  return g - (Date.UTC(w.year, w.month - 1, w.day, w.hour, w.minute) - g);
+}
 function ziehbar() {
   var t = now(), me = uid();
   // Ohne ziehbare Karte (leerer Stapel, nur eigene oder schon gezogene) keine Box
@@ -399,7 +426,7 @@ function videoBereich() {
   }).join("") + "</div>";
   var eigene = D.video_karten.filter(function (k) { return k.created_by == me });
   if (eigene.length) h += '<span class="sm mu" data-test="video-eigene">Von dir im Stapel: ' + eigene.length + "</span>";
-  if (isAdmin() && D.video_karten.length) h += '<details><summary class="sm">Alle Videokarten verwalten (' + D.video_karten.length + ')</summary><div class="lst" style="margin-top:8px">' + D.video_karten.map(function (k) {
+  if (isAdmin() && D.video_karten.length) h += '<details data-offen="vkAlleOpen"' + (UI.vkAlleOpen ? " open" : "") + '><summary class="sm">Alle Videokarten verwalten (' + D.video_karten.length + ')</summary><div class="lst" style="margin-top:8px">' + D.video_karten.map(function (k) {
     var z = D.video_ziehungen.filter(function (x) { return x.karte_id == k.id }).length;
     return '<button type="button" class="row sb" style="background:none;border:0;border-top:1px solid var(--ln);width:100%;text-align:left;color:var(--tx)" data-a="ov" data-t="video" data-id="' + k.id + '"><span class="grow"><b class="sm">' + esc(k.title) + '</b><br><span class="xs mu">' + esc(nm(k.created_by)) + " · " + z + " Mal gezogen</span></span></button>";
   }).join("") + "</div></details>";
@@ -422,11 +449,11 @@ function videoView(k) {
     '<span style="font:900 24px/1.15 var(--hf)">' + esc(k.title) + '</span><span class="sm mu">Von ' + esc(nm(k.created_by)) + (ev ? " · gezogen am " + esc(ev.title) : k.created_by == uid() ? " · liegt im Stapel" : "") + "</span></article>" +
     (loeschen ? '<button class="btn ghost" data-a="delvideo" data-id="' + k.id + '">Videokarte löschen</button>' : "") + "</main>";
 }
-function upload(area, file) {
-  if (!/^image\//.test(file.type || "")) return Promise.reject(new Error("Bitte ein Bild wählen."));
+function upload(area, file, onProgress) {
+  if (!istBild(file)) return Promise.reject(new Error("Bitte ein Bild wählen."));
   var path = area + "/" + uid() + "/" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + ".jpg";
   return shrink(file).then(function (blob) {
-    return sb.storage.from("photos").upload(path, blob, { contentType: "image/jpeg", upsert: false });
+    return sb.storage.from("photos").upload(path, blob, { contentType: "image/jpeg", upsert: false, onProgress: onProgress });
   }).then(function (r) { if (r.error) throw r.error; return path });
 }
 
@@ -594,7 +621,16 @@ function render() {
   if (fk) { var n = document.querySelector('[data-k="' + fk + '"]'); if (n && n.tagName != "BUTTON") { n.focus(); try { if (fs != null) n.setSelectionRange(fs, fs) } catch (e) {} } }
   else if (FOKUS || fa) { var n3 = null; try { n3 = document.querySelector(FOKUS || fa) } catch (e) {} if (n3) { n3.focus({ preventScroll: true }); FOKUS = null } }
   fetchUrls();
+  dateiFelder();
   if (READY && PRF) { fxStart(); karte() }
+}
+// Dateiauswahl direkt am Feld abhören: Lädt die App neu, während jemand ein Foto oder Video auswählt,
+// ist das alte Feld nicht mehr im Dokument. Die Auswahl käme sonst nie an.
+function dateiFelder() {
+  document.querySelectorAll("input[type=file][data-c]").forEach(function (el) {
+    if (el.__mg) return; el.__mg = 1;
+    el.addEventListener("change", function (e) { e.stopPropagation(); var c = el.getAttribute("data-c"); if (CHANGE[c]) CHANGE[c](el) });
+  });
 }
 function authShell(inner) { return '<div class="auth"><div class="row">' + GLASS + '<div><div class="lbl">Magnum Club</div><h1 style="margin:0;font:900 34px/1 var(--hf)">Magnum</h1></div></div>' + inner + "</div>" }
 
@@ -1407,13 +1443,16 @@ var SUBMIT = {
   vkarte: function () {
     var f = UI.vkFile, t = v("vkTitle").trim();
     if (!t) return toast("Bitte einen Titel angeben"); if (!f) return toast("Bitte ein Video wählen");
-    if (!/^video\//.test(f.type || "")) return toast("Bitte ein Video wählen");
+    if (!/^video\//.test(f.type || "") && !(!f.type && /\.(mp4|m4v|mov|webm|3gp)$/i.test(f.name || ""))) return toast("Bitte ein Video wählen");
     var kuerzen = videoKuerzen(f); // sofort, solange der Tipp noch gilt
     BUSY = true; UI.vkStatus = "Video wird vorbereitet (bis 7 Sekunden) …"; render();
     kuerzen.then(function (blob) {
       UI.vkStatus = "Wird hochgeladen …"; render();
       var webm = /webm/.test(blob.type || ""), path = "videos/" + uid() + "/" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + (webm ? ".webm" : ".mp4");
-      return sb.storage.from("photos").upload(path, blob, { contentType: webm ? "video/webm" : "video/mp4", upsert: false }).then(function (r) {
+      var pz = -1;
+      return sb.storage.from("photos").upload(path, blob, { contentType: webm ? "video/webm" : "video/mp4", upsert: false, onProgress: function (x) {
+        var n = Math.floor(x * 20) * 5; if (n == pz) return; pz = n; UI.vkStatus = "Wird hochgeladen … " + n + " %"; render();
+      } }).then(function (r) {
         if (r.error) throw r.error;
         return sb.from("video_karten").insert({ title: t, path: path, created_by: uid() });
       });
@@ -1552,9 +1591,19 @@ var CHANGE = {
   },
   tripphotos: function (el) {
     var fs = Array.prototype.slice.call(el.files || []), id = el.getAttribute("data-id"); if (!fs.length) return;
-    toast(fs.length + " Bild" + (fs.length > 1 ? "er werden" : " wird") + " hochgeladen …");
-    fs.reduce(function (p, f) { return p.then(function () { return upload("trips", f).then(function (path) { return sb.from("trip_photos").insert({ trip_id: id, path: path, uploaded_by: uid() }) }) }) }, Promise.resolve())
-      .then(function () { return after(null, fs.length + " Bild" + (fs.length > 1 ? "er" : "") + " hochgeladen") }).catch(function (e) { toast(errText(e)) });
+    var gut = 0, fehler = null;
+    fs.reduce(function (p, f, i) {
+      return p.then(function () {
+        toast(fs.length > 1 ? "Bild " + (i + 1) + " von " + fs.length + " wird hochgeladen …" : "Bild wird hochgeladen …");
+        return upload("trips", f, function (x) { if (fs.length == 1) toast("Bild wird hochgeladen … " + Math.round(x * 100) + " %") })
+          .then(function (path) { return sb.from("trip_photos").insert({ trip_id: id, path: path, uploaded_by: uid() }) })
+          .then(function (r) { if (r && r.error) throw r.error; gut++ }).catch(function (e) { fehler = e });
+      });
+    }, Promise.resolve()).then(function () {
+      if (!fehler) return after(null, gut + " Bild" + (gut > 1 ? "er" : "") + " hochgeladen");
+      toast((gut ? gut + " von " + fs.length + " Bildern hochgeladen. " : "") + errText(fehler));
+      if (gut) loadAll();
+    });
   },
   vkfile: function (el) { UI.vkFile = el.files && el.files[0] || null; render() },
   cardphoto: function (el) { UI.cdFile = el.files && el.files[0] || null; render() },
@@ -1600,6 +1649,11 @@ document.addEventListener("change", function (e) {
 });
 // Aufgeklappte Bereiche bleiben beim Neuzeichnen offen
 document.addEventListener("toggle", function (e) { var k = e.target.getAttribute && e.target.getAttribute("data-offen"); if (k) UI[k] = e.target.open }, true);
+// Das toggle-Ereignis kommt erst später. Lädt die App dazwischen neu, ginge das Aufklappen verloren: darum schon beim Tipp merken
+document.addEventListener("click", function (e) {
+  var s = e.target.closest && e.target.closest("summary"), d = s && s.parentNode, k = d && d.tagName == "DETAILS" && d.getAttribute("data-offen");
+  if (k && d.firstElementChild == s) UI[k] = !d.open;
+}, true);
 document.addEventListener("keydown", function (e) { if (e.key == "Escape" && (SH || OV)) { ACT.close() } });
 // Zurück-Taste (Browser, Android) schliesst zuerst das offene Fenster
 var ZURUECK = null, FOKUS = null;

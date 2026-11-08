@@ -160,6 +160,11 @@ base.test.describe("Sicherheit (statisch)", () => {
     expect(() => F.checkVideo(`videos/00000000-0000-0000-0000-00000000000b/a.webm`, id, webm)).toThrow("eigenen Ordner");
     expect(() => F.checkVideo(`videos/${id}/a.mov`, id, mp4)).toThrow("Speicherort");
     expect(() => F.checkVideo(`videos/${id}/a.webm`, id, new Uint8Array(F.MAX_VIDEO + 1))).toThrow("gross");
+    // Aufräumen: nur Videos ohne Karte und erst nach 2 Tagen
+    const jetzt = Date.parse("2026-11-07T12:00:00Z"), alt = "2026-11-01T00:00:00Z", neu = "2026-11-07T08:00:00Z";
+    const objekte = [{ Key: `videos/${id}/weg.mp4`, LastModified: alt }, { Key: `videos/${id}/karte.mp4`, LastModified: alt },
+      { Key: `videos/${id}/laeuft.mp4`, LastModified: neu }, { Key: `cards/${id}/a.jpg`, LastModified: alt }];
+    expect(F.verwaisteVideos(objekte, new Set([`videos/${id}/karte.mp4`]), jetzt)).toEqual([`videos/${id}/weg.mp4`]);
     // Ein Video geht nicht als Foto durch und umgekehrt
     expect(() => F.checkFoto(`videos/${id}/a.webm`, id, webm)).toThrow("Speicherort");
     expect(F.istVideo(`cards/${id}/a.jpg`)).toBe(false);

@@ -6,16 +6,17 @@
 // Vorschlag /feedback         Vorschlag speichern, /feedback-export für GitHub Actions (feedback-issues.yml)
 // Fotos     /fotos, /fotos/links  privater Speicher: JPEG bis 5 MB, Videokarten MP4/WebM bis 12 MB, nur Mitglieder
 // Backup    /backup           täglicher Function Trigger (neon.ts), legt auch die nächsten Magnum-Abende an
+//                             und räumt Videodateien gelöschter Videokarten weg
 // Push      /push/*, /taeglich  Abo speichern, Test-Push, täglich: Erinnerung 7 Tage vor dem Anlass, montags die Karte der Woche
 import { attachDatabasePool } from "@neon/functions";
 import { parseTriggerDelivery } from "@neon/functions/triggers";
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { Pool } from "pg";
-import { checkFoto, checkPfad, checkVideo, istVideo, MAX_FOTO, MAX_VIDEO, videoTyp } from "./fotos.mjs";
+import { checkFoto, checkPfad, checkVideo, istVideo, MAX_FOTO, MAX_VIDEO, verwaisteVideos, videoTyp } from "./fotos.mjs";
 import { checkJoin, checkToken, hashToken, INVITE_DAYS, joinError, newToken } from "./invite.mjs";
 import webpush from "web-push";
 import { checkAbo, erinnerungen, karteWaehlen, tagZuerich, wochenStart } from "./push.mjs";
@@ -238,8 +239,29 @@ app.post("/backup", async (c) => {
   if (!t.ok) return c.json({ error: t.error }, t.error === "invalid_body" ? 400 : 401);
   await q("select public.snapshot_club('täglich')");
   await q("select public.magnum_termine()");
-  return c.json({ ok: true });
+  const videos = await videosAufraeumen().catch((e) => { console.error("Aufräumen", e); return 0 });
+  return c.json({ ok: true, videos });
 });
+
+// Gelöschte Videokarten: Die Datei bleibt, solange eine Sicherung die Karte noch enthält (sonst fehlte sie beim Wiederherstellen)
+const videosAufraeumen = async () => {
+  const objekte: { Key?: string; LastModified?: Date }[] = [];
+  let weiter: string | undefined;
+  do {
+    const r = await s3.send(new ListObjectsV2Command({ Bucket: BUCKET, Prefix: "videos/", ContinuationToken: weiter }));
+    objekte.push(...(r.Contents ?? []));
+    weiter = r.IsTruncated ? r.NextContinuationToken : undefined;
+  } while (weiter);
+  const kandidaten: string[] = verwaisteVideos(objekte, new Set(), Date.now());
+  if (!kandidaten.length) return 0;
+  const behalten = new Set((await q(`select p from unnest($1::text[]) p
+    where exists (select 1 from public.video_karten k where k.path = p)
+       or exists (select 1 from public.backups b where b.data->'video_karten' @> jsonb_build_array(jsonb_build_object('path', p)))`, [kandidaten]))
+    .map((r: { p: string }) => r.p));
+  const weg = kandidaten.filter((k) => !behalten.has(k));
+  for (const k of weg) await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: k }));
+  return weg.length;
+};
 
 // ───────────── Push-Nachrichten ─────────────
 // Die Schlüssel entstehen beim ersten Bedarf und liegen nur in der Datenbank (Tabelle ohne Zugriff über die App)
