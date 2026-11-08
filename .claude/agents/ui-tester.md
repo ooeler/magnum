@@ -30,6 +30,7 @@ Du bist ein erfahrener, skeptischer QA-Tester. Du testest die Web-App „Magnum�
 - Spielerei: Rekord-Serie im Rang, Duell des Monats Android gegen iPhone, „Komm mal wieder“ nach drei verpassten Anlässen, Saison-Effekte, gefüllte Weingläser am Anlasstag (bei „Bewegung reduzieren“ bewegt sich nichts).
 - Club: Karte „App installieren“ mit Anleitung passend zum Gerät; in der installierten App keine Karte.
 - Am Handy (390 px) kein seitliches Scrollen, alle Knöpfe gut antippbar.
+- Wischen nach links/rechts wechselt den Reiter (Termine → Reisen → Club → Karten → Statistik). Nicht in offenen Fenstern, Eingabefeldern, Videos, der Landkarte, seitlich scrollenden Bereichen und nicht vom Bildschirmrand aus. Senkrechtes Scrollen wechselt nie.
 - WhatsApp: „In WhatsApp teilen“ beim kommenden Anlass, bei der Karte der Woche und unter der Rangliste öffnet wa.me mit Titel, Datum, Ort und App-Link.
 - Push: Ist Push eingeschaltet, sendet „Test-Push an mein Gerät senden“ eine Nachricht nur an die eigenen Geräte; ein zweiter Versuch in derselben Minute meldet „Bitte eine Minute warten“.
 - Ein Knopf, der gerade gedrückt wird, während die App neu lädt, löst trotzdem aus.

@@ -128,6 +128,9 @@ nav button.on{color:var(--ac)}nav button.on i{background:var(--ac)}
 .laden.update .wein{animation:mgVoll 180s cubic-bezier(.1,.6,.3,1) forwards}
 @keyframes mgVoll{from{transform:translateY(46px)}to{transform:translateY(8px)}}
 @media (prefers-reduced-motion:reduce){.ladeglas .wein{animation:none;transform:translateY(8px)}}
+main.vonr{animation:vonr .22s ease-out}main.vonl{animation:vonl .22s ease-out}
+@keyframes vonr{from{transform:translateX(40px);opacity:.4}}@keyframes vonl{from{transform:translateX(-40px);opacity:.4}}
+@media (prefers-reduced-motion:reduce){main.vonr,main.vonl{animation:none}}
 .star{width:44px;height:44px;border:0;background:transparent;padding:0;display:inline-flex;align-items:center;justify-content:center}
 .stars{display:flex;gap:2px}
 .bars{display:flex;align-items:flex-end;gap:8px;height:130px}.bars>div{flex:1 1 0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;height:100%}
@@ -594,7 +597,7 @@ function memberOptions(sel, filter, empty) {
 }
 
 // Neu zeichnen während eines Tipps würde den Knopf ersetzen, und der Klick ginge verloren (vor allem auf dem iPhone)
-var DRUCK = 0, NACHHER = false;
+var DRUCK = 0, NACHHER = false, DRUECKE = 0;
 function render() {
   if (DRUCK && Date.now() - DRUCK < 1500) { NACHHER = true; return }
   DRUCK = 0; NACHHER = false;
@@ -634,11 +637,12 @@ function dateiFelder() {
 }
 function authShell(inner) { return '<div class="auth"><div class="row">' + GLASS + '<div><div class="lbl">Magnum Club</div><h1 style="margin:0;font:900 34px/1 var(--hf)">Magnum</h1></div></div>' + inner + "</div>" }
 
+var WRICHT = null;
 function shell() {
   var t = TABS.filter(function (x) { return x[0] == TAB })[0] || TABS[0];
   var body = { termine: termine, reisen: reisen, club: club, karten: karten, stats: statistik }[t[0]]();
   return (ALS_MITGLIED && echterAdmin() ? '<div class="row sb sm" style="padding:8px 18px;background:var(--lila);color:#fff" data-test="sicht"><span>Ansicht als Mitglied</span><button class="pill sm" data-a="sicht">Zurück zur Admin-Ansicht</button></div>' : "") + '<header><div><div class="sub">' + esc(t[2]) + '</div><h1>Magnum</h1><div class="hello">' + esc(hello()) + '</div></div><span class="gl">' + flasche() + (isAdvent(today()) ? HAT : "") + "</span></header>" +
-    "<main>" + body + "</main>" +
+    "<main" + (WRICHT ? ' class="von' + WRICHT + '"' : "") + ">" + body + "</main>" +
     '<nav aria-label="Bereiche">' + TABS.map(function (x) { return '<button type="button" data-a="tab" data-v="' + x[0] + '" class="' + (x[0] == TAB ? "on" : "") + '"' + (x[0] == TAB ? ' aria-current="page"' : "") + "><i></i><span>" + x[1] + "</span></button>" }).join("") + "</nav>" +
     (OV ? overlay() : "") + (SH ? sheet() : "");
 }
@@ -1615,12 +1619,37 @@ var CHANGE = {
   tripset: function (el) { var o = {}; o[el.getAttribute("data-f")] = el.value || null; after(sb.from("trips").update(o).eq("id", el.getAttribute("data-id")), "Gespeichert") }
 };
 
-document.addEventListener("pointerdown", function (e) { if (e.isPrimary !== false) DRUCK = Date.now() }, true);
+// Wischen nach links/rechts wechselt den Reiter. Nicht in Fenstern, Eingaben, Videos, Karten (Leaflet)
+// und nicht in Bereichen, die selbst seitlich scrollen. Der Rand bleibt frei für die Zurück-Geste des iPhones.
+var WISCH = null;
+document.addEventListener("touchstart", function (e) {
+  WISCH = null;
+  var t = e.target;
+  if (e.touches.length != 1 || OV || SH || !ME || !READY || !PRF || !t.closest || !t.closest("#app main")) return;
+  if (t.closest("input, textarea, select, video, .leaflet-container, #ov, #sh")) return;
+  for (var n = t; n && n.tagName != "MAIN"; n = n.parentElement) if (n.scrollWidth > n.clientWidth + 2 && /auto|scroll/.test(getComputedStyle(n).overflowX)) return;
+  var p = e.touches[0];
+  if (p.clientX < 24 || p.clientX > innerWidth - 24) return;
+  WISCH = { x: p.clientX, y: p.clientY, t: Date.now() };
+}, { passive: true });
+document.addEventListener("touchcancel", function () { WISCH = null }, { passive: true });
+document.addEventListener("touchend", function (e) {
+  var w = WISCH; WISCH = null;
+  if (!w || OV || SH || e.touches.length) return;
+  var p = e.changedTouches[0], dx = p.clientX - w.x, dy = p.clientY - w.y;
+  if (Date.now() - w.t > 700 || Math.abs(dx) < 70 || Math.abs(dx) < 2 * Math.abs(dy)) return;
+  if (window.getSelection && String(window.getSelection())) return;
+  var i = TABS.map(function (x) { return x[0] }).indexOf(TAB) + (dx < 0 ? 1 : -1);
+  if (i < 0 || i >= TABS.length) return;
+  DRUCK = 0; WRICHT = dx < 0 ? "r" : "l"; ACT.tab({ v: TABS[i][0] }); WRICHT = null;
+}, { passive: true });
+document.addEventListener("pointerdown", function (e) { if (e.isPrimary !== false) { DRUCK = Date.now(); DRUECKE++ } }, true);
 function losgelassen() { if (!DRUCK) return; DRUCK = 0; if (NACHHER) setTimeout(render, 0) }
 // Der Klick kommt nach dem Loslassen: erst danach aufgeschobenes Neuzeichnen nachholen
 document.addEventListener("click", losgelassen, true);
 document.addEventListener("pointercancel", losgelassen, true);
-document.addEventListener("pointerup", function () { setTimeout(losgelassen, 400) }, true);
+// Nur loslassen, wenn seither kein neuer Tipp begonnen hat: sonst ginge bei zwei schnellen Tipps der zweite verloren
+document.addEventListener("pointerup", function () { var n = DRUECKE; setTimeout(function () { if (n == DRUECKE) losgelassen() }, 400) }, true);
 document.addEventListener("click", function (e) {
   var el = e.target.closest("[data-a]"); if (!el || el.disabled) return;
   var f = ACT[el.getAttribute("data-a")]; if (!f) return;
