@@ -257,6 +257,13 @@ test.describe("Anlässe anpassen", () => {
     await expect(event(page, "Januar-Magnum")).toBeVisible();
   });
 
+  test("Aufgeklappt bleibt aufgeklappt, auch wenn die App sofort neu lädt", async ({ page }) => {
+    await login(page);
+    await details(page, "Herbst-Stamm");
+    await page.evaluate(() => { document.querySelector("#ov details[data-offen=evEditOpen] summary").click(); render() });
+    await expect(page.getByRole("button", { name: "Speichern" })).toBeVisible();
+  });
+
   test("Andere Mitglieder passen fremde Anlässe nicht an", async ({ page }) => {
     await login(page, BEAT);
     await details(page, "Herbst-Stamm");

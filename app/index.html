@@ -1649,6 +1649,11 @@ document.addEventListener("change", function (e) {
 });
 // Aufgeklappte Bereiche bleiben beim Neuzeichnen offen
 document.addEventListener("toggle", function (e) { var k = e.target.getAttribute && e.target.getAttribute("data-offen"); if (k) UI[k] = e.target.open }, true);
+// Das toggle-Ereignis kommt erst später. Lädt die App dazwischen neu, ginge das Aufklappen verloren: darum schon beim Tipp merken
+document.addEventListener("click", function (e) {
+  var s = e.target.closest && e.target.closest("summary"), d = s && s.parentNode, k = d && d.tagName == "DETAILS" && d.getAttribute("data-offen");
+  if (k && d.firstElementChild == s) UI[k] = !d.open;
+}, true);
 document.addEventListener("keydown", function (e) { if (e.key == "Escape" && (SH || OV)) { ACT.close() } });
 // Zurück-Taste (Browser, Android) schliesst zuerst das offene Fenster
 var ZURUECK = null, FOKUS = null;
