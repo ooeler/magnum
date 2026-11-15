@@ -817,12 +817,19 @@ end $$;
 drop trigger if exists push_rsvp on public.rsvps;
 create trigger push_rsvp after insert or update of status on public.rsvps for each row execute function public.push_rsvp();
 
--- Jede Woche wird eine Sammelkarte aufgedeckt
+-- Jede Woche wird eine Sammelkarte aufgedeckt, aber nur für 3 Mitglieder (karte_der_woche_fuer). So bleibt es spannend:
+-- Alle anderen sehen bis zur nächsten Woche nur, für wen sie aufgedeckt ist.
 create table if not exists public.karte_der_woche (
   woche   date primary key,
   card_id uuid not null references public.cards(id) on delete cascade
 );
 alter table public.karte_der_woche enable row level security;
+create table if not exists public.karte_der_woche_fuer (
+  woche     date not null references public.karte_der_woche(woche) on delete cascade,
+  member_id uuid not null references public.profiles(id) on delete cascade,
+  primary key (woche, member_id)
+);
+alter table public.karte_der_woche_fuer enable row level security;
 
 -- ───────────── Getränkefotos (Trinkfestigkeit) ─────────────
 create table if not exists public.drinks (
@@ -1045,6 +1052,7 @@ grant usage on schema public to anonymous, authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 revoke all on table public.invites, public.magnum_serie, public.push_config, public.push_abos, public.push_log, public.push_queue from anonymous, authenticated;
 revoke insert, update, delete on public.karte_der_woche from authenticated;
+revoke insert, update, delete on public.karte_der_woche_fuer from authenticated;
 revoke insert, update, delete on public.video_ziehungen from authenticated;
 revoke update on public.video_karten from authenticated;
 grant select on public.app_status to anonymous;
@@ -1056,12 +1064,25 @@ begin
   foreach t in array array['settings', 'profiles', 'admin_log', 'restaurants', 'restaurant_visits',
     'restaurant_ratings', 'events', 'rsvps', 'magnums', 'magnum_guests', 'rides', 'ride_passengers', 'trips',
     'trip_participants', 'trip_photos', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
-    'sayings', 'saying_prosts', 'feedback', 'sync_stand', 'card_members', 'gaeste', 'karte_der_woche', 'video_ziehungen', 'karten_glaeser']
+    'sayings', 'saying_prosts', 'feedback', 'sync_stand', 'card_members', 'gaeste', 'karte_der_woche_fuer', 'video_ziehungen', 'karten_glaeser']
   loop
     execute format('drop policy if exists "Mitglieder lesen" on public.%I', t);
     execute format('create policy "Mitglieder lesen" on public.%I for select to authenticated using (public.is_member())', t);
   end loop;
 end $$;
+
+-- Karte der Woche: In der laufenden Woche sehen sie nur die 3, für die sie aufgedeckt ist. Ältere Wochen und Wochen ohne Auswahl sehen alle.
+drop policy if exists "Mitglieder lesen" on public.karte_der_woche;
+drop policy if exists "Karte der Woche lesen" on public.karte_der_woche;
+create or replace function public.kdw_sichtbar(p_woche date) returns boolean
+language sql stable security definer set search_path = public as $$
+  select p_woche < date_trunc('week', public.heute()::timestamp)::date
+    or not exists (select 1 from public.karte_der_woche_fuer f where f.woche = p_woche)
+    or exists (select 1 from public.karte_der_woche_fuer f where f.woche = p_woche and f.member_id = public.uid())
+$$;
+revoke execute on function public.kdw_sichtbar(date) from public, anonymous;
+grant execute on function public.kdw_sichtbar(date) to authenticated;
+create policy "Karte der Woche lesen" on public.karte_der_woche for select to authenticated using (public.is_member() and public.kdw_sichtbar(woche));
 
 -- Persönliche Einträge: anlegen/ändern nur die Person selbst, löschen sie selbst oder der Admin
 do $$
@@ -1223,7 +1244,7 @@ declare t text;
 begin
   foreach t in array array['profiles', 'events', 'rsvps', 'magnums', 'magnum_guests', 'rides', 'ride_passengers',
     'trips', 'trip_participants', 'trip_photos', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
-    'sayings', 'saying_prosts', 'card_members', 'gaeste', 'karte_der_woche', 'video_karten', 'video_ziehungen', 'karten_glaeser', 'restaurants', 'restaurant_visits', 'restaurant_ratings', 'feedback', 'admin_log']
+    'sayings', 'saying_prosts', 'card_members', 'gaeste', 'karte_der_woche', 'karte_der_woche_fuer', 'video_karten', 'video_ziehungen', 'karten_glaeser', 'restaurants', 'restaurant_visits', 'restaurant_ratings', 'feedback', 'admin_log']
   loop
     execute format('drop trigger if exists sync_bump on public.%I', t);
     execute format('create trigger sync_bump after insert or update or delete on public.%I for each statement execute function public.sync_bump()', t);

@@ -29,6 +29,15 @@ export function karteWaehlen(karten, bisher, zufall = Math.random) {
   return frei[Math.floor(zufall() * frei.length)] ?? null;
 }
 
+// Für wen die Karte der Woche aufgedeckt wird: 3 Mitglieder, zuerst wer in den letzten Wochen am seltensten dran war,
+// bei Gleichstand zufällig.
+export const AUFGEDECKT_FUER = 3;
+export function dreiWaehlen(mitglieder, bisher, zufall = Math.random) {
+  const n = {};
+  bisher.forEach((id) => { n[id] = (n[id] || 0) + 1 });
+  return mitglieder.map((id) => ({ id, k: (n[id] || 0) + zufall() * 0.999 })).sort((a, b) => a.k - b.k).slice(0, AUFGEDECKT_FUER).map((x) => x.id);
+}
+
 // Prüft ein Push-Abo aus dem Browser, bevor es gespeichert wird
 export function checkAbo(b) {
   const endpoint = String(b?.endpoint ?? ""), p256dh = String(b?.keys?.p256dh ?? ""), auth = String(b?.keys?.auth ?? "");

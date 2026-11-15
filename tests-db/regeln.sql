@@ -619,4 +619,23 @@ select pg_temp.als('B');
 reset role;
 select pg_temp.als('');
 
+-- Karte der Woche: in der laufenden Woche nur für die 3, für die sie aufgedeckt ist
+delete from public.karte_der_woche;
+insert into public.cards (id, title, rarity) values ('50000000-0000-0000-0000-000000000077', 'Wochenkarte', 'magic') on conflict do nothing;
+insert into public.karte_der_woche (woche, card_id) values
+  (date_trunc('week', public.heute()::timestamp)::date, '50000000-0000-0000-0000-000000000077'),
+  (date_trunc('week', public.heute()::timestamp)::date - 7, '50000000-0000-0000-0000-000000000077');
+insert into public.karte_der_woche_fuer (woche, member_id) select w, m from
+  (values (date_trunc('week', public.heute()::timestamp)::date), (date_trunc('week', public.heute()::timestamp)::date - 7)) x(w),
+  (values ('00000000-0000-0000-0000-00000000000b'::uuid), ('00000000-0000-0000-0000-00000000000c'::uuid), ('00000000-0000-0000-0000-00000000000d'::uuid)) y(m);
+set role authenticated;
+select pg_temp.als('A');
+select pg_temp.check((select count(*) from public.karte_der_woche) = 1, 'Nicht dran: nur die vergangene Woche sichtbar');
+select pg_temp.check((select count(*) from public.karte_der_woche_fuer) = 6, 'Alle sehen, für wen sie aufgedeckt ist');
+select pg_temp.verboten($q$insert into public.karte_der_woche_fuer (woche, member_id) values (date_trunc('week', now())::date, public.uid())$q$, 'Sich selbst nicht dazuschreiben');
+select pg_temp.als('C');
+select pg_temp.check((select count(*) from public.karte_der_woche) = 2, 'Für die 3: auch die laufende Woche sichtbar');
+reset role;
+select pg_temp.als('');
+
 select 'ALLE DB-TESTS GRÜN' as ergebnis;

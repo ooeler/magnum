@@ -41,7 +41,7 @@
       ],
       rsvps: [], magnums: [{ id: "m-1", event_id: "e-1", wine: "Cornalin 2019", brought_by: M.kurt, created_at: iso(-2) }],
       magnum_guests: [{ id: "g-1", magnum_id: "m-1", name: "Peter (Gast von Kurt)", added_by: M.kurt, created_at: iso(-2) }],
-      rides: [{ id: "r-1", event_id: "e-1", driver_id: M.jurg, direction: "Richtung Wil", seats: 3, created_at: iso(-1) }], ride_passengers: [], card_members: [], gaeste: [], karte_der_woche: [], karten_glaeser: [], video_karten: [], video_ziehungen: [],
+      rides: [{ id: "r-1", event_id: "e-1", driver_id: M.jurg, direction: "Richtung Wil", seats: 3, created_at: iso(-1) }], ride_passengers: [], card_members: [], gaeste: [], karte_der_woche: [], karte_der_woche_fuer: [], karten_glaeser: [], video_karten: [], video_ziehungen: [],
       trips: [
         { id: "t-bordeaux", title: "Bordeaux", starts_on: day(-60), ends_on: day(-57), program: "Saint-Émilion, Médoc, Austern in Arcachon", seats: 12, color: "#5A1F2E", ok_id: M.chris, kassier_id: M.beat, sacceri_id: M.dani, created_by: M.chris, created_at: iso(-200) },
         { id: "t-wallis", title: "Wallis", starts_on: day(190), ends_on: day(192), program: "Weinwanderung Sierre–Salgesch, Raclette", seats: 12, color: "#6E2433", ok_id: M.chris, kassier_id: null, sacceri_id: null, created_by: M.chris, created_at: iso(-20) }
@@ -96,7 +96,7 @@
     });
     return d;
   }
-  function db() { var d = get(DBK); if (!d) { d = seed(); set(DBK, d) } if (!d.karten_glaeser) d.karten_glaeser = []; return d }
+  function db() { var d = get(DBK); if (!d) { d = seed(); set(DBK, d) } if (!d.karten_glaeser) d.karten_glaeser = []; if (!d.karte_der_woche_fuer) d.karte_der_woche_fuer = []; return d }
   function save(d) { set(DBK, d) }
 
   // ───────────── Regeln (Spiegel von db/setup.sql) ─────────────
@@ -109,7 +109,7 @@
   var COLS = { profiles: ["display_name", "fav_wine", "specialty"], trips: ["title", "starts_on", "ends_on", "program", "seats", "color", "ok_id", "kassier_id"],
     events: ["title", "starts_at", "location", "ortschaft"], ride_passengers: ["stars_safe", "stars_punctual", "stars_mood", "points_given", "rated_at"],
     rsvps: ["event_id", "member_id", "status", "updated_at"], posts: ["text"], sayings: ["text"], rides: [] };
-  var READONLY = ["karte_der_woche", "video_ziehungen", "settings", "proposals", "ballots", "admin_log", "feedback"];
+  var READONLY = ["karte_der_woche", "karte_der_woche_fuer", "video_ziehungen", "settings", "proposals", "ballots", "admin_log", "feedback"];
   var CASCADE = { events: [["rsvps", "event_id"], ["magnums", "event_id"], ["rides", "event_id"], ["gaeste", "event_id"], ["video_ziehungen", "event_id"]], video_karten: [["video_ziehungen", "karte_id"]], magnums: [["magnum_guests", "magnum_id"]], rides: [["ride_passengers", "ride_id"]],
     cards: [["card_members", "card_id"]], trips: [["gaeste", "trip_id"], ["trip_participants", "trip_id"], ["trip_photos", "trip_id"], ["proposals", "trip_id"]], posts: [["post_prosts", "post_id"]], sayings: [["saying_prosts", "saying_id"]],
     restaurants: [["restaurant_visits", "restaurant_id"], ["restaurant_ratings", "restaurant_id"]], proposals: [["ballots", "proposal_id"]] };
@@ -119,6 +119,12 @@
   function admin(d) { var u = me(), p = d.profiles.find(function (x) { return x.id == u }); return !!(p && p.is_admin) }
   var RLS = function (t) { return fail('new row violates row-level security policy for table "' + t + '"', "42501") };
   function notify() { try { localStorage.setItem("__mg_ping", String(Date.now())) } catch (e) {} CH.forEach(function (c) { setTimeout(function () { c.cb({ table: "*" }) }, 50) }) }
+  // Spiegel der Policy «Karte der Woche lesen»: in der laufenden Woche nur für die 3, für die sie aufgedeckt ist
+  function kdwSichtbar(d, w) {
+    var t = new Date(day(0) + "T12:00:00Z"), mo = new Date(t.getTime() - ((t.getUTCDay() + 6) % 7) * 864e5).toISOString().slice(0, 10);
+    var F = d.karte_der_woche_fuer.filter(function (f) { return f.woche == w.woche });
+    return w.woche < mo || !F.length || F.some(function (f) { return f.member_id == me() });
+  }
   function videoSichtbar(d, k) { return admin(d) || k.created_by == me() || d.video_ziehungen.some(function (z) { return z.karte_id == k.id && z.member_id == me() }) }
   function pkMatch(t, a, b) { var k = PK[t] || ["id"]; return k.every(function (c) { return a[c] == b[c] }) }
   function removeCascade(d, t, row) {
@@ -203,7 +209,7 @@
     if (t == "app_status" && q.op == "select") return Promise.resolve(shape(q, d.app_status.filter(function (r) { return match(q, r) })));
     if (!u) return fail("JWT expired");
     if (!d[t]) return fail('relation "public.' + t + '" does not exist');
-    if (q.op == "select") return Promise.resolve(shape(q, member(d) ? d[t].filter(function (r) { return match(q, r) && (t != "video_karten" || videoSichtbar(d, r)) }) : []));
+    if (q.op == "select") return Promise.resolve(shape(q, member(d) ? d[t].filter(function (r) { return match(q, r) && (t != "video_karten" || videoSichtbar(d, r)) && (t != "karte_der_woche" || kdwSichtbar(d, r)) }) : []));
     if (d.app_status[0].maintenance) return fail("Datenbank nicht erreichbar");
     if (!member(d) || READONLY.indexOf(t) >= 0) return RLS(t);
     var own = OWNER[t], out = [];
