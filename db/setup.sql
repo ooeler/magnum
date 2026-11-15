@@ -838,6 +838,53 @@ create table if not exists public.video_ziehungen (
 );
 alter table public.video_ziehungen enable row level security;
 
+-- ───────────── Volle Gläser: Karten liken ─────────────
+-- karte: «karte-<id>» (Sammelkarte), «video-<id>» (Videokarte), «sac-<reise>» und «col-<reise>» (Sacceri- und Collage-Karte).
+-- Geheime Karten gehören jeder Person allein und bekommen keine Gläser.
+create table if not exists public.karten_glaeser (
+  karte      text not null check (karte ~ '^(karte|video|sac|col)-[0-9a-f-]{36}$'),
+  member_id  uuid not null default public.uid() references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (karte, member_id)
+);
+alter table public.karten_glaeser enable row level security;
+
+-- Ein Glas nur für Karten, die es gibt und die man sehen darf (Videokarten: hochgeladen, gezogen oder Admin)
+create or replace function public.check_glas() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare v_art text := split_part(new.karte, '-', 1); v_id uuid;
+begin
+  -- Falsches Format: Das meldet die check-Bedingung der Tabelle
+  if public.uid() is null or new.karte !~ '^(karte|video|sac|col)-[0-9a-f-]{36}$' then return new; end if;
+  v_id := substr(new.karte, length(v_art) + 2)::uuid;
+  if v_art = 'karte' and not exists (select 1 from public.cards where id = v_id)
+     or v_art = 'video' and not exists (select 1 from public.video_karten k where k.id = v_id and (k.created_by = public.uid() or public.is_admin()
+          or exists (select 1 from public.video_ziehungen z where z.karte_id = k.id and z.member_id = public.uid())))
+     or v_art = 'sac' and not exists (select 1 from public.trips where id = v_id and sacceri_id is not null)
+     or v_art = 'col' and not exists (select 1 from public.trip_photos where trip_id = v_id) then
+    raise exception 'Diese Karte gibt es nicht';
+  end if;
+  return new;
+end $$;
+drop trigger if exists glas_check on public.karten_glaeser;
+create trigger glas_check before insert or update on public.karten_glaeser for each row execute function public.check_glas();
+
+-- Wird die Karte gelöscht, gehen die Gläser mit
+create or replace function public.glaeser_weg() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if tg_table_name = 'cards' then delete from public.karten_glaeser where karte = 'karte-' || old.id;
+  elsif tg_table_name = 'video_karten' then delete from public.karten_glaeser where karte = 'video-' || old.id;
+  else delete from public.karten_glaeser where karte in ('sac-' || old.id, 'col-' || old.id); end if;
+  return old;
+end $$;
+drop trigger if exists glaeser_weg on public.cards;
+create trigger glaeser_weg after delete on public.cards for each row execute function public.glaeser_weg();
+drop trigger if exists glaeser_weg on public.video_karten;
+create trigger glaeser_weg after delete on public.video_karten for each row execute function public.glaeser_weg();
+drop trigger if exists glaeser_weg on public.trips;
+create trigger glaeser_weg after delete on public.trips for each row execute function public.glaeser_weg();
+
 -- Wie viele Videokarten es gibt (auch die verdeckten), damit alle ihren Anteil sehen
 create or replace function public.video_bestand() returns int
 language sql stable security definer set search_path = public as $$
@@ -913,7 +960,7 @@ begin
   foreach t in array array['settings', 'profiles', 'admin_log', 'restaurants', 'restaurant_visits',
     'restaurant_ratings', 'events', 'rsvps', 'magnums', 'magnum_guests', 'rides', 'ride_passengers', 'trips',
     'trip_participants', 'trip_photos', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
-    'sayings', 'saying_prosts', 'feedback', 'sync_stand', 'card_members', 'gaeste', 'karte_der_woche', 'video_ziehungen']
+    'sayings', 'saying_prosts', 'feedback', 'sync_stand', 'card_members', 'gaeste', 'karte_der_woche', 'video_ziehungen', 'karten_glaeser']
   loop
     execute format('drop policy if exists "Mitglieder lesen" on public.%I', t);
     execute format('create policy "Mitglieder lesen" on public.%I for select to authenticated using (public.is_member())', t);
@@ -926,7 +973,7 @@ declare r record;
 begin
   for r in select * from (values
     ('restaurant_ratings', 'member_id'), ('rsvps', 'member_id'), ('trip_participants', 'member_id'),
-    ('drinks', 'member_id'), ('saying_prosts', 'member_id'), ('post_prosts', 'member_id'),
+    ('drinks', 'member_id'), ('saying_prosts', 'member_id'), ('post_prosts', 'member_id'), ('karten_glaeser', 'member_id'),
     ('ride_passengers', 'passenger_id'), ('rides', 'driver_id')
   ) as x(tbl, col)
   loop
@@ -1054,6 +1101,7 @@ revoke execute on function public.check_ride_passenger() from public, anonymous,
 revoke execute on function public.heute() from public, anonymous, authenticated;
 revoke execute on function public.check_event() from public, anonymous, authenticated;
 revoke execute on function public.check_rsvp() from public, anonymous, authenticated;
+revoke execute on function public.check_glas(), public.glaeser_weg() from public, anonymous, authenticated;
 revoke execute on function public.check_trip() from public, anonymous, authenticated;
 revoke execute on function public.check_trip_participant() from public, anonymous, authenticated;
 revoke execute on function public.set_created_at() from public, anonymous, authenticated;
@@ -1073,7 +1121,7 @@ declare t text;
 begin
   foreach t in array array['profiles', 'events', 'rsvps', 'magnums', 'magnum_guests', 'rides', 'ride_passengers',
     'trips', 'trip_participants', 'trip_photos', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
-    'sayings', 'saying_prosts', 'card_members', 'gaeste', 'karte_der_woche', 'video_karten', 'video_ziehungen', 'restaurants', 'restaurant_visits', 'restaurant_ratings', 'feedback', 'admin_log']
+    'sayings', 'saying_prosts', 'card_members', 'gaeste', 'karte_der_woche', 'video_karten', 'video_ziehungen', 'karten_glaeser', 'restaurants', 'restaurant_visits', 'restaurant_ratings', 'feedback', 'admin_log']
   loop
     execute format('drop trigger if exists sync_bump on public.%I', t);
     execute format('create trigger sync_bump after insert or update or delete on public.%I for each statement execute function public.sync_bump()', t);
