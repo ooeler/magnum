@@ -157,3 +157,22 @@ base.test("Am 3. des Monats: Text je nach Anmeldung und Organisator", async () =
   base.expect(P.monatsNachricht("November-Magnum", 24, true, true).text).toBe("Du bist angemeldet. Bis bald! 🍷");
   base.expect(P.monatsNachricht("November-Magnum", 1, true, true).titel).toBe("Morgen ist November-Magnum");
 });
+
+test.describe("Schalter Admin- / Mitglied-Ansicht", () => {
+  test("schwebt auf jeder Seite, auch über offenen Fenstern", async ({ page }) => {
+    await login(page);
+    const admin = page.getByRole("button", { name: "App als Mitglied ansehen" });
+    await expect(admin).toBeVisible();
+    await page.locator("[data-a=ov][data-t=event]").first().click();
+    await expect(page.locator("#ov")).toBeVisible();
+    await admin.click();                                                    // im offenen Fenster umschalten
+    await expect(page.locator("[data-test=sicht]")).toBeVisible();
+    await expect(page.locator("#ov")).toBeVisible();
+    await page.getByRole("button", { name: "Zurück zur Admin-Ansicht" }).click();
+    await expect(page.locator("[data-test=sicht-admin]")).toBeVisible();
+  });
+  test("Mitglieder sehen keinen Schalter", async ({ page }) => {
+    await login(page, BEAT);
+    await expect(page.locator(".sicht")).toHaveCount(0);
+  });
+});

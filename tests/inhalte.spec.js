@@ -526,7 +526,7 @@ test.describe("Gäste, Beizen und Sichtweise", () => {
     await page.locator(".mem", { hasText: "Beat" }).click();
     await expect(card(page, "Rolle")).toHaveCount(0);
     await page.keyboard.press("Escape");
-    await page.locator("[data-test=sicht]").getByRole("button", { name: "Zurück zur Admin-Ansicht" }).click();
+    await page.getByRole("button", { name: "Zurück zur Admin-Ansicht" }).click();
     await page.locator(".mem", { hasText: "Beat" }).click();
     await expect(card(page, "Rolle")).toBeVisible();
   });

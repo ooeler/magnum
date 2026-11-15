@@ -103,6 +103,7 @@ nav{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:re
 nav button{background:none;border:0;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--mu2);font-size:11px;font-weight:600}
 nav button i{width:22px;height:4px;border-radius:2px;background:transparent}
 nav button.on{color:var(--ac)}nav button.on i{background:var(--ac)}nav button svg{flex:none}nav button.on svg{transform:scale(1.08)}
+.sicht{position:fixed;left:10px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:12}.sicht .pill{background:var(--lila);border-color:var(--lila);color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.45);min-height:36px}
 #ov{position:fixed;inset:0;background:var(--bg);z-index:8;overflow-y:auto}
 #ov .top{padding:calc(14px + env(safe-area-inset-top,0px)) 16px 16px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--ln)}
 .back{width:44px;height:44px;border-radius:50%;border:1px solid var(--ln);background:var(--card);display:flex;align-items:center;justify-content:center;align-self:flex-start}
@@ -685,7 +686,10 @@ var WRICHT = null;
 function shell() {
   var t = TABS.filter(function (x) { return x[0] == TAB })[0] || TABS[0];
   var body = { termine: termine, reisen: reisen, club: club, karten: karten, stats: statistik }[t[0]]();
-  return (ALS_MITGLIED && echterAdmin() ? '<div class="row sb sm" style="padding:8px 18px;background:var(--lila);color:#fff" data-test="sicht"><span>Ansicht als Mitglied</span><button class="pill sm" data-a="sicht">Zurück zur Admin-Ansicht</button></div>' : "") + '<header><div><div class="sub">' + esc(t[2]) + '</div><h1>Magnum</h1><div class="hello">' + esc(hello()) + '</div></div><div class="row" style="gap:12px;align-items:center"><span class="gl">' + flasche() + (isAdvent(today()) ? HAT : "") + '</span><button type="button" class="av kopf" data-a="ov" data-t="member" data-id="' + uid() + '" aria-label="Mein Profil">' + esc(ini(uid())) + "</button></div></header>" +
+  // Für Admins schwebt auf jeder Seite (auch über offenen Fenstern) ein Schalter Admin- / Mitglied-Ansicht
+  return (echterAdmin() ? (ALS_MITGLIED
+      ? '<div class="sicht" data-test="sicht"><button class="pill sm" data-a="sicht" aria-label="Zurück zur Admin-Ansicht">👁 Mitglied-Ansicht · zurück</button></div>'
+      : '<div class="sicht" data-test="sicht-admin"><button class="pill sm" data-a="sicht" aria-label="App als Mitglied ansehen">👁 Admin-Ansicht</button></div>') : "") + '<header><div><div class="sub">' + esc(t[2]) + '</div><h1>Magnum</h1><div class="hello">' + esc(hello()) + '</div></div><div class="row" style="gap:12px;align-items:center"><span class="gl">' + flasche() + (isAdvent(today()) ? HAT : "") + '</span><button type="button" class="av kopf" data-a="ov" data-t="member" data-id="' + uid() + '" aria-label="Mein Profil">' + esc(ini(uid())) + "</button></div></header>" +
     "<main" + (WRICHT ? ' class="von' + WRICHT + '"' : "") + ">" + body + "</main>" +
     '<nav aria-label="Bereiche">' + TABS.map(function (x) { return '<button type="button" data-a="tab" data-v="' + x[0] + '" class="' + (x[0] == TAB ? "on" : "") + '"' + (x[0] == TAB ? ' aria-current="page"' : "") + "><i></i>" + (TAB_ICON[x[0]] || "") + "<span>" + x[1] + "</span></button>" }).join("") + "</nav>" +
     (OV ? overlay() : "") + (SH ? sheet() : "");
