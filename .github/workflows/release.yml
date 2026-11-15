@@ -1,6 +1,7 @@
 # Deployment. Läuft automatisch nach jedem gemergten Pull Request (siehe auto-merge.yml)
 # oder manuell über "Run workflow" auf main (GitHub Pages nimmt nur Deployments von main an).
 # Reihenfolge: Tests → Backup → Wartungsseite an → Neon-Dienste → Datenbank (setup.sql + Migrationen) → Sicherheitsprüfung → Funktionstest → App (GitHub Pages) → Wartungsseite aus.
+# Tests entfallen nur, wenn genau dieser Stand (gleicher Git-Tree) im Pull Request schon gruen war (Job pruefen).
 # Bricht ein Schritt ab, geht nichts Neues live; das Backup erlaubt jederzeit ein Rollback (README: Rollback).
 name: Release
 
@@ -11,6 +12,14 @@ on:
         description: Grund für das Deployment
         required: false
         default: manuell
+      getestet:
+        description: Git-Tree, der im Pull Request schon gruen getestet wurde (setzt auto-merge.yml; leer = Tests laufen)
+        required: false
+        default: ""
+      lauf:
+        description: Lauf von auto-merge.yml, der diesen Tree getestet hat
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -20,11 +29,48 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Tests nur ueberspringen, wenn (1) der ausgecheckte Stand exakt dem im PR getesteten Tree entspricht und
+  # (2) im genannten Auto-Merge-Lauf alle Test- und CodeQL-Jobs erfolgreich waren. Sonst: volle Tests wie bisher.
+  pruefen:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      getestet: ${{ steps.p.outputs.getestet }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - id: p
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BAUM: ${{ inputs.getestet }}
+          LAUF: ${{ inputs.lauf }}
+        run: |
+          ok=false
+          if [[ "$BAUM" =~ ^[0-9a-f]{40}$ && "$LAUF" =~ ^[0-9]+$ ]]; then
+            jetzt=$(git rev-parse 'HEAD^{tree}')
+            wf=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$LAUF" --jq '.path' || true)
+            jobs=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$LAUF/jobs?per_page=100" \
+              --jq '[.jobs[] | select((.name|startswith("test /")) or (.name|startswith("codeql /")))]' || echo '[]')
+            anzahl=$(jq 'length' <<< "$jobs")
+            rot=$(jq '[.[] | select(.conclusion != "success")] | length' <<< "$jobs")
+            if [ "$jetzt" != "$BAUM" ]; then echo "Stand auf main ($jetzt) ist nicht der getestete ($BAUM)"
+            elif [[ "$wf" != .github/workflows/auto-merge.yml* ]]; then echo "Lauf $LAUF ist kein Auto-Merge-Lauf"
+            elif [ "$anzahl" -lt 7 ] || [ "$rot" != "0" ]; then echo "Lauf $LAUF: $anzahl Pruef-Jobs, $rot nicht gruen"
+            else ok=true; fi
+          fi
+          echo "getestet=$ok" >> "$GITHUB_OUTPUT"
+          if [ "$ok" = true ]; then echo "Identischer Stand im PR gruen getestet (Lauf $LAUF) → Tests werden uebersprungen"; else echo "Tests laufen voll"; fi
+
   test:
+    needs: pruefen
+    if: needs.pruefen.outputs.getestet != 'true'
     uses: ./.github/workflows/ci.yml
 
   backend:
-    needs: test
+    needs: [pruefen, test]
+    # nur nach gruenen Tests – oder wenn pruefen bestaetigt hat, dass genau dieser Stand schon gruen war
+    if: ${{ !cancelled() && needs.pruefen.result == 'success' && (needs.test.result == 'success' || (needs.test.result == 'skipped' && needs.pruefen.outputs.getestet == 'true')) }}
     runs-on: ubuntu-latest
     env:
       NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
@@ -113,7 +159,11 @@ jobs:
 
   pages:
     needs: backend
+    # explizit: ein uebersprungener test-Job weiter oben darf pages nicht mit ueberspringen
+    if: ${{ !cancelled() && needs.backend.result == 'success' }}
     runs-on: ubuntu-latest
+    outputs:
+      url: ${{ steps.deploy.outputs.page_url }}
     permissions:
       contents: read
       pages: write
@@ -160,12 +210,21 @@ jobs:
       NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
       PROJECT: ${{ vars.NEON_PROJECT_ID }}
       PAGES: ${{ needs.pages.result }}
+      SEITE: ${{ needs.pages.outputs.url }}
     steps:
       - name: Wartungsseite ausschalten
         run: |
-          # GitHub Pages braucht nach dem Deployment einen Moment, bis die neue Version überall ausgeliefert wird
-          [ "$PAGES" = "success" ] && sleep 30
           npm i -g neon@8.15.1
+          # GitHub Pages braucht nach dem Deployment einen Moment, bis die neue Version ausgeliefert wird:
+          # statt fest 30 s warten, bis sw.js die neue Cache-Version enthaelt (hoechstens 60 s, dann trotzdem weiter)
+          if [ "$PAGES" = "success" ] && [ -n "$SEITE" ]; then
+            v="mg-${GITHUB_SHA::8}"
+            for i in $(seq 1 20); do
+              if curl -fsS --max-time 5 "${SEITE%/}/sw.js" 2>/dev/null | grep -q "\"$v\""; then echo "Neue Version $v wird ausgeliefert"; break; fi
+              [ "$i" = 20 ] && echo "::warning::Neue Version nach 60 s noch nicht sichtbar – Wartung geht trotzdem aus"
+              sleep 3
+            done
+          fi
           psql "$(neon connection-string main --project-id "$PROJECT")" -v ON_ERROR_STOP=1 -q -c "do \$\$ begin if to_regclass('public.app_status') is not null then
                update public.app_status set maintenance = false, since = null where id = 'main';
              end if; end \$\$"

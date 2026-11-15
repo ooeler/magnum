@@ -96,9 +96,10 @@ test.describe("Mehrere Tabs", () => {
     await page.locator("[data-ev=e-2]").getByRole("button", { name: /Ich organisiere/ }).waitFor();
     // Chris übernimmt im Hintergrund, Beats Ansicht ist noch alt
     await as(page, CHRIS.email, `sb.rpc("claim_organizer", { p_event: "e-2" })`);
-    await page.evaluate(() => { clearTimeout(RT) });
+    await page.waitForTimeout(100);                       // notify()-Rückruf (50 ms) abwarten …
+    await page.evaluate(() => { clearTimeout(RT) });      // … und erst dann das Neuzeichnen verhindern
     const knopf = page.locator("[data-ev=e-2]").getByRole("button", { name: /Ich organisiere/ });
-    if (await knopf.count()) await knopf.click();
+    if (await knopf.count()) await knopf.click({ timeout: 2000 }).catch(() => {});
     await page.waitForTimeout(600);
     const org = await page.evaluate(() => window.__mg.db().events.find((e) => e.id == "e-2").organizer_id);
     // Beat hat Chris unbemerkt verdrängt (claim_organizer erlaubt Übernahme ohne Rückfrage)

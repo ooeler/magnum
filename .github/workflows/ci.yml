@@ -11,20 +11,30 @@ permissions:
 
 jobs:
   test:
+    # Je Geraet ein eigener Runner: die drei Playwright-Projekte laufen gleichzeitig statt nacheinander
+    # auf 2 Workern, und jeder Runner installiert nur den Browser, den er braucht.
+    name: test (${{ matrix.projekt }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { projekt: android, browser: chromium }
+          - { projekt: desktop, browser: chromium }
+          - { projekt: iphone, browser: webkit }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
       - run: npm ci
-      - run: npx playwright install --with-deps chromium webkit
-      - run: npm test
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+      - run: npm test -- --project=${{ matrix.projekt }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: failure()
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.projekt }}
           path: playwright-report
           retention-days: 14
 

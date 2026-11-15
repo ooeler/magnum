@@ -42,11 +42,20 @@ test.describe("Deployment", () => {
   });
 
   test("Reihenfolge: Tests, Backup, Wartung an, Neon-Dienste, Datenbank, Funktionstest, App, Wartung aus", () => {
-    const schritte = ["needs: test", "Backup vor dem Deployment", "Wartungsseite einschalten", "neon deploy --env", "-f db/setup.sql", "Sicherheitsprüfung Datenbank",
+    const schritte = ["needs: [pruefen, test]", "Backup vor dem Deployment", "Wartungsseite einschalten", "neon deploy --env", "-f db/setup.sql", "Sicherheitsprüfung Datenbank",
       "Funktionstest Datenbank", "needs: backend", "wartung-aus:"];
     const pos = schritte.map((s) => release.indexOf(s));
     expect(pos, "Schritt fehlt").not.toContain(-1);
     expect(pos).toEqual([...pos].sort((a, b) => a - b));
+  });
+
+  test("Release ueberspringt Tests nur fuer den im PR gruen getesteten Stand", () => {
+    const b = release.slice(release.indexOf("  backend:"), release.indexOf("Backup vor dem Deployment"));
+    expect(b).toContain("needs.test.result == 'success'");
+    expect(b).toContain("needs.test.result == 'skipped' && needs.pruefen.outputs.getestet == 'true'");
+    const p = release.slice(release.indexOf("  pruefen:"), release.indexOf("  test:"));
+    expect(p).toContain("git rev-parse 'HEAD^{tree}'");
+    expect(p).toContain('select(.conclusion != "success")');
   });
 
   test("Release prüft, dass Konten nur mit Einladung entstehen", () => {
