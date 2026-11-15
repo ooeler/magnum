@@ -564,3 +564,27 @@ test.describe("Archiv aus dem Chat", () => {
     expect(vorher).toBeGreaterThan(0);
   });
 });
+
+test.describe("Unsere Beizen", () => {
+  test("zuerst die 5 zuletzt besuchten, «Mehr anzeigen» zeigt den Rest", async ({ page }) => {
+    await page.goto("/");
+    await page.evaluate(() => {
+      const d = window.__mg.db();
+      for (let i = 1; i <= 6; i++) {
+        d.restaurants.push({ id: "re-x" + i, name: "Beiz " + i, place: "Gossau", lat: null, lng: null, created_by: "u-ot", created_at: "2020-01-01T10:00:00Z" });
+        d.restaurant_visits.push({ id: "rv-x" + i, restaurant_id: "re-x" + i, visited_on: "2026-10-2" + i, people: 1, total_chf: 0, created_by: null, created_at: "2026-01-01T10:00:00Z" });
+      }
+      localStorage.setItem("__mg_db", JSON.stringify(d));
+    });
+    await login(page);
+    await tab(page, "Statistik");
+    const b = page.locator("[aria-label='Unsere Beizen']");
+    const zeilen = b.locator("button[data-t=resto]");
+    await expect(zeilen).toHaveCount(5);
+    await expect(zeilen.first()).toContainText("Beiz 6");                 // zuletzt besucht zuerst
+    await b.getByRole("button", { name: /Mehr anzeigen/ }).click();
+    await expect(zeilen).toHaveCount(await page.evaluate(() => D.restaurants.length));
+    await b.getByRole("button", { name: "Weniger anzeigen" }).click();
+    await expect(zeilen).toHaveCount(5);
+  });
+});

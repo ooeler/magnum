@@ -67,3 +67,4 @@ Pro Fund: Schritte, erwartet, tatsächlich, Schwere. Am Schluss, was du geprüft
 - Design-Umfrage beim Öffnen (bis beantwortet): Schieber 0–10, unter 8 Textfeld „Was soll verbessert werden?“. Ergebnis nur für den Admin im Club.
 - Beiz ohne Standort: „Hier bin ich“ oder „Suchen“ (wer sie erfasst hat oder Admin), danach erscheint sie auf der Karte.
 - Mitglied-Ansicht (Admin): nur dann schwebt auf jeder Seite „👁 Mitglied-Ansicht · zurück“ mit ✕ zum Ausblenden; in der Admin-Ansicht kein Overlay.
+- Statistik „Unsere Beizen“: zuerst die 5 zuletzt besuchten, „Mehr anzeigen (n weitere)“ zeigt den Rest, „Weniger anzeigen“ klappt zu.
