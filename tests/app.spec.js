@@ -180,18 +180,14 @@ test.describe("Reisen", () => {
     await expect(card(page, "Auszeichnung De Sacceri")).toContainText("mit 2 von 3 Stimmen");
   });
 
-  test("OK und Kassier eintragen, mitreisen, Bilder: 3 sichtbar, Rest als Collage", async ({ page }) => {
+  test("Ämtli in der Reiseliste, Fotos für Mitreisende mit Auswahl für die Karte", async ({ page }) => {
     await login(page);
     await tab(page, "Reisen");
-    await page.locator(".trip", { hasText: "Wallis" }).click();
-    await page.locator("select[data-f=kassier_id]").selectOption({ label: "Beat" });
-    await expect(page.locator("#toast")).toContainText("Gespeichert");
-    await page.locator("#ov [data-a=close]").click();
-    await expect(page.locator(".trip", { hasText: "Wallis" })).toContainText("Kassier: Beat");
+    await expect(page.locator(".trip", { hasText: "Bordeaux" }).locator("[data-test=aemtli-kurz]")).toContainText("OK: Chris · Kassier: Beat");
     await page.locator(".trip", { hasText: "Bordeaux" }).click();
-    await expect(page.locator("#ov")).toContainText("6 hochgeladen · 3 sichtbar");
-    await expect(page.locator("#ov")).toContainText("Die übrigen 3 Bilder liegen als Collage-Karte");
-    await expect(page.locator("#ov .ph img")).toHaveCount(3);
+    await expect(page.locator("#ov [data-test=foto-anzahl]")).toHaveText("6 hochgeladen · 3 auf der Karte");
+    await expect(page.locator("#ov .ph img")).toHaveCount(6);
+    await expect(page.locator("#ov .ph .chip.v")).toHaveCount(3);
   });
 });
 

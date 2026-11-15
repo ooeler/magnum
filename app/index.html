@@ -28,7 +28,7 @@ header h1{margin:2px 0 0;font:900 30px/1 var(--hf);letter-spacing:-.5px}
 .hello{font-size:13px;color:var(--mu);margin-top:4px}
 main,.top{overflow-wrap:anywhere}
 /* Knöpfe brechen nie mitten im Wort um und werden in einer Zeile nicht zusammengedrückt; umbrechen darf der Text daneben */
-.btn,.pill,.chip{overflow-wrap:normal;word-break:keep-all}.row>.btn,.row>.pill,.row>.chip,.sb>.btn,.sb>.pill{flex:none;white-space:nowrap}.row>.grow{min-width:0}main{padding:16px 14px 24px;display:flex;flex-direction:column;gap:14px;max-width:640px;margin:0 auto}
+.row>.btn,.row>.pill,.sb>.btn,.sb>.pill{flex:none;white-space:nowrap;overflow-wrap:normal}.row>.grow{min-width:0}main{padding:16px 14px 24px;display:flex;flex-direction:column;gap:14px;max-width:640px;margin:0 auto}
 h2{margin:6px 2px 0;font:700 22px var(--hf)}
 .card{background:var(--card);border:1px solid var(--ln);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px}
 .card.gold{border-color:var(--ac);background:#2B1F23}
@@ -168,7 +168,7 @@ details summary{cursor:pointer;font-weight:700;list-style:none}details summary::
 // ═══════════════════════════════════════════════════════════════════════
 var C = window.MG_CONFIG || {}, sb = null, ME = null, PRF = null, PREV = null, MAINT = false, READY = false;
 var TABLES = ["settings", "profiles", "events", "rsvps", "magnums", "magnum_guests", "rides", "ride_passengers", "trips",
-  "trip_participants", "trip_photos", "proposals", "ballots", "posts", "post_prosts", "cards", "drinks", "sayings", "card_members", "gaeste", "karte_der_woche", "karte_der_woche_fuer", "video_karten", "video_ziehungen", "karten_glaeser",
+  "trip_participants", "trip_photos", "trip_aemtli", "trip_absagen", "proposals", "ballots", "posts", "post_prosts", "cards", "drinks", "sayings", "card_members", "gaeste", "karte_der_woche", "karte_der_woche_fuer", "video_karten", "video_ziehungen", "karten_glaeser",
   "saying_prosts", "restaurants", "restaurant_visits", "restaurant_ratings", "feedback", "admin_log"];
 var D = {}; TABLES.forEach(function (t) { D[t] = [] });
 var TAB = lsGet("mg_tab") || "termine", OV = null, SH = null, UI = {}, AUTH = { mode: "login" }, INVITE = null, INVLIST = null, NEWLINK = null, BUSY = false;
@@ -489,6 +489,7 @@ function loadAll() {
     rs.forEach(function (r, i) { if (!r.error) D[TABLES[i]] = r.data || [] });
     PRF = pr(uid());
     // Wie viele Videokarten es gibt, auch die verdeckten
+    sb.rpc("reise_fotos").then(function (r) { RF = {}; (r.data || []).forEach(function (x) { RF[x.trip_id] = x.anzahl }); if (OV && OV.t == "trip") render() });
     return Promise.all([sb.rpc("video_bestand"), sb.rpc("video_ziehbar")]).then(function (a) {
       if (a[0] && !a[0].error) VB = Number(a[0].data) || 0;
       if (a[1] && !a[1].error) VZ = Number(a[1].data) || 0;
@@ -514,6 +515,13 @@ function after(p, msg) {
 // Push-Warteschlange anstossen (neuer Anlass, Organisator, An- und Abmeldung). Fehler stören nicht: der tägliche Lauf holt nach.
 function pushAnstoss(p) {
   return Promise.resolve(p).then(function (r) { if (!(r && r.error)) try { sb.functions.invoke("push/senden", { body: {} }).catch(function () {}) } catch (e) {} return r });
+}
+function dankHinweis() {
+  var gesehen = (lsGet("mg_fb_dank") || "").split(",");
+  var f = D.feedback.filter(function (x) { return x.user_id == uid() && x.status == "umgesetzt" && gesehen.indexOf(String(x.id)) < 0 })[0];
+  if (!f) return;
+  gesehen.push(String(f.id)); lsSet("mg_fb_dank", gesehen.filter(Boolean).join(","));
+  toast("Danke für deinen Input! «" + f.title + "» wurde umgesetzt · +8 Punkte");
 }
 function wartung() {
   return sb.from("app_status").select("maintenance").eq("id", "main").maybeSingle().then(function (r) {
@@ -956,7 +964,7 @@ function reisen() {
     var past = (tr.ends_on || tr.starts_on) < t;
     return '<button type="button" class="trip" data-a="ov" data-t="trip" data-id="' + tr.id + '"><div class="band" style="background:' + esc(tr.color) + '"><b>' + esc(tr.title) + "</b><span>" + esc(fMonYear(tr.starts_on)) + "</span></div>" +
       '<div class="col" style="padding:14px 16px">' + (tr.program ? '<span class="sm mu">' + esc(tr.program) + "</span>" : "") +
-      '<span class="xs mu">OK: ' + esc(tr.ok_id ? nm(tr.ok_id) : "offen") + " · Kassier: " + esc(tr.kassier_id ? nm(tr.kassier_id) : "offen") + " · Sacceri: " + esc(tr.sacceri_id ? nm(tr.sacceri_id) : "offen") + "</span>" +
+      '<span class="xs mu" data-test="aemtli-kurz">' + esc(aemtliKurz(tr.id)) + " · Sacceri: " + esc(tr.sacceri_id ? nm(tr.sacceri_id) : "offen") + "</span>" +
       '<div class="row sb"><span class="sm b">' + (past ? "Abgeschlossen · " : "") + n + " Mitreisende" + (gaesteVon("trip", tr.id).length ? " · " + gaesteVon("trip", tr.id).length + " Gäste" : "") + '</span><span class="chip' + (me ? " v" : "") + '">' + (me ? (past ? "warst dabei" : "angemeldet") : "Details") + "</span></div></div></button>";
   }).join("") : '<div class="card empty">Noch keine Reise geplant.</div>';
   h += UI.newTrip ? tripForm() : '<button class="btn dash" data-a="ui" data-k="newTrip" data-v="1">+ Reise erfassen</button>';
@@ -971,23 +979,57 @@ function tripForm() {
 }
 function tripView(tr) {
   var me = uid(), part = D.trip_participants.filter(function (x) { return x.trip_id == tr.id }).map(function (x) { return x.member_id });
-  var joined = part.indexOf(me) >= 0, past = (tr.ends_on || tr.starts_on) < today();
+  var joined = part.indexOf(me) >= 0, past = (tr.ends_on || tr.starts_on) < today(), begonnen = tr.starts_on < today();
+  var ab = D.trip_absagen.filter(function (x) { return x.trip_id == tr.id }).map(function (x) { return x.member_id }), abgemeldet = ab.indexOf(me) >= 0;
+  var offen = D.profiles.filter(function (p) { return part.indexOf(p.id) < 0 && ab.indexOf(p.id) < 0 }).length;
   var photos = D.trip_photos.filter(function (p) { return p.trip_id == tr.id }).sort(function (a, b) { return a.created_at < b.created_at ? -1 : 1 });
   var h = '<div class="top" style="background:' + esc(tr.color) + '"><button class="back" data-a="close" aria-label="Zurück">' + BACK + '</button><span style="font:900 32px/1 var(--hf);color:#FFF8EE">' + esc(tr.title) + '</span><span class="sm" style="color:#FFF8EE">' + esc(fDay(tr.starts_on)) + (tr.ends_on ? " – " + esc(fDay(tr.ends_on)) : "") + (tr.program ? " · " + esc(tr.program) : "") + "</span></div><main>";
   h += '<div class="row sb"><span class="sm b">' + part.length + " Mitreisende" + (past ? " · abgeschlossen" : "") + "</span>" +
-    (past ? (joined ? '<span class="chip v">Warst dabei</span>' : "") : '<button class="pill ' + (joined ? "on" : "") + '" data-a="tripjoin" data-id="' + tr.id + '" aria-pressed="' + joined + '"' + (!joined && tr.starts_on < today() ? " disabled" : "") + ">" + (joined ? "Angemeldet" : "Mitreisen · +30") + "</button>") + "</div>";
-  if (part.length) h += '<div class="chips">' + part.map(function (p) { return '<span class="chip">' + esc(nm(p)) + "</span>" }).join("") + "</div>";
-  h += '<section class="card"><span class="b" style="font-size:15px">Ämtli</span><label class="f">OK (Organisation)<select class="t" data-c="tripset" data-id="' + tr.id + '" data-f="ok_id">' + memberOptions(tr.ok_id) + "</select></label>" +
-    '<label class="f">Kassier<select class="t" data-c="tripset" data-id="' + tr.id + '" data-f="kassier_id">' + memberOptions(tr.kassier_id) + "</select></label></section>";
+    (past ? (joined ? '<span class="chip v">Warst dabei</span>' : "") : begonnen ? "" : '<div class="row"><button class="pill ' + (joined ? "on" : "") + '" data-a="tripzu" data-id="' + tr.id + '" aria-pressed="' + joined + '">' + (joined ? "Bin dabei ✓" : "Bin dabei · +30") + "</button>" +
+      '<button class="pill ' + (abgemeldet ? "out" : "") + '" data-a="tripab" data-id="' + tr.id + '" aria-pressed="' + abgemeldet + '">' + (abgemeldet ? "Abgemeldet" : "Abmelden") + "</button></div>") + "</div>";
+  // Übersicht: wer kommt, wer nicht, wie viele noch offen
+  h += '<section class="card" aria-label="Anmeldungen"><span class="lbl">Dabei (' + part.length + ")</span>" + (part.length ? '<div class="chips" data-test="reise-dabei">' + part.map(function (p) { return '<span class="chip">' + esc(nm(p)) + "</span>" }).join("") + "</div>" : '<span class="sm mu">Noch niemand</span>') +
+    (ab.length ? '<span class="lbl">Abgemeldet (' + ab.length + ')</span><div class="chips" data-test="reise-ab">' + ab.map(function (p) { return '<span class="chip">' + esc(nm(p)) + "</span>" }).join("") + "</div>" : "") +
+    (offen && !past ? '<span class="sm mu" data-test="reise-offen">Noch offen: ' + offen + "</span>" : "") + "</section>";
+  h += aemtliBox(tr);
   h += gaesteBox("trip", tr.id);
   h += sacceri(tr, part);
-  var top = photos.slice(0, 3), rest = photos.length - 3;
-  h += '<section class="card"><div class="row sb"><span class="b" style="font-size:15px">Die besten Bilder</span><span class="sm mu">' + photos.length + " hochgeladen" + (photos.length > 3 ? " · 3 sichtbar" : "") + "</span></div>" +
-    '<div class="ph">' + [0, 1, 2].map(function (i) { return "<span>" + (top[i] ? img(top[i].path, "Reisefoto") : "") + "</span>" }).join("") + "</div>" +
-    '<span class="sm mu">' + (rest > 0 ? "Die übrigen " + rest + " Bilder liegen als Collage-Karte unter «Legendär» in den Sammelkarten." : "Die ersten 3 Bilder erscheinen hier, alle weiteren werden zur Collage-Karte unter «Legendär».") + "</span>" +
-    '<label class="btn line file">Bilder hochladen<input type="file" accept="image/*" multiple data-c="tripphotos" data-id="' + tr.id + '" aria-label="Bilder hochladen"></label></section>';
+  h += reiseFotos(tr, photos, joined);
   if (tr.created_by == me || isAdmin()) h += '<button class="btn ghost" data-a="deltrip" data-id="' + tr.id + '">Reise löschen</button>';
   return h + "</main>";
+}
+// ═════════════ Reise: Ämtli und Fotos ═════════════
+var ROLLEN = [["ok", "OK"], ["organisator", "Organisator"], ["kassier", "Kassier"]];
+function rolleName(r) { return (ROLLEN.find(function (x) { return x[0] == r }) || [r, r])[1] }
+function aemtliVon(trip) { return D.trip_aemtli.filter(function (a) { return a.trip_id == trip }).sort(function (a, b) { return ROLLEN.findIndex(function (x) { return x[0] == a.rolle }) - ROLLEN.findIndex(function (x) { return x[0] == b.rolle }) || (nm(a.member_id) < nm(b.member_id) ? -1 : 1) }) }
+function aemtliKurz(trip) {
+  var L = aemtliVon(trip); if (!L.length) return "Ämtli offen";
+  return ROLLEN.map(function (r) { var P = L.filter(function (a) { return a.rolle == r[0] }); return P.length ? r[1] + ": " + P.map(function (a) { return nm(a.member_id) }).join(", ") : "" }).filter(Boolean).join(" · ");
+}
+function aemtliBox(tr) {
+  var L = aemtliVon(tr.id), edit = UI.amtEdit == tr.id;
+  var h = '<section class="card" aria-label="Ämtli"><div class="row sb"><span class="b" style="font-size:15px">Ämtli</span><button class="pill sm" data-a="setui" data-k="amtEdit" data-v="' + (edit ? "" : tr.id) + '" aria-pressed="' + edit + '">' + (edit ? "Fertig" : "Bearbeiten") + "</button></div>";
+  h += L.length ? '<div class="lst" data-test="aemtli">' + L.map(function (a) {
+    return '<div class="row sb sm"><span class="grow"><b>' + esc(rolleName(a.rolle)) + "</b> · " + esc(nm(a.member_id)) + "</span>" +
+      (edit ? '<button class="pill sm" data-a="amtweg" data-id="' + tr.id + '" data-m="' + a.member_id + '" data-v="' + a.rolle + '" aria-label="' + esc(nm(a.member_id)) + " als " + esc(rolleName(a.rolle)) + ' entfernen">Entfernen</button>' : "") + "</div>";
+  }).join("") + "</div>" : '<span class="sm mu">Noch niemand eingetragen.</span>';
+  if (edit) h += '<form class="col" data-s="amt" data-id="' + tr.id + '" style="gap:8px"><div class="g2"><label class="f">Person<select class="t" data-k="amtPerson">' + memberOptions(v("amtPerson", ""), null, "– wählen –") + "</select></label>" +
+    '<label class="f">Rolle<select class="t" data-k="amtRolle">' + ROLLEN.map(function (r) { return '<option value="' + r[0] + '"' + (v("amtRolle", "ok") == r[0] ? " selected" : "") + ">" + r[1] + "</option>" }).join("") + "</select></label></div>" +
+    '<button class="btn"' + (v("amtPerson", "") ? "" : " disabled") + ">Hinzufügen</button></form>";
+  return h + "</section>";
+}
+// Fotos sehen nur Mitreisende. Pro Foto wählt, wer es hochgeladen hat, ob es auf die Collage-Karte kommt (dann sehen es alle).
+function reiseFotos(tr, photos, dabei) {
+  var n = RF[tr.id] != null ? RF[tr.id] : photos.length;
+  if (!dabei && !isAdmin()) return '<section class="card" aria-label="Reisefotos"><span class="b" style="font-size:15px">Fotos</span><span class="sm" data-test="foto-anzahl">' + (n ? n + (n == 1 ? " Foto" : " Fotos") + " gemacht" : "Noch keine Fotos") + '</span><span class="xs mu">Die Fotos sehen nur die Mitreisenden. Ausgewählte erscheinen als Collage-Karte unter «Legendär».</span></section>';
+  var karte = photos.filter(function (p) { return p.als_karte }).length;
+  return '<section class="card" aria-label="Reisefotos"><div class="row sb"><span class="b" style="font-size:15px">Fotos</span><span class="sm mu" data-test="foto-anzahl">' + photos.length + " hochgeladen · " + karte + " auf der Karte</span></div>" +
+    (photos.length ? '<div class="ph">' + photos.map(function (p) {
+      var darf = p.uploaded_by == uid() || isAdmin();
+      return '<span style="position:relative">' + img(p.path, "Reisefoto") + (darf ? '<button class="chip' + (p.als_karte ? " v" : "") + '" style="position:absolute;left:4px;bottom:4px;min-height:32px" data-a="fotokarte" data-id="' + p.id + '" aria-pressed="' + !!p.als_karte + '">' + (p.als_karte ? "Karte ✓" : "Als Karte") + "</button>" : p.als_karte ? '<span class="chip v" style="position:absolute;left:4px;bottom:4px">Karte</span>' : "") + "</span>";
+    }).join("") + "</div>" : "") +
+    '<span class="xs mu">Die Fotos sehen nur die Mitreisenden. Mit «Als Karte» kommt ein Foto auf die Collage-Karte unter «Legendär», die alle sehen.</span>' +
+    (dabei ? '<label class="btn line file">Bilder hochladen<input type="file" accept="image/*" multiple data-c="tripphotos" data-id="' + tr.id + '" aria-label="Bilder hochladen"></label>' : "") + "</section>";
 }
 function sacceri(tr, part) {
   var me = uid(), p = D.proposals.filter(function (x) { return x.kind == "sacceri" && x.trip_id == tr.id }).sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1 });
@@ -1127,8 +1169,8 @@ function allCards() {
   var me = uid(), s = stats(me), L = D.cards.map(function (c) { return { id: c.id, r: c.rarity, title: c.title, sub: c.happened_on ? fDay(c.happened_on) : "", place: c.place, who: c.who, story: c.story, photo: c.photo_path, own: c.created_by == me || isAdmin() } });
   D.trips.forEach(function (t) {
     if (t.sacceri_id) L.push({ id: "sac-" + t.id, r: "legend", tag: "Legendär · Sacceri", title: "De Sacceri " + t.title + ": " + nm(t.sacceri_id), sub: fMonYear(t.starts_on), place: t.title, who: nm(t.sacceri_id), story: "Vom Club ausgezeichnet, mit Zweidrittelmehrheit der Mitreisenden." });
-    var ph = D.trip_photos.filter(function (p) { return p.trip_id == t.id }).sort(function (a, b) { return a.created_at < b.created_at ? -1 : 1 }).slice(3);
-    if (ph.length) L.push({ id: "col-" + t.id, r: "legend", tag: "Legendär · Collage", title: "Collage " + t.title + " " + t.starts_on.slice(0, 4), sub: ph.length + " Bilder", place: t.title, who: "Alle Mitreisenden", story: "Alle Bilder der Reise, die es nicht in die Top 3 geschafft haben.", collage: ph.map(function (p) { return p.path }) });
+    var ph = D.trip_photos.filter(function (p) { return p.trip_id == t.id && p.als_karte }).sort(function (a, b) { return a.created_at < b.created_at ? -1 : 1 });
+    if (ph.length) L.push({ id: "col-" + t.id, r: "legend", tag: "Legendär · Collage", title: "Collage " + t.title + " " + t.starts_on.slice(0, 4), sub: ph.length + " Bilder", place: t.title, who: "Alle Mitreisenden", story: "Die Bilder, die die Mitreisenden für die Karte ausgewählt haben.", collage: ph.map(function (p) { return p.path }) });
   });
   [["s1", "Trophäe", "Goldene Magnum", "7 Anlässe in Folge", s.streak >= 7, "Streak " + s.streak + " / 7", "Sieben Anlässe in Folge dabei. Der Club verneigt sich."],
    ["s2", "Location", "Weltenbummler", "3 Club-Reisen", s.trips >= 3, "Reisen " + s.trips + " / 3", "Drei Club-Reisen mitgemacht. Die geheime Location-Karte gehört dir."],
@@ -1138,6 +1180,7 @@ function allCards() {
   return L;
 }
 // ═════════════ Volle Gläser (Likes) für Karten ═════════════
+var RF = {};
 var GLAS_VOLL = '<svg width="22" height="26" viewBox="0 0 24 28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5.4 5h13.2c.3 1.5.4 2.8.4 4a7 7 0 0 1-14 0c0-1.2.1-2.5.4-4z" fill="#9B1B30" stroke="none"/><path d="M6 2h12c.6 2 1 4.6 1 7a7 7 0 0 1-14 0c0-2.4.4-5 1-7z"/><path d="M12 16v8M7.5 26h9"/></svg>', GLAS_LEER = '<svg width="22" height="26" viewBox="0 0 24 28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12c.6 2 1 4.6 1 7a7 7 0 0 1-14 0c0-2.4.4-5 1-7z"/><path d="M12 16v8M7.5 26h9"/></svg>';
 var GLAS_FLASCHE = '<svg width="14" height="26" viewBox="0 0 14 28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 1h4v6c0 1.5 3 3 3 6v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V13c0-3 3-4.5 3-6z"/><path d="M2.8 14.5h8.4V25a1 1 0 0 1-1 1H3.8a1 1 0 0 1-1-1z" fill="#9B1B30" stroke="none"/></svg>';
 // 4 volle Gläser geben eine Flasche: 9 Gläser = 2 Flaschen und 1 Glas
@@ -1516,6 +1559,21 @@ var ACT = {
     after(on ? sb.from("post_prosts").delete().eq("post_id", d.id).eq("member_id", uid()) : sb.from("post_prosts").insert({ post_id: d.id, member_id: uid() }), on ? null : "Prost!");
   },
   drinkkind: function (d) { after(sb.from("drinks").update({ kind: d.v }).eq("id", d.id).eq("member_id", uid())) },
+  tripzu: function (d) {
+    var on = D.trip_participants.some(function (p) { return p.trip_id == d.id && p.member_id == uid() }), t = D.trips.find(function (x) { return x.id == d.id });
+    if (on) return;
+    after(sb.from("trip_participants").insert({ trip_id: d.id, member_id: uid() }).then(function (r) { if (r.error) return r; return post("reist mit nach " + t.title + "!") }), "Dabei in " + t.title + " · +30 Punkte nach der Reise");
+  },
+  tripab: function (d) {
+    var t = D.trips.find(function (x) { return x.id == d.id });
+    if (D.trip_absagen.some(function (x) { return x.trip_id == d.id && x.member_id == uid() })) return;
+    after(sb.from("trip_absagen").insert({ trip_id: d.id, member_id: uid() }), "Von " + t.title + " abgemeldet");
+  },
+  amtweg: function (d) { after(sb.from("trip_aemtli").delete().eq("trip_id", d.id).eq("member_id", d.m).eq("rolle", d.v), nm(d.m) + " ist nicht mehr " + rolleName(d.v)) },
+  fotokarte: function (d) {
+    var p = D.trip_photos.find(function (x) { return x.id == d.id }); if (!p) return;
+    after(sb.from("trip_photos").update({ als_karte: !p.als_karte }).eq("id", d.id), p.als_karte ? "Nicht mehr auf der Karte" : "Kommt auf die Collage-Karte");
+  },
   tripjoin: function (d) {
     var on = D.trip_participants.some(function (p) { return p.trip_id == d.id && p.member_id == uid() }), t = D.trips.find(function (x) { return x.id == d.id });
     after(on ? sb.from("trip_participants").delete().eq("trip_id", d.id).eq("member_id", uid())
@@ -1570,7 +1628,7 @@ var ACT = {
       if (!r.error) toast(r.data == "passed" ? "Angenommen mit Zweidrittelmehrheit!" : r.data == "rejected" ? "Abgelehnt · ⅔-Mehrheit nicht erreicht" : "Stimme abgegeben"); return r;
     }));
   },
-  second: function (d) { after(sb.rpc("second_proposal", { p_proposal: d.id }).then(function (r) { if (!r.error) toast(r.data == "passed" ? "Bestätigt!" : "Unterstützt · Abstimmung offen"); return r })) },
+  second: function (d) { after(pushAnstoss(sb.rpc("second_proposal", { p_proposal: d.id })).then(function (r) { if (!r.error) toast(r.data == "passed" ? "Bestätigt!" : "Unterstützt · Abstimmung offen"); return r })) },
   setadmin: function (d) {
     var neu = d.v == "1", p = pr(d.id); if (!!p.is_admin == neu) return;
     if (neu && !confirm(nm(d.id) + " zum Administrator machen?")) return;
@@ -1692,6 +1750,10 @@ var SUBMIT = {
       return pushAnstoss(sb.rpc("set_organizer", { p_event: id, p_member: org || null }));
     }), "Anlass angepasst").then(function () { UI.evEditOpen = UI.edTitle = UI.edDate = UI.edTime = UI.edLoc = UI.edOrt = UI.edOrg = null; render() });
   },
+  amt: function (f) {
+    var id = f.getAttribute("data-id"), m = v("amtPerson", ""), r = v("amtRolle", "ok"); if (!m) return toast("Bitte eine Person wählen");
+    after(sb.from("trip_aemtli").insert({ trip_id: id, member_id: m, rolle: r, added_by: uid() }), nm(m) + " ist " + rolleName(r)).then(function () { UI.amtPerson = null; render() });
+  },
   event: function () {
     var at = new Date(v("evDate", evStandard()) + "T" + v("evTime", "19:00")); if (!v("evTitle").trim() || isNaN(at)) return toast("Bitte Titel und Datum angeben");
     var org = !!UI.evOrg;
@@ -1708,7 +1770,7 @@ var SUBMIT = {
     after(sb.from("trips").insert({ title: title, starts_on: v("trFrom"), ends_on: v("trTo") || null, program: v("trProg").trim() || null, color: v("trColor", COLORS[0]), created_by: uid() })
       .then(function (r) { if (r.error) return r; return post("hat die Reise nach " + title + " eröffnet. Wer kommt mit?") }), "Reise erfasst").then(function () { ["newTrip", "trTitle", "trFrom", "trTo", "trProg", "trSeats", "trColor"].forEach(function (k) { UI[k] = null }); render() });
   },
-  sacceri: function (f) { var t = v("sacPick"); if (!t) return; after(sb.rpc("propose_sacceri", { p_trip: f.getAttribute("data-id"), p_target: t }), "Antrag gestellt: " + nm(t) + " als De Sacceri").then(function () { UI.sacPick = null; render() }) },
+  sacceri: function (f) { var t = v("sacPick"); if (!t) return; after(pushAnstoss(sb.rpc("propose_sacceri", { p_trip: f.getAttribute("data-id"), p_target: t })), "Antrag gestellt: " + nm(t) + " als De Sacceri").then(function () { UI.sacPick = null; render() }) },
   nick: function (f) {
     var id = f.getAttribute("data-id"), n = v("nick" + id).trim(); if (!n) return;
     after(sb.rpc("propose_nickname", { p_target: id, p_nick: n }), "«" + n + "» vorgeschlagen · wartet auf eine zweite Unterstützung").then(function () { UI["nick" + id] = null; render() });
@@ -1900,7 +1962,7 @@ function start() {
     if (INVITE && INVITE.state != "bad") { INVITE = null; history.replaceState(null, "", location.pathname + location.search) }
     READY = false; render();
     setTimeout(function () {
-      sb.rpc("me").then(function (r) { PREV = r.data && r.data.prev_seen; return sb.rpc("magnum_termine") }).then(function () { return loadAll() }).then(function () { READY = true; render(); pushAbgleich(); loadInvites() });
+      sb.rpc("me").then(function (r) { PREV = r.data && r.data.prev_seen; return sb.rpc("magnum_termine") }).then(function () { return loadAll() }).then(function () { READY = true; render(); pushAbgleich(); dankHinweis(); loadInvites() });
     }, 0);
   });
   render();

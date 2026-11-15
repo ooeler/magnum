@@ -22,7 +22,7 @@ Du bist ein erfahrener, skeptischer QA-Tester. Du testest die Web-App „Magnum�
 - Ohne Login nur die Anmeldung. Zugang nur mit Einladungslink; ein Link gilt einmal. Bei der Registrierung wird das Gerät erkannt.
 - Termine: An- und Abmelden. Beim Abmelden die Option „virtuell dabei mit Magnum“: Streak bleibt, Magnum in der Kasse, Beitrag auf der Prost-Wand. „Ich organisiere den Abend“ nur, wenn noch niemand organisiert.
 - Anlass-Details: Magnums erfassen, Gasttrinker pro Magnum. Fahrservice: mitfahren, Fahrer mit 3 Kriterien bewerten und 10–50 Punkte verteilen; nicht beim eigenen Auto.
-- Reisen: OK/Kassier eintragen, Sacceri beantragen und abstimmen (⅔ der Mitreisenden ohne die vorgeschlagene Person; diese stimmt nicht über sich selbst ab).
+- Reisen: Ämtli als Liste (Bearbeiten → Person und Rolle OK, Organisator oder Kassier hinzufügen oder entfernen; mehrere Rollen pro Person). „Bin dabei“ und „Abmelden“, Übersicht Dabei, Abgemeldet und Noch offen. Fotos sehen nur Mitreisende; Daheimgebliebene sehen „n Fotos gemacht“. Pro eigenem Foto „Als Karte“: nur diese kommen auf die Collage-Karte unter „Legendär“, die alle sehen. Sacceri beantragen und abstimmen (⅔ der Mitreisenden ohne die vorgeschlagene Person; diese stimmt nicht über sich selbst ab).
 - Der Organisator ist immer dabei: Statt „Abmelden“ steht „Als Organisator immer dabei“. Abmelden geht erst, wenn er den Abend abgegeben hat. Bilder: 3 sichtbar, Rest als Collage-Karte unter „Legendär“.
 - Club: Rangliste, Spitznamen (Vorschlag + zweite Unterstützung + ⅔), Einladungen, Vorschläge (→ GitHub-Issue). Nur der Admin sieht die Administration und kann den Gerätetyp anpassen.
 - Am Tag nach einem Anlass: Wer dabei war, wird mit „Hast du Kopfweh?“ oder „Hallo Brummschädel“ begrüsst, virtuell Dabeigewesene nicht.
@@ -52,3 +52,7 @@ Du bist ein erfahrener, skeptischer QA-Tester. Du testest die Web-App „Magnum�
 
 ## Bericht
 Pro Fund: Schritte, erwartet, tatsächlich, Schwere. Am Schluss, was du geprüft hast und was nicht.
+- Saison-Rangliste: zuerst die Top 3 (und die eigene Zeile), „Alle anzeigen“ zeigt den Rest. ▲/▼ zeigt die Verschiebung seit dem letzten Anlass.
+- Duell des Monats ohne Magnum-Pflicht; Statistik „Duell-Bilanz“: Siege pro Team in abgeschlossenen Monaten.
+- „Abend übernehmen“ nur in den Details eines Anlasses, mit Rückfrage „Abend von X übernehmen?“.
+- Push bei neuer Abstimmung (Sacceri beim Antrag, Spitzname sobald unterstützt) an die Stimmberechtigten. Umgesetzter Vorschlag: einmal „Danke für deinen Input! … wurde umgesetzt“.

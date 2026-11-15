@@ -521,6 +521,34 @@ drop trigger if exists trip_participant_check on public.trip_participants;
 create trigger trip_participant_check before insert on public.trip_participants
   for each row execute function public.check_trip_participant();
 
+-- Abmeldungen von Reisen, damit alle die Übersicht behalten. Wer sich abmeldet, ist nicht mehr dabei und umgekehrt.
+create table if not exists public.trip_absagen (
+  trip_id    uuid not null references public.trips(id) on delete cascade,
+  member_id  uuid not null default public.uid() references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (trip_id, member_id)
+);
+alter table public.trip_absagen enable row level security;
+create or replace function public.trip_absage() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if public.uid() is not null and not public.is_admin() and (select starts_on from public.trips where id = new.trip_id) < public.heute() then
+    raise exception 'Die Reise hat schon begonnen';
+  end if;
+  delete from public.trip_participants where trip_id = new.trip_id and member_id = new.member_id;
+  return new;
+end $$;
+drop trigger if exists trip_absage on public.trip_absagen;
+create trigger trip_absage before insert on public.trip_absagen for each row execute function public.trip_absage();
+create or replace function public.trip_zusage() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  delete from public.trip_absagen where trip_id = new.trip_id and member_id = new.member_id;
+  return new;
+end $$;
+drop trigger if exists trip_zusage on public.trip_participants;
+create trigger trip_zusage after insert on public.trip_participants for each row execute function public.trip_zusage();
+
 create table if not exists public.trip_photos (
   id          uuid primary key default gen_random_uuid(),
   trip_id     uuid not null references public.trips(id) on delete cascade,
@@ -529,6 +557,47 @@ create table if not exists public.trip_photos (
   created_at  timestamptz not null default now()
 );
 alter table public.trip_photos enable row level security;
+-- Reisefotos sehen nur die Mitreisenden. Was als Karte erscheinen soll, wählt wer es hochgeladen hat: Diese Fotos bilden
+-- die Collage-Karte und sind für alle sichtbar. Standard: privat.
+alter table public.trip_photos add column if not exists als_karte boolean not null default false;
+
+-- Ämtli einer Reise als Liste: Person und Rolle (OK, Organisator, Kassier). Mehrere Personen pro Rolle möglich.
+create table if not exists public.trip_aemtli (
+  trip_id   uuid not null references public.trips(id) on delete cascade,
+  member_id uuid not null references public.profiles(id) on delete cascade,
+  rolle     text not null check (rolle in ('ok', 'organisator', 'kassier')),
+  added_by  uuid default public.uid() references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  primary key (trip_id, member_id, rolle)
+);
+alter table public.trip_aemtli enable row level security;
+-- Bisherige OK und Kassier in die Liste übernehmen (danach leer, damit ein Entfernen beim nächsten Einspielen nicht zurückkommt)
+insert into public.trip_aemtli (trip_id, member_id, rolle, added_by)
+select id, ok_id, 'ok', null::uuid from public.trips where ok_id is not null
+union all select id, kassier_id, 'kassier', null::uuid from public.trips where kassier_id is not null
+on conflict do nothing;
+update public.trips set ok_id = null, kassier_id = null where ok_id is not null or kassier_id is not null;
+
+create or replace function public.reise_dabei(p_trip uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.trip_participants where trip_id = p_trip and member_id = public.uid())
+$$;
+-- Wie viele Fotos eine Reise hat: das sehen auch die Daheimgebliebenen
+create or replace function public.reise_fotos() returns table (trip_id uuid, anzahl int)
+language sql stable security definer set search_path = public as $$
+  select p.trip_id, count(*)::int from public.trip_photos p where public.is_member() group by p.trip_id
+$$;
+-- Hochladen nur für Mitreisende
+create or replace function public.check_trip_photo() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if public.uid() is not null and not public.is_admin() and not public.reise_dabei(new.trip_id) then
+    raise exception 'Fotos laden nur Mitreisende hoch';
+  end if;
+  return new;
+end $$;
+drop trigger if exists trip_photo_check on public.trip_photos;
+create trigger trip_photo_check before insert on public.trip_photos for each row execute function public.check_trip_photo();
 
 -- Gäste bei Anlässen und Reisen: nur ein Name, kein Konto
 create table if not exists public.gaeste (
@@ -820,6 +889,31 @@ end $$;
 drop trigger if exists push_rsvp on public.rsvps;
 create trigger push_rsvp after insert or update of status on public.rsvps for each row execute function public.push_rsvp();
 
+-- Neue Abstimmung: Sacceri sofort beim Antrag, Spitzname sobald er unterstützt ist (erst dann wird abgestimmt)
+create or replace function public.push_abstimmung() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare v_titel text; v_text text; v_von uuid;
+begin
+  if new.status <> 'open' then return new; end if;
+  if new.kind = 'sacceri' and tg_op = 'INSERT' then
+    v_titel := 'Neue Abstimmung: De Sacceri';
+    v_text := public.push_name(new.proposed_by) || ' schlägt ' || public.push_name(new.target_id) || ' vor (Reise ' || coalesce((select title from public.trips where id = new.trip_id), '') || '). Stimm ab!';
+    v_von := new.proposed_by;
+  elsif new.kind = 'nickname' and tg_op = 'UPDATE' and old.seconded_by is null and new.seconded_by is not null then
+    v_titel := 'Neue Abstimmung: Spitzname';
+    v_text := '«' || new.value || '» für ' || public.push_name(new.target_id) || '? Stimm ab!';
+    v_von := new.seconded_by;
+  else
+    return new;
+  end if;
+  insert into public.push_queue (titel, text, an)
+  select v_titel, v_text, v from public.eligible_voters(new.id) v
+   where v <> v_von and v <> new.proposed_by and v is distinct from new.seconded_by;
+  return new;
+end $$;
+drop trigger if exists push_abstimmung on public.proposals;
+create trigger push_abstimmung after insert or update of seconded_by on public.proposals for each row execute function public.push_abstimmung();
+
 -- Jede Woche wird eine Sammelkarte aufgedeckt, aber nur für 3 Mitglieder (karte_der_woche_fuer). So bleibt es spannend:
 -- Alle anderen sehen bis zur nächsten Woche nur, für wen sie aufgedeckt ist.
 create table if not exists public.karte_der_woche (
@@ -940,7 +1034,7 @@ begin
      or v_art = 'video' and not exists (select 1 from public.video_karten k where k.id = v_id and (k.created_by = public.uid() or public.is_admin()
           or exists (select 1 from public.video_ziehungen z where z.karte_id = k.id and z.member_id = public.uid())))
      or v_art = 'sac' and not exists (select 1 from public.trips where id = v_id and sacceri_id is not null)
-     or v_art = 'col' and not exists (select 1 from public.trip_photos where trip_id = v_id) then
+     or v_art = 'col' and not exists (select 1 from public.trip_photos where trip_id = v_id and als_karte) then
     raise exception 'Diese Karte gibt es nicht';
   end if;
   return new;
@@ -1058,6 +1152,9 @@ revoke insert, update, delete on public.karte_der_woche from authenticated;
 revoke insert, update, delete on public.karte_der_woche_fuer from authenticated;
 revoke insert, update, delete on public.video_ziehungen from authenticated;
 revoke update on public.video_karten from authenticated;
+revoke update on public.trip_aemtli from authenticated;
+revoke update on public.trip_photos from authenticated;
+grant update (als_karte) on public.trip_photos to authenticated;
 grant select on public.app_status to anonymous;
 
 -- Lesen: alle Mitglieder (Einladungen nie direkt, nur über die Edge Function)
@@ -1066,7 +1163,7 @@ declare t text;
 begin
   foreach t in array array['settings', 'profiles', 'admin_log', 'restaurants', 'restaurant_visits',
     'restaurant_ratings', 'events', 'rsvps', 'magnums', 'magnum_guests', 'rides', 'ride_passengers', 'trips',
-    'trip_participants', 'trip_photos', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
+    'trip_participants', 'trip_aemtli', 'trip_absagen', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
     'sayings', 'saying_prosts', 'feedback', 'sync_stand', 'card_members', 'gaeste', 'karte_der_woche_fuer', 'video_ziehungen', 'karten_glaeser']
   loop
     execute format('drop policy if exists "Mitglieder lesen" on public.%I', t);
@@ -1075,6 +1172,14 @@ begin
 end $$;
 
 -- Karte der Woche: In der laufenden Woche sehen sie nur die 3, für die sie aufgedeckt ist. Ältere Wochen und Wochen ohne Auswahl sehen alle.
+drop policy if exists "Mitglieder lesen" on public.trip_photos;
+drop policy if exists "Reisefotos sehen" on public.trip_photos;
+create policy "Reisefotos sehen" on public.trip_photos for select to authenticated using (public.is_member() and (als_karte or public.reise_dabei(trip_id)));
+-- Ämtli: alle Mitglieder tragen ein und entfernen (wie bisher OK und Kassier)
+drop policy if exists "Ämtli eintragen" on public.trip_aemtli;
+drop policy if exists "Ämtli entfernen" on public.trip_aemtli;
+create policy "Ämtli eintragen" on public.trip_aemtli for insert to authenticated with check (public.is_member() and added_by = public.uid());
+create policy "Ämtli entfernen" on public.trip_aemtli for delete to authenticated using (public.is_member());
 drop policy if exists "Mitglieder lesen" on public.karte_der_woche;
 drop policy if exists "Karte der Woche lesen" on public.karte_der_woche;
 create or replace function public.kdw_sichtbar(p_woche date) returns boolean
@@ -1093,7 +1198,7 @@ declare r record;
 begin
   for r in select * from (values
     ('restaurant_ratings', 'member_id'), ('rsvps', 'member_id'), ('trip_participants', 'member_id'),
-    ('drinks', 'member_id'), ('saying_prosts', 'member_id'), ('post_prosts', 'member_id'), ('karten_glaeser', 'member_id'),
+    ('drinks', 'member_id'), ('saying_prosts', 'member_id'), ('post_prosts', 'member_id'), ('karten_glaeser', 'member_id'), ('trip_absagen', 'member_id'),
     ('ride_passengers', 'passenger_id'), ('rides', 'driver_id')
   ) as x(tbl, col)
   loop
@@ -1221,6 +1326,14 @@ revoke execute on function public.check_ride_passenger() from public, anonymous,
 revoke execute on function public.heute() from public, anonymous, authenticated;
 revoke execute on function public.check_event() from public, anonymous, authenticated;
 revoke execute on function public.check_rsvp() from public, anonymous, authenticated;
+revoke execute on function public.push_abstimmung() from public, anonymous, authenticated;
+revoke execute on function public.check_trip_photo() from public, anonymous, authenticated;
+revoke execute on function public.trip_absage() from public, anonymous, authenticated;
+revoke execute on function public.trip_zusage() from public, anonymous, authenticated;
+revoke execute on function public.reise_dabei(uuid) from public, anonymous;
+grant execute on function public.reise_dabei(uuid) to authenticated;
+revoke execute on function public.reise_fotos() from public, anonymous;
+grant execute on function public.reise_fotos() to authenticated;
 revoke execute on function public.push_event() from public, anonymous, authenticated;
 revoke execute on function public.push_rsvp() from public, anonymous, authenticated;
 revoke execute on function public.push_glas() from public, anonymous, authenticated;
@@ -1246,7 +1359,7 @@ do $$
 declare t text;
 begin
   foreach t in array array['profiles', 'events', 'rsvps', 'magnums', 'magnum_guests', 'rides', 'ride_passengers',
-    'trips', 'trip_participants', 'trip_photos', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
+    'trips', 'trip_participants', 'trip_photos', 'trip_aemtli', 'trip_absagen', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
     'sayings', 'saying_prosts', 'card_members', 'gaeste', 'karte_der_woche', 'karte_der_woche_fuer', 'video_karten', 'video_ziehungen', 'karten_glaeser', 'restaurants', 'restaurant_visits', 'restaurant_ratings', 'feedback', 'admin_log']
   loop
     execute format('drop trigger if exists sync_bump on public.%I', t);

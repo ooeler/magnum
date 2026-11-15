@@ -41,13 +41,39 @@ test.describe("Reisen", () => {
     await login(page);
     await tab(page, "Reisen");
     await page.locator(".trip", { hasText: "Wallis" }).click();
-    const b = page.locator("#ov [data-a=tripjoin]");
-    await b.click();
+    await page.locator("#ov [data-a=tripab]").click();
     await expect(toast(page)).toContainText("Von Wallis abgemeldet");
-    await expect(b).toContainText("Mitreisen");
-    await b.click();
+    await expect(page.locator("#ov [data-a=tripab]")).toContainText("Abgemeldet");
+    await expect(page.locator("#ov [data-test=reise-ab]")).toContainText("Ot");
+    await expect(page.locator("#ov [data-test=reise-dabei]")).not.toContainText("Ot");
+    await expect(page.locator("#ov [data-test=reise-offen]")).toContainText("Noch offen:");
+    await page.locator("#ov [data-a=tripzu]").click();
     await expect(toast(page)).toContainText("Dabei in Wallis");
-    await expect(b).toContainText("Angemeldet");
+    await expect(page.locator("#ov [data-a=tripzu]")).toContainText("Bin dabei ✓");
+    await expect(page.locator("#ov [data-test=reise-ab]")).toHaveCount(0);
+  });
+
+  test("Ämtli als Liste: bearbeiten, Person mit Rolle hinzufügen und entfernen", async ({ page }) => {
+    await login(page);
+    await tab(page, "Reisen");
+    await expect(page.locator(".trip", { hasText: "Wallis" }).locator("[data-test=aemtli-kurz]")).toContainText("OK: Chris ·");
+    await page.locator(".trip", { hasText: "Wallis" }).click();
+    const a = page.locator("#ov [aria-label=Ämtli]");
+    await expect(a.locator("[data-test=aemtli]")).toContainText("OK · Chris");
+    await a.getByRole("button", { name: "Bearbeiten" }).click();
+    await a.locator("[data-k=amtPerson]").selectOption({ label: "Beat" });
+    await a.locator("[data-k=amtRolle]").selectOption({ label: "Kassier" });
+    await a.getByRole("button", { name: "Hinzufügen" }).click();
+    await expect(toast(page)).toContainText("Beat ist Kassier");
+    await a.locator("[data-k=amtPerson]").selectOption({ label: "Beat" });
+    await a.locator("[data-k=amtRolle]").selectOption({ label: "Organisator" });
+    await a.getByRole("button", { name: "Hinzufügen" }).click();
+    await expect(a.locator("[data-test=aemtli]")).toContainText("Organisator · Beat");
+    await expect(a.locator("[data-test=aemtli]")).toContainText("Kassier · Beat");
+    await a.getByRole("button", { name: "Chris als OK entfernen" }).click();
+    await expect(a.locator("[data-test=aemtli]")).not.toContainText("Chris");
+    await a.getByRole("button", { name: "Fertig" }).click();
+    await expect(a.getByRole("button", { name: /entfernen/ })).toHaveCount(0);
   });
 
   test("Bilder hochladen zählt mit", async ({ page }) => {
@@ -56,7 +82,39 @@ test.describe("Reisen", () => {
     await page.locator(".trip", { hasText: "Bordeaux" }).click();
     await page.locator("#ov input[data-c=tripphotos]").setInputFiles([{ name: "a.png", mimeType: "image/png", buffer: PNG }, { name: "b.png", mimeType: "image/png", buffer: PNG }]);
     await expect(toast(page)).toContainText("2 Bilder hochgeladen");
-    await expect(page.locator("#ov")).toContainText("8 hochgeladen · 3 sichtbar");
+    await expect(page.locator("#ov [data-test=foto-anzahl]")).toHaveText("8 hochgeladen · 3 auf der Karte");
+  });
+
+  test("Reisefotos sehen nur Mitreisende, Daheimgebliebene sehen die Anzahl", async ({ page }) => {
+    await login(page, BEAT);                               // Beat war in Bordeaux dabei
+    await tab(page, "Reisen");
+    await page.locator(".trip", { hasText: "Bordeaux" }).click();
+    await expect(page.locator("#ov .ph img")).toHaveCount(6);
+    await page.locator("#ov .back").click();
+    await page.evaluate(() => { const d = window.__mg.db(); d.trip_participants = d.trip_participants.filter((p) => !(p.trip_id == "t-bordeaux" && p.member_id == "u-beat")); localStorage.setItem("__mg_db", JSON.stringify(d)) });
+    await page.reload();
+    await tab(page, "Reisen");
+    await page.locator(".trip", { hasText: "Bordeaux" }).click();
+    await expect(page.locator("#ov [data-test=foto-anzahl]")).toHaveText("6 Fotos gemacht");
+    await expect(page.locator("#ov .ph img")).toHaveCount(0);
+    await expect(page.locator("#ov input[data-c=tripphotos]")).toHaveCount(0);
+    // Die Fotos für die Karte sieht er trotzdem: Collage unter Legendär
+    expect(await page.evaluate(() => D.trip_photos.filter((p) => p.trip_id == "t-bordeaux").length)).toBe(3);
+  });
+
+  test("Pro Foto wählen, ob es auf die Collage-Karte kommt", async ({ page }) => {
+    await login(page, CHRIS);                              // Chris hat die Bordeaux-Fotos hochgeladen
+    await tab(page, "Reisen");
+    await page.locator(".trip", { hasText: "Bordeaux" }).click();
+    const erstes = page.locator("#ov [data-a=fotokarte]").first();
+    await expect(erstes).toHaveText("Als Karte");
+    await erstes.click();
+    await expect(toast(page)).toContainText("Kommt auf die Collage-Karte");
+    await expect(page.locator("#ov [data-test=foto-anzahl]")).toHaveText("6 hochgeladen · 4 auf der Karte");
+    await page.locator("#ov .back").click();
+    await tab(page, "Karten");
+    await page.getByRole("button", { name: "Legendär", exact: true }).click();
+    await expect(page.locator(".kc", { hasText: "Collage Bordeaux" })).toContainText("4 Bilder");
   });
 });
 
@@ -469,5 +527,19 @@ test.describe("Gäste, Beizen und Sichtweise", () => {
     await page.locator("[data-test=sicht]").getByRole("button", { name: "Zurück zur Admin-Ansicht" }).click();
     await page.locator(".mem", { hasText: "Beat" }).click();
     await expect(card(page, "Rolle")).toBeVisible();
+  });
+});
+
+test.describe("Vorschläge", () => {
+  test("Umgesetzter Vorschlag: einmal ein Danke-Hinweis", async ({ page }) => {
+    await page.goto("/");
+    await page.evaluate(() => { const d = window.__mg.db(); d.feedback.push({ id: 99, user_id: "u-ot", kind: "idee", title: "Push Benachrichtigung", body: "x", labels: [], status: "umgesetzt", created_at: new Date().toISOString() }); localStorage.setItem("__mg_db", JSON.stringify(d)) });
+    await login(page);
+    await expect(page.locator("#toast")).toContainText("Danke für deinen Input! «Push Benachrichtigung» wurde umgesetzt");
+    await page.evaluate(() => { document.getElementById("toast").hidden = true });
+    await page.reload();
+    await expect(page.locator("header h1")).toHaveText("Magnum");
+    await page.waitForTimeout(500);
+    await expect(page.locator("#toast")).toBeHidden();
   });
 });
