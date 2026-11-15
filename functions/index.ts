@@ -282,12 +282,15 @@ const senden = async (titel: string, text: string, url = "./", nur: string | nul
   const abos = await q("select endpoint, p256dh, auth from public.push_abos where ($1::uuid is null or member_id = $1) and ($2::uuid is null or member_id <> $2)", [nur, ausser]);
   for (const a of abos) {
     try {
-      await webpush.sendNotification({ endpoint: a.endpoint, keys: { p256dh: a.p256dh, auth: a.auth } }, JSON.stringify({ title: titel, body: text, url }), { TTL: 86400 });
+      // urgency "high": Android stellt sonst im Energiesparmodus (Doze) erst viel später zu
+      const r = await webpush.sendNotification({ endpoint: a.endpoint, keys: { p256dh: a.p256dh, auth: a.auth } }, JSON.stringify({ title: titel, body: text, url }), { TTL: 86400, urgency: "high" });
+      console.log("Push zugestellt an", new URL(a.endpoint).host, r.statusCode);
       n++;
     } catch (e) {
-      // Abgelaufene Abos räumen wir weg, andere Fehler bleiben im Log
+      // Abgelaufene Abos räumen wir weg (404/410). 403: das Abo gehört zu einem anderen Schlüssel, die App meldet sich neu an.
       const s = (e as { statusCode?: number }).statusCode;
-      if (s == 404 || s == 410) await q("delete from public.push_abos where endpoint = $1", [a.endpoint]); else console.error("Push", s);
+      if (s == 404 || s == 410 || s == 403) await q("delete from public.push_abos where endpoint = $1", [a.endpoint]);
+      console.error("Push abgelehnt von", new URL(a.endpoint).host, s);
     }
   }
   return n;
@@ -334,8 +337,9 @@ app.post("/push/test", async (c) => {
   const m = await member(c.req.raw);
   if (!m) return c.json({ error: "Kein Mitglied" }, 403);
   if (!(await einmal("test", m.id + "@" + new Date().toISOString().slice(0, 16)))) return c.json({ error: "Bitte eine Minute warten." }, 429);
+  const [{ abos }] = await q("select count(*)::int as abos from public.push_abos where member_id = $1", [m.id]);
   const n = await senden("Magnum", "Test-Push: Es funktioniert! 🍷", "./", m.id);
-  return c.json({ ok: true, geraete: n });
+  return c.json({ ok: true, geraete: n, abos });
 });
 
 // Täglich: Erinnerung 7 Tage vor jedem Anlass, montags wird eine Sammelkarte aufgedeckt
