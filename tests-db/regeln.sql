@@ -562,13 +562,60 @@ select pg_temp.check((select count(*) from public.push_queue where titel = 'Neue
 select pg_temp.check((select count(*) from public.push_queue where titel like 'Push-Abend: Beat organisiert' and ausser = '00000000-0000-0000-0000-00000000000b') = 1, 'Neuer Organisator: an alle ausser ihn');
 select pg_temp.check((select count(*) from public.push_queue where titel = 'Anmeldung: Push-Abend' and an = '00000000-0000-0000-0000-00000000000b' and text like 'Chris ist dabei.%') = 1, 'Anmeldung: an den Organisator, einmal');
 select pg_temp.check((select count(*) from public.push_queue where titel = 'Abmeldung: Push-Abend' and an = '00000000-0000-0000-0000-00000000000b') = 1, 'Abmeldung: an den Organisator');
+select pg_temp.check((select count(*) from public.push_queue where an = '00000000-0000-0000-0000-00000000000c') = 0, 'Keine Meldung an sich selbst');
 select pg_temp.check((select count(*) from public.push_queue where titel like 'Push-Abend: Dani übernimmt' and text like '%von Beat%') = 1, 'Übernahme: an alle, mit dem bisherigen Organisator');
 select pg_temp.check((select count(*) from public.push_queue where an = '00000000-0000-0000-0000-00000000000d' or (an = '00000000-0000-0000-0000-00000000000b' and text like 'Beat%')) = 0, 'Organisator bekommt keine Meldung über sich selbst');
 select pg_temp.check((select count(*) from public.push_queue) = 5, 'Genau fünf Meldungen');
+-- Wer schon dabei ist, hört auch von An- und Abmeldungen: B (Organisator bis eben) und D (Organisator) sind dabei, A meldet sich an
+delete from public.push_queue;
+set role authenticated;
+select pg_temp.als('A');
+insert into public.rsvps (event_id, status) values ('20000000-0000-0000-0000-000000000009', 'virtual');
+reset role;
+select pg_temp.als('');
+select pg_temp.check((select array_agg(an order by an)::text from public.push_queue where titel = 'Virtuell dabei: Push-Abend')
+  = '{00000000-0000-0000-0000-00000000000b,00000000-0000-0000-0000-00000000000d}', 'An- und Abmeldung: an Organisator und alle, die dabei sind');
 delete from public.push_queue;
 select public.magnum_termine();
 select pg_temp.check((select count(*) from public.push_queue where titel like 'Neuer Anlass%') = 0, 'Automatische Magnum-Serie meldet keinen neuen Anlass');
 set role authenticated;
+-- Volle Gläser (Likes) für Karten
+select pg_temp.als('B');
+insert into public.karten_glaeser (karte) select 'video-' || karte_id from public.video_ziehungen where member_id = public.uid();
+insert into public.karten_glaeser (karte) values ('video-60000000-0000-0000-0000-000000000003');
+select pg_temp.check((select count(*) from public.karten_glaeser) = 2, 'Glas für gezogene und eigene Videokarte');
+do $$ begin
+  insert into public.karten_glaeser (karte) values ('video-60000000-0000-0000-0000-000000000003');
+  raise exception 'FEHLER: zweites Glas für dieselbe Karte';
+exception when unique_violation then raise notice 'ok – Pro Karte nur ein Glas';
+end $$;
+select pg_temp.verboten($q$insert into public.karten_glaeser (karte, member_id) values ('video-60000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-00000000000c')$q$, 'Kein Glas im Namen anderer');
+select pg_temp.verboten($q$insert into public.karten_glaeser (karte) values ('karte-70000000-0000-0000-0000-000000000099')$q$, 'Kein Glas für Karten, die es nicht gibt');
+do $$ begin
+  insert into public.karten_glaeser (karte) values ('geheim-streak');
+  raise exception 'FEHLER: Glas für geheime Karte';
+exception when check_violation then raise notice 'ok – Geheime Karten bekommen keine Gläser';
+end $$;
+select pg_temp.als('D');
+select pg_temp.verboten($q$insert into public.karten_glaeser (karte) values ('video-60000000-0000-0000-0000-000000000003')$q$, 'Kein Glas für verdeckte Videokarten');
+select pg_temp.check((select count(*) from public.karten_glaeser) = 2, 'Alle sehen die Gläser');
+with x as (delete from public.karten_glaeser returning 1)
+select pg_temp.check((select count(*) from x) = 0, 'Fremde Gläser nimmt niemand weg');
+select pg_temp.als('B');
+delete from public.video_karten where id = '60000000-0000-0000-0000-000000000003';
+select pg_temp.check((select count(*) from public.karten_glaeser) = 1, 'Gläser gehen mit der gelöschten Karte');
+with x as (delete from public.karten_glaeser where member_id = public.uid() returning 1)
+select pg_temp.check((select count(*) from x) = 1, 'Eigenes Glas zurücknehmen');
+-- Push an wer die Karte hochgeladen hat: für die gezogene fremde Karte einmal, für die eigene nie, nochmals geben meldet nicht nochmals
+insert into public.karten_glaeser (karte) select 'video-' || karte_id from public.video_ziehungen where member_id = public.uid();
+reset role;
+select pg_temp.als('');
+select pg_temp.check((select count(*) from public.push_queue q join public.video_karten k on q.an = k.created_by
+  where q.titel like '🍷 Volles Glas für «%' and q.text like 'Beat hat deiner Karte ein volles Glas gegeben. Jetzt: 1 volles Glas.') = 1, 'Glas: Push an wer die Karte hochgeladen hat, einmal');
+select pg_temp.check((select count(*) from public.push_queue where titel like '🍷%' and an = '00000000-0000-0000-0000-00000000000b') = 0, 'Kein Push für eigene Gläser');
+select pg_temp.check(public.glas_menge(9) = '2 Flaschen und 1 volles Glas' and public.glas_menge(4) = '1 Flasche' and public.glas_menge(2) = '2 volle Gläser', 'Menge in Flaschen und Gläsern');
+set role authenticated;
+select pg_temp.als('B');
 reset role;
 select pg_temp.als('');
 

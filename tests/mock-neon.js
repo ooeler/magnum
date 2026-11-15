@@ -41,7 +41,7 @@
       ],
       rsvps: [], magnums: [{ id: "m-1", event_id: "e-1", wine: "Cornalin 2019", brought_by: M.kurt, created_at: iso(-2) }],
       magnum_guests: [{ id: "g-1", magnum_id: "m-1", name: "Peter (Gast von Kurt)", added_by: M.kurt, created_at: iso(-2) }],
-      rides: [{ id: "r-1", event_id: "e-1", driver_id: M.jurg, direction: "Richtung Wil", seats: 3, created_at: iso(-1) }], ride_passengers: [], card_members: [], gaeste: [], karte_der_woche: [], video_karten: [], video_ziehungen: [],
+      rides: [{ id: "r-1", event_id: "e-1", driver_id: M.jurg, direction: "Richtung Wil", seats: 3, created_at: iso(-1) }], ride_passengers: [], card_members: [], gaeste: [], karte_der_woche: [], karten_glaeser: [], video_karten: [], video_ziehungen: [],
       trips: [
         { id: "t-bordeaux", title: "Bordeaux", starts_on: day(-60), ends_on: day(-57), program: "Saint-Émilion, Médoc, Austern in Arcachon", seats: 12, color: "#5A1F2E", ok_id: M.chris, kassier_id: M.beat, sacceri_id: M.dani, created_by: M.chris, created_at: iso(-200) },
         { id: "t-wallis", title: "Wallis", starts_on: day(190), ends_on: day(192), program: "Weinwanderung Sierre–Salgesch, Raclette", seats: 12, color: "#6E2433", ok_id: M.chris, kassier_id: null, sacceri_id: null, created_by: M.chris, created_at: iso(-20) }
@@ -96,16 +96,16 @@
     });
     return d;
   }
-  function db() { var d = get(DBK); if (!d) { d = seed(); set(DBK, d) } return d }
+  function db() { var d = get(DBK); if (!d) { d = seed(); set(DBK, d) } if (!d.karten_glaeser) d.karten_glaeser = []; return d }
   function save(d) { set(DBK, d) }
 
   // ───────────── Regeln (Spiegel von db/setup.sql) ─────────────
-  var OWNER = { restaurant_ratings: "member_id", rsvps: "member_id", trip_participants: "member_id", drinks: "member_id", saying_prosts: "member_id", post_prosts: "member_id",
+  var OWNER = { restaurant_ratings: "member_id", rsvps: "member_id", trip_participants: "member_id", drinks: "member_id", saying_prosts: "member_id", post_prosts: "member_id", karten_glaeser: "member_id",
     ride_passengers: "passenger_id", rides: "driver_id", restaurants: "created_by", restaurant_visits: "created_by", events: "created_by", magnums: "brought_by", magnum_guests: "added_by",
     trip_photos: "uploaded_by", cards: "created_by", video_karten: "created_by", gaeste: "added_by", sayings: "author_id", posts: "author_id", trips: "created_by" };
   var PK = { card_members: ["card_id", "member_id"], rsvps: ["event_id", "member_id"], restaurant_ratings: ["restaurant_id", "member_id"], trip_participants: ["trip_id", "member_id"], saying_prosts: ["saying_id", "member_id"],
-    post_prosts: ["post_id", "member_id"], ride_passengers: ["ride_id", "passenger_id"], ballots: ["proposal_id", "voter_id"] };
-  var PERSONAL = ["restaurant_ratings", "rsvps", "trip_participants", "drinks", "saying_prosts", "post_prosts", "ride_passengers", "rides"];
+    post_prosts: ["post_id", "member_id"], karten_glaeser: ["karte", "member_id"], ride_passengers: ["ride_id", "passenger_id"], ballots: ["proposal_id", "voter_id"] };
+  var PERSONAL = ["restaurant_ratings", "rsvps", "trip_participants", "drinks", "saying_prosts", "post_prosts", "karten_glaeser", "ride_passengers", "rides"];
   var COLS = { profiles: ["display_name", "fav_wine", "specialty"], trips: ["title", "starts_on", "ends_on", "program", "seats", "color", "ok_id", "kassier_id"],
     events: ["title", "starts_at", "location", "ortschaft"], ride_passengers: ["stars_safe", "stars_punctual", "stars_mood", "points_given", "rated_at"],
     rsvps: ["event_id", "member_id", "status", "updated_at"], posts: ["text"], sayings: ["text"], rides: [] };
@@ -122,6 +122,8 @@
   function videoSichtbar(d, k) { return admin(d) || k.created_by == me() || d.video_ziehungen.some(function (z) { return z.karte_id == k.id && z.member_id == me() }) }
   function pkMatch(t, a, b) { var k = PK[t] || ["id"]; return k.every(function (c) { return a[c] == b[c] }) }
   function removeCascade(d, t, row) {
+    var weg = t == "cards" ? ["karte-" + row.id] : t == "video_karten" ? ["video-" + row.id] : t == "trips" ? ["sac-" + row.id, "col-" + row.id] : [];
+    if (weg.length) d.karten_glaeser = d.karten_glaeser.filter(function (g) { return weg.indexOf(g.karte) < 0 });
     (CASCADE[t] || []).forEach(function (c) {
       var gone = d[c[0]].filter(function (r) { return r[c[1]] == row.id }); d[c[0]] = d[c[0]].filter(function (r) { return r[c[1]] != row.id });
       gone.forEach(function (g) { removeCascade(d, c[0], g) });
@@ -149,6 +151,14 @@
       if (old && !loeschen && r.event_id != old.event_id) return "Der Anlass lässt sich nicht ändern";
       if (tag(eventOf(d, r.event_id).starts_at) < day(0)) return "Der Anlass ist vorbei, die Anmeldung ist geschlossen";
       if (eventOf(d, r.event_id).organizer_id == r.member_id && (loeschen || r.status != "in")) return "Der Organisator ist immer dabei. Gib den Abend zuerst ab.";
+    }
+    if (t == "karten_glaeser" && !loeschen) {
+      var m = /^(karte|video|sac|col)-(.+)$/.exec(r.karte || ""), id = m && m[2], k;
+      if (!m) return 'new row for relation "karten_glaeser" violates check constraint';
+      if (m[1] == "karte" ? !d.cards.some(function (c) { return c.id == id })
+        : m[1] == "video" ? !((k = d.video_karten.find(function (x) { return x.id == id })) && videoSichtbar(d, k))
+        : m[1] == "sac" ? !d.trips.some(function (x) { return x.id == id && x.sacceri_id })
+        : !d.trip_photos.some(function (x) { return x.trip_id == id })) return "Diese Karte gibt es nicht";
     }
     if (t == "trips") {
       if ((!old || r.starts_on != old.starts_on) && r.starts_on < day(0)) return "Eine Reise kann nicht in der Vergangenheit liegen";

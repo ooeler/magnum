@@ -83,6 +83,11 @@ ol{list-style:none;margin:0;padding:0}
 .ph{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.ph>*{aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--bg);display:block}
 .ph img,.cimg img{width:100%;height:100%;object-fit:cover;display:block}
 .kgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.glas{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--ln2);background:transparent;color:var(--mu2);font:inherit;align-self:flex-start}
+.glas b{color:var(--tx);font-size:15px}.glas.on{border-color:#C23B55;color:#E8B95A;background:rgba(155,27,48,.18)}.glas.on svg{animation:glasvoll .35s ease-out}
+.regal{display:flex;flex-wrap:wrap;align-items:flex-end;gap:6px;color:#E8B95A;padding:4px 2px}
+.gl{display:inline-flex;align-items:center;gap:4px;color:#E8B95A}.kc .gl svg{height:17px;width:auto}
+@keyframes glasvoll{50%{transform:scale(1.25) rotate(-8deg)}}@media (prefers-reduced-motion:reduce){.glas.on svg{animation:none}}
 .kc{background:var(--card);border:2px solid var(--c,var(--ac));border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:8px;text-align:left;min-height:220px;color:var(--tx)}
 .kc.lock{border-style:dashed;border-color:var(--ln2);background:#1F1719;color:var(--mu)}
 .kc .r{font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--c,var(--ac))}
@@ -160,7 +165,7 @@ details summary{cursor:pointer;font-weight:700;list-style:none}details summary::
 // ═══════════════════════════════════════════════════════════════════════
 var C = window.MG_CONFIG || {}, sb = null, ME = null, PRF = null, PREV = null, MAINT = false, READY = false;
 var TABLES = ["settings", "profiles", "events", "rsvps", "magnums", "magnum_guests", "rides", "ride_passengers", "trips",
-  "trip_participants", "trip_photos", "proposals", "ballots", "posts", "post_prosts", "cards", "drinks", "sayings", "card_members", "gaeste", "karte_der_woche", "video_karten", "video_ziehungen",
+  "trip_participants", "trip_photos", "proposals", "ballots", "posts", "post_prosts", "cards", "drinks", "sayings", "card_members", "gaeste", "karte_der_woche", "video_karten", "video_ziehungen", "karten_glaeser",
   "saying_prosts", "restaurants", "restaurant_visits", "restaurant_ratings", "feedback", "admin_log"];
 var D = {}; TABLES.forEach(function (t) { D[t] = [] });
 var TAB = lsGet("mg_tab") || "termine", OV = null, SH = null, UI = {}, AUTH = { mode: "login" }, INVITE = null, INVLIST = null, NEWLINK = null, BUSY = false;
@@ -425,7 +430,7 @@ function videoBereich() {
     '<div class="bar"><i style="width:' + pct + '%"></i></div><span class="xs mu">Verdeckt im Stapel. Am Magnum-Abend zieht jede Person, die dabei ist, eine Karte.</span>';
   if (mine.length) h += '<div class="kgrid">' + mine.map(function (id) {
     var k = videoKarte(id); if (!k) return "";
-    return '<button class="kc" style="--c:#B79CE0;min-height:0" data-a="ov" data-t="video" data-id="' + k.id + '"><span class="r">Videokarte</span><span class="cimg" style="min-height:70px"><b style="font-size:30px">🎬</b></span><b style="font-size:14px;line-height:1.25">' + esc(k.title) + "</b></button>";
+    return '<button class="kc" style="--c:#B79CE0;min-height:0" data-a="ov" data-t="video" data-id="' + k.id + '"><span class="r">Videokarte</span><span class="cimg" style="min-height:70px"><b style="font-size:30px">🎬</b></span><b style="font-size:14px;line-height:1.25">' + esc(k.title) + "</b>" + glasZahl("video-" + k.id) + "</button>";
   }).join("") + "</div>";
   var eigene = D.video_karten.filter(function (k) { return k.created_by == me });
   if (eigene.length) h += '<span class="sm mu" data-test="video-eigene">Von dir im Stapel: ' + eigene.length + "</span>";
@@ -449,7 +454,7 @@ function videoView(k) {
   var ev = meine && D.events.find(function (e) { return e.id == meine.event_id });
   var loeschen = isAdmin() || (k.created_by == uid() && !Z.length);
   return '<div class="top"><button class="back" data-a="close" aria-label="Zurück">' + BACK + '</button></div><main><article class="kc" style="--c:#B79CE0;min-height:0"><span class="r">Videokarte</span>' + vid(k.path, true) +
-    '<span style="font:900 24px/1.15 var(--hf)">' + esc(k.title) + '</span><span class="sm mu">Von ' + esc(nm(k.created_by)) + (ev ? " · gezogen am " + esc(ev.title) : k.created_by == uid() ? " · liegt im Stapel" : "") + "</span></article>" +
+    '<span style="font:900 24px/1.15 var(--hf)">' + esc(k.title) + '</span><span class="sm mu">Von ' + esc(nm(k.created_by)) + (ev ? " · gezogen am " + esc(ev.title) : k.created_by == uid() ? " · liegt im Stapel" : "") + "</span></article>" + glasKnopf("video-" + k.id) +
     (loeschen ? '<button class="btn ghost" data-a="delvideo" data-id="' + k.id + '">Videokarte löschen</button>' : "") + "</main>";
 }
 function upload(area, file, onProgress) {
@@ -1049,6 +1054,38 @@ function allCards() {
   });
   return L;
 }
+// ═════════════ Volle Gläser (Likes) für Karten ═════════════
+var GLAS_VOLL = '<svg width="22" height="26" viewBox="0 0 24 28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5.4 5h13.2c.3 1.5.4 2.8.4 4a7 7 0 0 1-14 0c0-1.2.1-2.5.4-4z" fill="#9B1B30" stroke="none"/><path d="M6 2h12c.6 2 1 4.6 1 7a7 7 0 0 1-14 0c0-2.4.4-5 1-7z"/><path d="M12 16v8M7.5 26h9"/></svg>', GLAS_LEER = '<svg width="22" height="26" viewBox="0 0 24 28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12c.6 2 1 4.6 1 7a7 7 0 0 1-14 0c0-2.4.4-5 1-7z"/><path d="M12 16v8M7.5 26h9"/></svg>';
+var GLAS_FLASCHE = '<svg width="14" height="26" viewBox="0 0 14 28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 1h4v6c0 1.5 3 3 3 6v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V13c0-3 3-4.5 3-6z"/><path d="M2.8 14.5h8.4V25a1 1 0 0 1-1 1H3.8a1 1 0 0 1-1-1z" fill="#9B1B30" stroke="none"/></svg>';
+// 4 volle Gläser geben eine Flasche: 9 Gläser = 2 Flaschen und 1 Glas
+function glasMenge(n) {
+  var f = Math.floor(n / 4), g = n % 4, t = [];
+  if (f) t.push(f + (f == 1 ? " Flasche" : " Flaschen"));
+  if (g || !f) t.push(g + (g == 1 ? " volles Glas" : " volle Gläser"));
+  return t.join(" und ");
+}
+function glasIcons(n) {
+  var f = Math.floor(n / 4), g = n % 4;
+  return (f ? '<span class="gl" data-test="flaschen">' + GLAS_FLASCHE + f + "</span>" : "") + (g ? '<span class="gl">' + GLAS_VOLL + g + "</span>" : "");
+}
+// In der Karte: die Flaschen und Gläser nebeneinander wie auf einem Regal (höchstens 12 Flaschen, dann eine Zahl)
+function glasRegal(n) {
+  var f = Math.floor(n / 4), g = n % 4, h = "";
+  for (var i = 0; i < Math.min(f, 12); i++) h += GLAS_FLASCHE;
+  if (f > 12) h += '<b class="sm">+' + (f - 12) + "</b>";
+  for (var j = 0; j < g; j++) h += GLAS_VOLL;
+  return '<div class="regal" data-test="regal" aria-hidden="true">' + h + "</div>";
+}
+function glasKey(c) { return c.r == "secret" || c.locked ? null : /^(sac|col)-/.test(c.id) ? c.id : "karte-" + c.id }
+function glaeser(key) { return key ? D.karten_glaeser.filter(function (g) { return g.karte == key }) : [] }
+// Kleine Anzeige auf der Kachel (die Kachel ist selbst ein Knopf)
+function glasZahl(key) { var n = glaeser(key).length; return n ? '<span class="xs row" style="gap:8px" data-test="glaeser" aria-label="' + glasMenge(n) + '">' + glasIcons(n) + "</span>" : "" }
+function glasKnopf(key) {
+  var L = glaeser(key), on = L.some(function (g) { return g.member_id == uid() });
+  return '<div class="col" style="gap:6px"><button class="glas' + (on ? " on" : "") + '" data-a="glas" data-id="' + esc(key) + '" aria-pressed="' + on + '" aria-label="' + (on ? "Glas zurücknehmen" : "Volles Glas geben") + ", " + glasMenge(L.length) + '">' + (on ? GLAS_VOLL : GLAS_LEER) + '<span data-test="glas-menge">' + glasMenge(L.length) + "</span></button>" +
+    (L.length >= 4 ? glasRegal(L.length) : "") +
+    (L.length ? '<span class="xs mu" data-test="glas-von">Prost von ' + L.map(function (g) { return esc(nm(g.member_id)) }).join(", ") + "</span>" : "") + "</div>";
+}
 function karten() {
   var all = allCards(), f = UI.kf || "alle", L = all.filter(function (c) { return f == "alle" || c.r == f });
   var h = videoBereich() + '<div class="row sb"><h2>Sammelkarten</h2><span class="sm mu">' + L.length + " von " + all.length + " Karten</span></div>";
@@ -1059,7 +1096,7 @@ function karten() {
     var col = RAR[c.r][1];
     if (c.locked) return '<button class="kc lock" data-a="lockinfo" data-v="' + esc(c.kind + ": " + c.need) + '"><span class="r" style="color:var(--mu2)">' + esc(c.tag) + '</span><span class="cimg"><b style="color:var(--mu2)">?</b></span><b>Gesperrt</b><span class="xs">' + esc(c.sub) + "</span></button>";
     var pic = c.collage ? '<span class="coll">' + c.collage.slice(0, 4).map(function (p) { return "<span>" + img(p, "Reisefoto") + "</span>" }).join("") + "</span>" : c.photo ? img(c.photo, c.title) : "<b>" + esc(c.r == "secret" ? "★" : (c.title.charAt(0) || "?")) + "</b>";
-    return '<button class="kc" style="--c:' + col + '" data-a="ov" data-t="card" data-id="' + esc(c.id) + '"><span class="r">' + esc(c.tag || RAR[c.r][0]) + '</span><span class="cimg">' + pic + '</span><b style="font-size:14px;line-height:1.25">' + esc(c.title) + '</b><span class="xs mu">' + esc(c.sub) + "</span></button>";
+    return '<button class="kc" style="--c:' + col + '" data-a="ov" data-t="card" data-id="' + esc(c.id) + '"><span class="r">' + esc(c.tag || RAR[c.r][0]) + '</span><span class="cimg">' + pic + '</span><b style="font-size:14px;line-height:1.25">' + esc(c.title) + '</b><span class="xs mu">' + esc(c.sub) + "</span>" + glasZahl(glasKey(c)) + "</button>";
   }).join("") + "</div>";
   h += UI.newCard ? cardForm() : '<button class="btn dash" data-a="ui" data-k="newCard" data-v="1">+ Sammelkarte erstellen · +10</button>';
   return h;
@@ -1080,7 +1117,7 @@ function cardView(c) {
   return '<div class="top"><button class="back" data-a="close" aria-label="Zurück">' + BACK + '</button></div><main><article class="kc" style="--c:' + col + ';min-height:0;box-shadow:0 0 0 6px var(--bg),0 0 0 7px ' + col + '"><span class="r">' + esc(c.tag || RAR[c.r][0]) + "</span>" + pic +
     '<span style="font:900 24px/1.15 var(--hf)">' + esc(c.title) + '</span><span class="sm mu">' + esc([c.sub, c.place].filter(Boolean).join(" · ")) + "</span>" + (c.story ? '<p style="margin:0;line-height:1.5">' + esc(c.story) + "</p>" : "") +
     (c.who ? '<span class="sm mu" style="border-top:1px solid var(--ln);padding-top:10px">Beteiligt: ' + esc(c.who) + "</span>" : "") + "</article>" +
-    kartePersonen(c) + (c.own ? '<button class="btn ghost" data-a="delcard" data-id="' + c.id + '">Karte löschen</button>' : "") + "</main>";
+    (glasKey(c) ? glasKnopf(glasKey(c)) : "") + kartePersonen(c) + (c.own ? '<button class="btn ghost" data-a="delcard" data-id="' + c.id + '">Karte löschen</button>' : "") + "</main>";
 }
 // Personen auf der Karte: Wer eingetragen ist, bekommt +10 Punkte
 function kartePersonen(c) {
@@ -1149,7 +1186,7 @@ function pushPlan() {
   L.sort(function (a, b) { return a.tag < b.tag ? -1 : a.tag > b.tag ? 1 : 0 });
   return '<section class="card" aria-label="Benachrichtigungen"><span class="b" style="font-size:15px">Benachrichtigungen</span>' +
     '<span class="sm mu">Push-Nachrichten kommen einmal am Tag um ' + pushUhr(heute) + ":</span>" +
-    '<ul class="sm" style="margin:0;padding-left:18px;line-height:1.6"><li><b>7 Tage vor jedem Anlass</b>: Erinnerung zum Anmelden</li><li><b>Montags</b>: die Karte der Woche</li></ul><span class="sm mu" style="margin-top:4px">Sofort:</span><ul class="sm" style="margin:0;padding-left:18px;line-height:1.6"><li><b>Neuer Anlass</b>: an alle</li><li><b>Jemand organisiert oder übernimmt einen Abend</b>: an alle</li><li><b>An- und Abmeldungen</b>: an den Organisator des Anlasses</li><li><b>Jederzeit</b>: die Test-Benachrichtigung, die du selbst auslöst (Knopf unten)</li></ul>' +
+    '<ul class="sm" style="margin:0;padding-left:18px;line-height:1.6"><li><b>7 Tage vor jedem Anlass</b>: Erinnerung zum Anmelden</li><li><b>Montags</b>: die Karte der Woche</li></ul><span class="sm mu" style="margin-top:4px">Sofort:</span><ul class="sm" style="margin:0;padding-left:18px;line-height:1.6"><li><b>Neuer Anlass</b>: an alle</li><li><b>Jemand organisiert oder übernimmt einen Abend</b>: an alle</li><li><b>An- und Abmeldungen</b>: an den Organisator und alle, die schon dabei sind</li><li><b>Volles Glas für deine Karte</b>: an dich, pro Person einmal</li><li><b>Jederzeit</b>: die Test-Benachrichtigung, die du selbst auslöst (Knopf unten)</li></ul>' +
     '<span class="lbl" style="margin-top:6px">Als Nächstes</span>' +
     (L.length ? '<div class="lst" data-test="push-plan">' + L.slice(0, 4).map(function (x) {
       return '<div class="row sb sm"><span class="grow">' + esc(x.was) + '</span><b style="white-space:nowrap">' + esc(pushTag(x.tag)) + " · " + pushUhr(x.tag) + "</b></div>";
@@ -1384,6 +1421,10 @@ var ACT = {
     after(on ? sb.from("saying_prosts").delete().eq("saying_id", d.id).eq("member_id", uid()) : sb.from("saying_prosts").insert({ saying_id: d.id, member_id: uid() }));
   },
   spnext: function () { UI.spOff = (UI.spOff || 0) + 1; render() },
+  glas: function (d) {
+    var on = D.karten_glaeser.some(function (g) { return g.karte == d.id && g.member_id == uid() });
+    after(on ? sb.from("karten_glaeser").delete().eq("karte", d.id).eq("member_id", uid()) : pushAnstoss(sb.from("karten_glaeser").insert({ karte: d.id, member_id: uid() })), on ? null : "Prost! Ein volles Glas für diese Karte 🍷");
+  },
   pprost: function (d) {
     var on = D.post_prosts.some(function (p) { return p.post_id == d.id && p.member_id == uid() });
     after(on ? sb.from("post_prosts").delete().eq("post_id", d.id).eq("member_id", uid()) : sb.from("post_prosts").insert({ post_id: d.id, member_id: uid() }), on ? null : "Prost!");
