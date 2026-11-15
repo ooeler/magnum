@@ -540,6 +540,35 @@ with x as (delete from public.video_karten where id in (select karte_id from pub
 select pg_temp.check((select count(*) from x) = 0, 'Gezogene Karte löscht der Ersteller nicht mehr');
 with x as (delete from public.video_karten where id not in (select karte_id from public.video_ziehungen) returning 1)
 select pg_temp.check((select count(*) from x) = 1, 'Ungezogene eigene Karte löschbar');
+
+-- Sofortige Push-Nachrichten: Trigger legen in die Warteschlange, die App sieht sie nicht
+reset role;
+delete from public.push_queue;
+set role authenticated;
+select pg_temp.als('A');
+insert into public.events (id, title, starts_at) values ('20000000-0000-0000-0000-000000000009', 'Push-Abend', now() + interval '20 days');
+select pg_temp.verboten($q$select * from public.push_queue$q$, 'Warteschlange nicht über die App lesbar');
+select pg_temp.als('B');
+select public.claim_organizer('20000000-0000-0000-0000-000000000009');
+select pg_temp.als('C');
+insert into public.rsvps (event_id, status) values ('20000000-0000-0000-0000-000000000009', 'in');
+update public.rsvps set status = 'in' where event_id = '20000000-0000-0000-0000-000000000009' and member_id = public.uid();
+update public.rsvps set status = 'out' where event_id = '20000000-0000-0000-0000-000000000009' and member_id = public.uid();
+select pg_temp.als('D');
+select public.claim_organizer('20000000-0000-0000-0000-000000000009', '00000000-0000-0000-0000-00000000000b');
+reset role;
+select pg_temp.als('');
+select pg_temp.check((select count(*) from public.push_queue where titel = 'Neuer Anlass: Push-Abend' and an is null and ausser = '00000000-0000-0000-0000-00000000000a') = 1, 'Neuer Anlass: an alle ausser wer ihn erfasst');
+select pg_temp.check((select count(*) from public.push_queue where titel like 'Push-Abend: Beat organisiert' and ausser = '00000000-0000-0000-0000-00000000000b') = 1, 'Neuer Organisator: an alle ausser ihn');
+select pg_temp.check((select count(*) from public.push_queue where titel = 'Anmeldung: Push-Abend' and an = '00000000-0000-0000-0000-00000000000b' and text like 'Chris ist dabei.%') = 1, 'Anmeldung: an den Organisator, einmal');
+select pg_temp.check((select count(*) from public.push_queue where titel = 'Abmeldung: Push-Abend' and an = '00000000-0000-0000-0000-00000000000b') = 1, 'Abmeldung: an den Organisator');
+select pg_temp.check((select count(*) from public.push_queue where titel like 'Push-Abend: Dani übernimmt' and text like '%von Beat%') = 1, 'Übernahme: an alle, mit dem bisherigen Organisator');
+select pg_temp.check((select count(*) from public.push_queue where an = '00000000-0000-0000-0000-00000000000d' or (an = '00000000-0000-0000-0000-00000000000b' and text like 'Beat%')) = 0, 'Organisator bekommt keine Meldung über sich selbst');
+select pg_temp.check((select count(*) from public.push_queue) = 5, 'Genau fünf Meldungen');
+delete from public.push_queue;
+select public.magnum_termine();
+select pg_temp.check((select count(*) from public.push_queue where titel like 'Neuer Anlass%') = 0, 'Automatische Magnum-Serie meldet keinen neuen Anlass');
+set role authenticated;
 reset role;
 select pg_temp.als('');
 

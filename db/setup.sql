@@ -748,6 +748,71 @@ create table if not exists public.push_log (
   primary key (art, ref)
 );
 alter table public.push_log enable row level security;
+-- Warteschlange für sofortige Push-Nachrichten. Trigger legen ab, die Function verschickt (/push/senden, täglich als Rückfall).
+-- an: nur an diese Person (sonst an alle); ausser: diese Person nicht (wer es ausgelöst hat).
+create table if not exists public.push_queue (
+  id         bigint generated always as identity primary key,
+  titel      text not null,
+  text       text not null,
+  url        text not null default './',
+  an         uuid references public.profiles(id) on delete cascade,
+  ausser     uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  sent_at    timestamptz
+);
+alter table public.push_queue enable row level security;
+
+create or replace function public.push_name(p uuid) returns text
+language sql stable security definer set search_path = public as $$
+  select coalesce(nullif(display_name, ''), 'Jemand') from public.profiles where id = p
+$$;
+create or replace function public.push_datum(t timestamptz) returns text
+language sql immutable set search_path = public as $$
+  select (array['So','Mo','Di','Mi','Do','Fr','Sa'])[extract(dow from t at time zone 'Europe/Zurich')::int + 1] || ' '
+    || to_char(t at time zone 'Europe/Zurich', 'DD.MM. "um" HH24:MI')
+$$;
+
+-- Neuer Anlass (von einem Mitglied erfasst, nicht die automatische Magnum-Serie) und neuer Organisator: an alle ausser wer es war
+create or replace function public.push_event() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.starts_at < now() then return new; end if;
+  if tg_op = 'INSERT' and new.created_by is not null then
+    insert into public.push_queue (titel, text, ausser)
+    values ('Neuer Anlass: ' || new.title, public.push_datum(new.starts_at) || coalesce(' · ' || new.location, '') || '. Bist du dabei?', new.created_by);
+  elsif tg_op = 'UPDATE' and new.organizer_id is not null and new.organizer_id is distinct from old.organizer_id
+     -- Wer gerade einen Anlass erfasst und gleich selbst organisiert, bekommt keine zweite Meldung
+     and not (old.organizer_id is null and new.created_by = new.organizer_id and new.created_at > now() - interval '5 minutes') then
+    insert into public.push_queue (titel, text, ausser)
+    values (new.title || ': ' || public.push_name(new.organizer_id) || case when old.organizer_id is null then ' organisiert' else ' übernimmt' end,
+            case when old.organizer_id is null then public.push_name(new.organizer_id) || ' organisiert den Abend am ' || public.push_datum(new.starts_at) || '.'
+                 else public.push_name(new.organizer_id) || ' übernimmt den Abend von ' || public.push_name(old.organizer_id) || '.' end,
+            new.organizer_id);
+  end if;
+  return new;
+end $$;
+drop trigger if exists push_event on public.events;
+create trigger push_event after insert or update of organizer_id on public.events for each row execute function public.push_event();
+
+-- An- und Abmeldungen: an den Organisator des Anlasses (nicht an sich selbst)
+create or replace function public.push_rsvp() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare e public.events; n int;
+begin
+  if tg_op = 'UPDATE' and new.status = old.status then return new; end if;
+  select * into e from public.events where id = new.event_id;
+  if e.organizer_id is null or e.organizer_id = new.member_id or e.starts_at < now() then return new; end if;
+  select count(*) into n from public.rsvps where event_id = new.event_id and status = 'in';
+  insert into public.push_queue (titel, text, an)
+  values (case new.status when 'in' then 'Anmeldung: ' when 'out' then 'Abmeldung: ' else 'Virtuell dabei: ' end || e.title,
+          public.push_name(new.member_id) || case new.status when 'in' then ' ist dabei.' when 'out' then ' hat sich abgemeldet.' else ' ist virtuell dabei und spendiert eine Magnum.' end
+            || ' Angemeldet: ' || n || '.',
+          e.organizer_id);
+  return new;
+end $$;
+drop trigger if exists push_rsvp on public.rsvps;
+create trigger push_rsvp after insert or update of status on public.rsvps for each row execute function public.push_rsvp();
+
 -- Jede Woche wird eine Sammelkarte aufgedeckt
 create table if not exists public.karte_der_woche (
   woche   date primary key,
@@ -900,7 +965,7 @@ end $$;
 -- Die Data API läuft als Rolle "authenticated". Was sie darf, regeln danach Spalten-Rechte und Policies.
 grant usage on schema public to anonymous, authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
-revoke all on table public.invites, public.magnum_serie, public.push_config, public.push_abos, public.push_log from anonymous, authenticated;
+revoke all on table public.invites, public.magnum_serie, public.push_config, public.push_abos, public.push_log, public.push_queue from anonymous, authenticated;
 revoke insert, update, delete on public.karte_der_woche from authenticated;
 revoke insert, update, delete on public.video_ziehungen from authenticated;
 revoke update on public.video_karten from authenticated;
@@ -1054,6 +1119,7 @@ revoke execute on function public.check_ride_passenger() from public, anonymous,
 revoke execute on function public.heute() from public, anonymous, authenticated;
 revoke execute on function public.check_event() from public, anonymous, authenticated;
 revoke execute on function public.check_rsvp() from public, anonymous, authenticated;
+revoke execute on function public.push_event(), public.push_rsvp(), public.push_name(uuid), public.push_datum(timestamptz) from public, anonymous, authenticated;
 revoke execute on function public.check_trip() from public, anonymous, authenticated;
 revoke execute on function public.check_trip_participant() from public, anonymous, authenticated;
 revoke execute on function public.set_created_at() from public, anonymous, authenticated;
@@ -1099,7 +1165,7 @@ language plpgsql stable set search_path = public as $$
 declare rest text[]; frei text[]; fertig text[] := '{}';
 begin
   select array_agg(c.relname::text) into rest from pg_class c join pg_namespace n on n.oid = c.relnamespace
-  where n.nspname = 'public' and c.relkind = 'r' and c.relname not in ('backups', 'schema_migrations', 'app_status', 'sync_stand', 'push_config', 'push_abos', 'push_log');
+  where n.nspname = 'public' and c.relkind = 'r' and c.relname not in ('backups', 'schema_migrations', 'app_status', 'sync_stand', 'push_config', 'push_abos', 'push_log', 'push_queue');
   while cardinality(rest) > 0 loop
     select array_agg(t) into frei from unnest(rest) t
     where not exists (
