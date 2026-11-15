@@ -80,5 +80,18 @@ jobs:
           tag="v$ma.$mi.$pa"; echo "Neue Version: $tag (vorher $last)"
           gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target main --title "Magnum ${tag#v}" --generate-notes
           # Ein mit GITHUB_TOKEN erstelltes Release startet keine Workflows → Deployment explizit anstossen.
+          # Ist der gemergte Stand auf main Datei fuer Datei identisch mit dem hier getesteten (gleicher Git-Tree),
+          # muss das Release die Tests nicht nochmals laufen lassen. Ist main inzwischen weitergelaufen
+          # (anderer PR dazwischen gemergt), weicht der Tree ab und das Release testet wie bisher voll.
+          getestet=""
+          merged=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json mergeCommit --jq '.mergeCommit.oid' || true)
+          baum_main=$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$merged" --jq '.tree.sha' 2>/dev/null || true)
+          baum_test=$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$GITHUB_SHA" --jq '.tree.sha' 2>/dev/null || true)
+          if [ -n "$baum_test" ] && [ "$baum_main" = "$baum_test" ]; then
+            getestet="$baum_test"; echo "main = getesteter Stand ($baum_test) → Release ohne zweiten Testlauf"
+          else
+            echo "main weicht vom getesteten Stand ab → Release testet nochmals"
+          fi
           # Von main aus: GitHub Pages nimmt nur Deployments von main an, keine von Tags.
-          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref main -f grund="$TITLE ($tag, #$PR)"
+          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref main -f grund="$TITLE ($tag, #$PR)" \
+            -f getestet="$getestet" -f lauf="$GITHUB_RUN_ID"

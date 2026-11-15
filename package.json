@@ -10,7 +10,9 @@
     "test:ui": "playwright test --ui",
     "test:db": "bash scripts/db-test.sh",
     "build": "node scripts/build.mjs",
-    "test:neon": "playwright test -c playwright.neon.config.js"
+    "test:neon": "playwright test -c playwright.neon.config.js",
+    "test:schnell": "playwright test --project=android --project=desktop",
+    "test:desktop": "playwright test --project=desktop"
   },
   "dependencies": {
     "@neon/config": "1.10.0",

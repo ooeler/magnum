@@ -19,8 +19,9 @@ test.describe("Wischen zwischen den Reitern", () => {
     await login(page);
     await expect(aktiv(page)).toHaveText("Termine");
     await wisch(page, "main h2", 300, 300, 120, 310);
+    // Die Gleit-Klasse gibt es nur bis zum nächsten Neuzeichnen: gleich nach dem Wisch lesen
+    expect(await page.evaluate(() => document.querySelector("main").className)).toMatch(/vonr/);
     await expect(aktiv(page)).toHaveText("Reisen");
-    await expect(page.locator("main")).toHaveClass(/vonr/);
     await wisch(page, "main", 100, 300, 300, 290);
     await expect(aktiv(page)).toHaveText("Termine");
     await wisch(page, "main", 100, 300, 300, 290);       // vor Termine gibt es nichts
