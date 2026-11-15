@@ -7,7 +7,7 @@
 // Fotos     /fotos, /fotos/links  privater Speicher: JPEG bis 5 MB, Videokarten MP4/WebM bis 12 MB, nur Mitglieder
 // Backup    /backup           täglicher Function Trigger (neon.ts), legt auch die nächsten Magnum-Abende an
 //                             und räumt Videodateien gelöschter Videokarten weg
-// Push      /push/*, /taeglich  Abo speichern, Test-Push, täglich: Erinnerung 7 Tage vor dem Anlass, montags die Karte der Woche
+// Push      /push/*, /taeglich  Abo speichern, Test-Push, täglich: Erinnerung 7 Tage vor dem Anlass, montags die Karte der Woche (für 3 Mitglieder)
 //                             /push/senden: verschickt die Warteschlange (neuer Anlass, Organisator, An- und Abmeldungen)
 import { attachDatabasePool } from "@neon/functions";
 import { parseTriggerDelivery } from "@neon/functions/triggers";
@@ -20,7 +20,7 @@ import { Pool } from "pg";
 import { checkFoto, checkPfad, checkVideo, istVideo, MAX_FOTO, MAX_VIDEO, verwaisteVideos, videoTyp } from "./fotos.mjs";
 import { checkJoin, checkToken, hashToken, INVITE_DAYS, joinError, newToken } from "./invite.mjs";
 import webpush from "web-push";
-import { checkAbo, erinnerungen, karteWaehlen, tagZuerich, wochenStart } from "./push.mjs";
+import { checkAbo, dreiWaehlen, erinnerungen, karteWaehlen, tagZuerich, wochenStart } from "./push.mjs";
 import { safeEqual } from "./sicherheit.mjs";
 import { buildIssue, DAILY_LIMIT } from "./vorschlag.mjs";
 
@@ -357,7 +357,17 @@ app.post("/taeglich", async (c) => {
     const id = karteWaehlen(karten, bisher);
     if (id) {
       const [k] = await q("insert into public.karte_der_woche (woche, card_id) values ($1, $2) on conflict do nothing returning card_id", [woche, id]);
-      if (k) { const [c2] = await q("select title from public.cards where id = $1", [id]); await senden("Karte der Woche", c2.title); erg.karte = id }
+      if (k) {
+        // Aufgedeckt nur für 3 Mitglieder (wer zuletzt am seltensten dran war). Nur sie bekommen die Push-Nachricht.
+        const [c2] = await q("select title from public.cards where id = $1", [id]);
+        const mitglieder = (await q("select id from public.profiles")).map((x) => x.id);
+        const zuletzt = (await q("select member_id from public.karte_der_woche_fuer where woche > $1::date - 84", [woche])).map((x) => x.member_id);
+        for (const m of dreiWaehlen(mitglieder, zuletzt)) {
+          await q("insert into public.karte_der_woche_fuer (woche, member_id) values ($1, $2) on conflict do nothing", [woche, m]);
+          await senden("Karte der Woche: für dich aufgedeckt", c2.title + " · Nur du und zwei andere sehen sie diese Woche.", "./", m);
+        }
+        erg.karte = id;
+      }
     }
   }
   return c.json(erg);
