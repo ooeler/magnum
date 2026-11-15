@@ -20,7 +20,7 @@ import { Pool } from "pg";
 import { checkFoto, checkPfad, checkVideo, istVideo, MAX_FOTO, MAX_VIDEO, verwaisteVideos, videoTyp } from "./fotos.mjs";
 import { checkJoin, checkToken, hashToken, INVITE_DAYS, joinError, newToken } from "./invite.mjs";
 import webpush from "web-push";
-import { checkAbo, dreiWaehlen, stundeZuerich, erinnerungen, karteWaehlen, tagZuerich, wochenStart } from "./push.mjs";
+import { checkAbo, dreiWaehlen, monatsNachricht, stundeZuerich, erinnerungen, karteWaehlen, tagZuerich, wochenStart } from "./push.mjs";
 import { safeEqual } from "./sicherheit.mjs";
 import { buildIssue, DAILY_LIMIT } from "./vorschlag.mjs";
 
@@ -372,7 +372,19 @@ app.post("/taeglich", async (c) => {
   if (!t.ok) return c.json({ error: t.error }, t.error === "invalid_body" ? 400 : 401);
   await q("select public.magnum_termine()");
   await warteschlange().catch((e) => console.error("Warteschlange", e));
-  const heute = tagZuerich(new Date()), erg = { erinnert: 0, karte: null as string | null };
+  const heute = tagZuerich(new Date()), erg = { erinnert: 0, karte: null as string | null, monat: 0 };
+  // Am 3. des Monats: «Nur noch x Tage bis zum nächsten Magnum», persönlich mit «Melde dich an» und «Organisiere»
+  if (heute.slice(8, 10) == "03" && (await einmal("monat3", heute.slice(0, 7)))) {
+    const [m] = await q(`select id, title, organizer_id, (starts_at at time zone 'Europe/Zurich')::date - $1::date as tage
+      from public.events where (starts_at at time zone 'Europe/Zurich')::date >= $1::date order by (title like '%-Magnum') desc, starts_at limit 1`, [heute]);
+    if (m) {
+      const dabei = new Set((await q("select member_id from public.rsvps where event_id = $1 and status in ('in', 'virtual')", [m.id])).map((x) => x.member_id));
+      for (const p of await q("select id from public.profiles")) {
+        const n = monatsNachricht(m.title, m.tage, dabei.has(p.id), !!m.organizer_id);
+        erg.monat += await senden(n.titel, n.text, "./", p.id);
+      }
+    }
+  }
   const E = await q("select id, title, starts_at from public.events where starts_at between now() + interval '5 days' and now() + interval '9 days'");
   for (const e of erinnerungen(E, heute)) {
     if (await einmal("erinnerung", e.id)) { await senden("In 7 Tagen: " + e.title, "Bist du dabei? Melde dich in der App an."); erg.erinnert++ }

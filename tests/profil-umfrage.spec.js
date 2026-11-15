@@ -148,3 +148,12 @@ base.test("Magnum-Abend: Stunde in Zürich (immer 18 Uhr, Sommer wie Winter)", a
   base.expect(P.stundeZuerich("2026-07-01T16:00:00Z")).toBe(18);   // Sommer: 16 Uhr UTC
   base.expect(P.stundeZuerich("2026-07-01T17:00:00Z")).toBe(19);
 });
+
+base.test("Am 3. des Monats: Text je nach Anmeldung und Organisator", async () => {
+  const P = await import("../functions/push.mjs");
+  base.expect(P.monatsNachricht("November-Magnum", 24, false, false)).toEqual({ titel: "Nur noch 24 Tage bis zum November-Magnum", text: "Melde dich an! Organisiere den Abend, noch niemand ist eingetragen." });
+  base.expect(P.monatsNachricht("November-Magnum", 24, true, false).text).toBe("Organisiere den Abend, noch niemand ist eingetragen.");
+  base.expect(P.monatsNachricht("November-Magnum", 24, false, true).text).toBe("Melde dich an!");
+  base.expect(P.monatsNachricht("November-Magnum", 24, true, true).text).toBe("Du bist angemeldet. Bis bald! 🍷");
+  base.expect(P.monatsNachricht("November-Magnum", 1, true, true).titel).toBe("Morgen ist November-Magnum");
+});
