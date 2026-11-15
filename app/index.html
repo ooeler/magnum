@@ -1096,11 +1096,11 @@ function club() {
   h += '<h2>Die Mitglieder <span class="sm mu" style="font-family:Inter">' + D.profiles.length + "</span></h2><div class=\"g2\">" + D.profiles.slice().sort(function (a, b) { return nm(a.id).localeCompare(nm(b.id), "de") }).map(function (p) {
     var s = stats(p.id);
     return '<button type="button" class="mem" data-a="ov" data-t="member" data-id="' + p.id + '"><span class="av">' + esc(ini(p.id)) + '</span><b>' + esc(nm(p.id)) + "</b>" + (p.nickname ? '<span class="nick">«' + esc(p.nickname) + "»</span>" : "") + '<span class="xs mu row" style="gap:4px" data-test="mem-geraet">' + geraetIcon(p) + deviceText(p) + "</span>" +
-      '<span class="sm mu">' + esc(p.role_title) + '</span><span class="xs mu b" style="letter-spacing:1px;text-transform:uppercase">Trinkfestigkeit</span><div style="width:100%">' + segs(s.drink.level) + "</div></button>";
+      '<span class="xs mu b" style="letter-spacing:1px;text-transform:uppercase">Trinkfestigkeit</span><div style="width:100%">' + segs(s.drink.level) + "</div></button>";
   }).join("") + "</div>";
   h += invites() + feedback();
   if (isAdmin()) h += '<section class="card" style="border-color:var(--lila)" aria-label="Umfrage"><span class="b" style="color:var(--lila)">Umfrage</span>' + umfrageErgebnis() + "</section>";
-  if (isAdmin()) h += '<section class="card" style="border-color:var(--lila)"><span class="b" style="color:var(--lila)">Administration</span><span class="sm mu">Gerätetyp und Funktion passt du im Profil des Mitglieds an. Jede Änderung wird hier protokolliert.</span>' +
+  if (isAdmin()) h += '<section class="card" style="border-color:var(--lila)"><span class="b" style="color:var(--lila)">Administration</span><span class="sm mu">Rolle und Gerätetyp passt du im Profil des Mitglieds an. Jede Änderung wird hier protokolliert.</span>' +
     (D.admin_log.length ? '<div class="lst">' + D.admin_log.slice().sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1 }).slice(0, 10).map(function (l) { return '<span class="sm mu">' + esc(nm(l.member_id)) + ": " + esc(l.action) + " · durch " + esc(nm(l.admin_id)) + " · " + esc(fDate(l.created_at)) + "</span>" }).join("") + "</div>" : '<span class="empty">Noch keine Änderungen.</span>') + "</section>";
   h += '<button class="btn ghost" data-a="ov" data-t="member" data-id="' + me + '">Mein Profil ansehen und bearbeiten</button>';
   h += installCard();
@@ -1148,7 +1148,7 @@ function meinProfil() {
 function memberView(p) {
   var me = uid(), s = stats(p.id), self = p.id == me;
   var h = '<div class="top"><button class="back" data-a="close" aria-label="Zurück">' + BACK + '</button><div class="row"><span class="av l">' + esc(ini(p.id)) + '</span><div class="col" style="gap:2px"><span style="font:900 26px/1.1 var(--hf)">' + esc(nm(p.id)) + "</span>" +
-    (p.nickname ? '<span class="nick" style="font-size:16px" data-test="nickname">«' + esc(p.nickname) + "»</span>" : "") + '<span class="sm mu">' + esc(p.role_title) + (p.since_year ? " · seit " + p.since_year : "") + "</span></div></div></div><main>";
+    (p.nickname ? '<span class="nick" style="font-size:16px" data-test="nickname">«' + esc(p.nickname) + "»</span>" : "") + (p.since_year ? '<span class="sm mu">Mitglied seit ' + p.since_year + "</span>" : "") + "</div></div></div><main>";
   h += '<section class="card"><div class="row sb xs mu b" style="letter-spacing:1px;text-transform:uppercase"><span>Trinkfestigkeit · errechnet</span><span style="color:var(--ac)">' + esc(s.drink.label) + "</span></div>" + segs(s.drink.level, 12) + '<span class="sm mu">' + esc(s.drink.basis) + "</span>" +
     '<div class="g3"><div class="tile"><b>' + s.points + '</b><span>Punkte</span></div><div class="tile"><b>' + s.streak + '</b><span>Streak · Rekord ' + s.rekord + '</span></div><div class="tile"><b>' + s.trips + '</b><span>Reisen</span></div>' +
     '<div class="tile"><b>' + s.virt + '</b><span>Magnums spendiert</span></div><div class="tile"><b>' + s.cards + "</b><span>Karten</span></div></div>" +
@@ -1156,10 +1156,11 @@ function memberView(p) {
     '<span><span class="mu">Gerät: </span>' + geraetIcon(p) + ' <span data-test="geraet">' + deviceText(p) + "</span></span>" +
     (p.invited_by ? '<span><span class="mu">Eingeladen von: </span>' + esc(nm(p.invited_by)) + "</span>" : "") + "</div></section>";
   if (isAdmin()) h += '<section class="card" style="border-color:var(--lila)" aria-label="Rolle"><span class="lbl" style="color:var(--lila)">Rolle</span><div class="g2">' +
-    [["0", "Mitglied"], ["1", "Administrator"]].map(function (r) { var on = !!p.is_admin == (r[0] == "1"); return '<button class="pill' + (on ? " on" : "") + '" data-a="setadmin" data-id="' + p.id + '" data-v="' + r[0] + '" aria-pressed="' + on + '">' + r[1] + "</button>" }).join("") + "</div></section>";
+    [["0", "Mitglied"], ["1", "Administrator"]].map(function (r) { var on = !!p.is_admin == (r[0] == "1"); return '<button class="pill' + (on ? " on" : "") + '" data-a="setadmin" data-id="' + p.id + '" data-v="' + r[0] + '" aria-pressed="' + on + '">' + r[1] + "</button>" }).join("") + "</div>" +
+    '<span class="xs mu" data-test="admin-rechte">Ein Administrator kann zusätzlich: Einladungen erstellen und zurückziehen, Rollen und Gerätetypen ändern, vergangene Anlässe und Anwesenheit nachtragen, die Magnum-Kasse öffnen, Inhalte anderer löschen und die Umfrage-Ergebnisse sehen. Alle Änderungen werden protokolliert.</span></section>';
   if (isAdmin()) h += '<section class="card" style="border-color:var(--lila)" aria-label="Admin"><span class="lbl" style="color:var(--lila)">Admin · Gerätetyp anpassen</span><div class="g2">' +
     [["iphone", "iPhone"], ["android", "Android"]].map(function (d) { var on = p.device == d[0]; return '<button class="pill' + (on ? " on" : "") + '" style="' + (on ? "background:var(--lila);border-color:var(--lila)" : "") + '" data-a="setdevice" data-id="' + p.id + '" data-v="' + d[0] + '" aria-pressed="' + on + '">' + d[1] + "</button>" }).join("") +
-    '</div><span class="xs mu">Zählt nur fürs Duell des Monats. Änderungen werden protokolliert.</span><form class="row" data-s="role" data-id="' + p.id + '"><input class="t" data-k="role' + p.id + '" value="' + esc(v("role" + p.id, p.role_title)) + '" maxlength="40" aria-label="Funktion"><button class="btn lila">Funktion</button></form></section>';
+    '</div><span class="xs mu">Zählt nur fürs Duell des Monats. Änderungen werden protokolliert.</span></section>';
   h += nickname(p);
   if (self) h += meinProfil();
   return h + "</main>";
@@ -1834,7 +1835,6 @@ var SUBMIT = {
     var id = f.getAttribute("data-id"), n = v("nick" + id).trim(); if (!n) return;
     after(sb.rpc("propose_nickname", { p_target: id, p_nick: n }), "«" + n + "» vorgeschlagen · wartet auf eine zweite Unterstützung").then(function () { UI["nick" + id] = null; render() });
   },
-  role: function (f) { var id = f.getAttribute("data-id"); after(sb.rpc("admin_set_role", { p_member: id, p_role: v("role" + id, pr(id).role_title) }), "Funktion gespeichert") },
   profile: function () {
     after(sb.from("profiles").update({ display_name: v("pfName", PRF.display_name).trim().slice(0, 40) || PRF.display_name, fav_wine: v("pfWine", PRF.fav_wine || "").trim() || null, specialty: v("pfSpec", PRF.specialty || "").trim() || null }).eq("id", uid()), "Profil gespeichert")
       .then(function () { UI.pfName = UI.pfWine = UI.pfSpec = null; render() });

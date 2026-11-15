@@ -53,14 +53,13 @@ test.describe("Profil", () => {
     await expect(page.locator("[data-k=pfWine]")).toHaveValue("Humagne Rouge");
   });
 
-  test("Admin vergibt eine Funktion", async ({ page }) => {
+  test("Keine Funktion mehr in der App, dafür der Spitzname; Text zu den Admin-Rechten", async ({ page }) => {
     await login(page);
     await tab(page, "Club");
-    await page.locator(".mem", { hasText: "Hans" }).click();
-    await page.fill("#ov form[data-s=role] input", "Weinwart");
-    await page.click("#ov form[data-s=role] .btn");
-    await expect(toast(page)).toContainText("Funktion gespeichert");
-    expect(await page.evaluate(() => window.__mg.db().profiles.find((p) => p.id == "u-hans").role_title)).toBe("Weinwart");
+    await expect(page.locator("form[data-s=role]")).toHaveCount(0);
+    await page.locator(".mem", { hasText: "Dani" }).click();
+    await expect(page.locator("#ov form[data-s=role]")).toHaveCount(0);
+    await expect(page.locator("#ov [data-test=admin-rechte]")).toContainText("Einladungen erstellen");
   });
 
   test("Funktion ändern ist Nicht-Admins verwehrt", async ({ page }) => {
