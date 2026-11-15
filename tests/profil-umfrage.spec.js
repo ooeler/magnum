@@ -159,19 +159,23 @@ base.test("Am 3. des Monats: Text je nach Anmeldung und Organisator", async () =
 });
 
 test.describe("Schalter Admin- / Mitglied-Ansicht", () => {
-  test("nur in der Mitglied-Ansicht, auch über offenen Fenstern; ✕ blendet aus", async ({ page }) => {
+  test("bleibt für Admins in beiden Ansichten, auch über offenen Fenstern, bis ✕; Ansichtswechsel holt ihn zurück", async ({ page }) => {
     await login(page);
-    await expect(page.locator(".sicht")).toHaveCount(0);                   // Admin-Ansicht: kein Overlay
+    await expect(page.locator("[data-test=sicht-admin]")).toBeVisible();          // Admin-Ansicht: Schalter da
+    await page.locator("[data-a=ov][data-t=event]").first().click();
+    await page.getByRole("button", { name: "App als Mitglied ansehen" }).click(); // im offenen Fenster umschalten
+    await expect(page.locator("[data-test=sicht]")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await page.reload();
+    await expect(page.locator("[data-test=sicht]")).toBeVisible();                // bleibt nach dem Neuladen
+    await page.getByRole("button", { name: "Schalter ausblenden" }).click();
+    await expect(page.locator(".sicht")).toHaveCount(0);
+    await page.reload();
+    await expect(page.locator("header h1")).toHaveText("Magnum");
+    await expect(page.locator(".sicht")).toHaveCount(0);                          // ausgeblendet bleibt ausgeblendet
     await profil(page);
-    await page.locator("#ov [aria-label=Ansicht]").getByRole("button", { name: "Mitglied" }).click();
-    await expect(page.locator("[data-test=sicht]")).toBeVisible();          // auch im offenen Fenster
-    await page.getByRole("button", { name: "Hinweis ausblenden" }).click();
-    await expect(page.locator(".sicht")).toHaveCount(0);
     await page.locator("#ov [aria-label=Ansicht]").getByRole("button", { name: "Administrator" }).click();
-    await page.locator("#ov [aria-label=Ansicht]").getByRole("button", { name: "Mitglied" }).click();
-    await expect(page.locator("[data-test=sicht]")).toBeVisible();          // neu gewählt: wieder da
-    await page.getByRole("button", { name: "Zurück zur Admin-Ansicht" }).click();
-    await expect(page.locator(".sicht")).toHaveCount(0);
+    await expect(page.locator("[data-test=sicht-admin]")).toBeVisible();          // Wechsel im Profil holt ihn zurück
   });
   test("Mitglieder sehen keinen Schalter", async ({ page }) => {
     await login(page, BEAT);
