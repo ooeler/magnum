@@ -177,10 +177,11 @@ var URLS = {}, WANT = {}, CACHE = null, CH = null, VB = 0, VZ = 0;
 function lsGet(k) { try { return localStorage.getItem(k) } catch (e) { return null } }
 function lsSet(k, v) { try { localStorage.setItem(k, v) } catch (e) {} }
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] }) }
-function now() { return Date.now() }
+var NOW_AB = null; // nur für boardVorher(): die Rangliste kurz vor dem letzten Anlass
+function now() { return NOW_AB != null ? NOW_AB : Date.now() }
 function uid() { return ME && ME.id }
 function localDay(iso) { var d = new Date(iso); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0") }
-function today() { var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0") }
+function today() { var d = new Date(now()); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0") }
 function pr(id) { return D.profiles.find(function (p) { return p.id == id }) || null }
 function nm(id) { var p = pr(id); return p ? (p.display_name || "Mitglied") : "–" }
 function first(id) { return nm(id).split(" ")[0] }
@@ -284,6 +285,20 @@ function board() {
   var L = D.profiles.map(function (p) { return { id: p.id, s: stats(p.id) } }).sort(function (a, b) { return b.s.points - a.s.points || nm(a.id).localeCompare(nm(b.id), "de") });
   L.forEach(function (x, i) { x.place = i && L[i - 1].s.points == x.s.points ? L[i - 1].place : i + 1; x.showNo = !i || L[i - 1].place != x.place });
   return L;
+}
+// Plätze kurz vor dem letzten Anlass, für die Verschiebung in der Rangliste
+function boardVorher() {
+  var P = pastEvents(); if (!P.length) return null;
+  var alt = CACHE, m = {}; NOW_AB = new Date(P[0].starts_at).getTime() - 1; CACHE = null;
+  try { board().forEach(function (x) { m[x.id] = x.place }) } finally { NOW_AB = null; CACHE = alt }
+  return m;
+}
+function verschiebung(id, place, V) {
+  if (!V || V[id] == null) return "";
+  var d = V[id] - place;
+  return d > 0 ? '<span class="xs b" style="color:#6FCF97" data-test="trend" aria-label="' + d + (d == 1 ? " Platz" : " Plätze") + ' gewonnen seit dem letzten Anlass">▲' + d + "</span>"
+    : d < 0 ? '<span class="xs b" style="color:#E07A7A" data-test="trend" aria-label="' + -d + (d == -1 ? " Platz" : " Plätze") + ' verloren seit dem letzten Anlass">▼' + -d + "</span>"
+    : '<span class="xs mu" data-test="trend" aria-label="Gleicher Platz wie vor dem letzten Anlass">–</span>';
 }
 function segs(n, h) { var s = ""; for (var i = 1; i <= 5; i++) s += '<i class="' + (i <= n ? "on" : "") + '"' + (h ? ' style="height:' + h + 'px"' : "") + "></i>"; return '<div class="segs">' + s + "</div>" }
 
@@ -701,6 +716,26 @@ function duellMonat(m) {
   };
   return { android: quote("android"), iphone: quote("iphone") };
 }
+function duellBilanz() {
+  var m = today().slice(0, 7), mon = {}, b = { android: 0, iphone: 0, gleich: 0, L: [] };
+  pastEvents().forEach(function (e) { var x = localDay(e.starts_at).slice(0, 7); if (x < m) mon[x] = 1 });
+  Object.keys(mon).sort().forEach(function (x) {
+    var r = duellMonat(x); if (!r) return;
+    var w = r.android == r.iphone ? "gleich" : r.android > r.iphone ? "android" : "iphone"; b[w]++; b.L.push({ m: x, w: w, r: r });
+  });
+  return b;
+}
+function duellBilanzHtml() {
+  if (!D.profiles.some(function (p) { return p.device == "android" }) || !D.profiles.some(function (p) { return p.device == "iphone" })) return "";
+  var b = duellBilanz(); if (!b.L.length) return "";
+  var fuehrt = b.android == b.iphone ? "Gleichstand" : (b.android > b.iphone ? "Android" : "iPhone") + " führt";
+  return '<section class="card" aria-label="Duell-Bilanz"><span class="b" style="font-size:15px">Duell-Bilanz · Android gegen iPhone</span>' +
+    '<div class="g3"><div class="tile"><b data-test="bilanz-android">' + b.android + '</b><span>Android</span></div><div class="tile"><b data-test="bilanz-iphone">' + b.iphone + '</b><span>iPhone</span></div><div class="tile"><b>' + b.gleich + "</b><span>Unentschieden</span></div></div>" +
+    '<span class="sm b" data-test="bilanz-fuehrt">' + fuehrt + "</span>" +
+    '<div class="lst">' + b.L.slice(-6).reverse().map(function (x) {
+      return '<div class="row sb sm"><span>' + MONATE[+x.m.slice(5, 7) - 1] + " " + x.m.slice(0, 4) + "</span><span>" + x.r.android + " % : " + x.r.iphone + ' % · <b>' + (x.w == "gleich" ? "unentschieden" : x.w == "android" ? "Android" : "iPhone") + "</b></span></div>";
+    }).join("") + "</div></section>";
+}
 function duell() {
   if (!D.profiles.some(function (p) { return p.device == "android" }) || !D.profiles.some(function (p) { return p.device == "iphone" })) return "";
   // Bis und mit dem 10. steht noch der Endstand des Vormonats, ab dem 11. die laufende Wertung
@@ -709,7 +744,7 @@ function duell() {
   var zeile = function (n, q) { return '<div class="col" style="gap:4px"><div class="row sb sm"><span class="b">' + n + '</span><span data-test="duell-' + n.toLowerCase() + '">' + q + ' %</span></div><div class="bar"><i style="width:' + q + '%"></i></div></div>' };
   var h = '<section class="card" aria-label="Duell des Monats"><span class="lbl">Duell des Monats · Android gegen iPhone</span>';
   if (vor) return h + '<span class="sm b" data-test="duell-endstand">Endstand ' + mn(vm) + "</span>" + zeile("Android", vor.android) + zeile("iPhone", vor.iphone) +
-    '<span class="sm b" data-test="duell-vormonat">' + (vor.android == vor.iphone ? "Unentschieden." : (vor.android > vor.iphone ? "Android gewinnt, iPhone" : "iPhone gewinnt, Android") + " bringt die nächste Magnum.") + "</span>" +
+    '<span class="sm b" data-test="duell-vormonat">' + (vor.android == vor.iphone ? "Unentschieden." : (vor.android > vor.iphone ? "Android" : "iPhone") + " gewinnt den " + mn(vm) + ".") + "</span>" +
     '<span class="xs mu">Das Duell im ' + mn(m) + " zählt schon. Die Zwischenwertung erscheint ab dem 11. " + mn(m) + ".</span></section>";
   h += jetzt ? zeile("Android", jetzt.android) + zeile("iPhone", jetzt.iphone) + '<span class="sm mu">' + (jetzt.android == jetzt.iphone ? "Unentschieden." : (jetzt.android > jetzt.iphone ? "Android" : "iPhone") + " führt.") + "</span>"
     : '<span class="sm mu">Diesen Monat gab es noch keinen Anlass. Das nächste Treffen eröffnet das Duell.</span>';
@@ -790,7 +825,7 @@ function eventCard(e) {
   return '<article class="card ev" data-ev="' + e.id + '"><div class="dt"><b>' + d.getDate() + "</b><span>" + MON[d.getMonth()] + '</span></div><div class="col grow">' +
     '<span class="b" style="font-size:16px">' + esc(e.title) + '</span><span class="sm mu">' + esc(fDate(e.starts_at, true)) + (ortText(e) ? " · " + esc(ortText(e)) : "") + "</span>" +
     '<span class="sm mu" data-test="anzahl">' + nIn + " von " + D.profiles.length + " dabei" + (nV ? " · " + nV + " virtuell" : "") + (g ? " · " + g + " Gasttrinker" : "") + (gaesteVon("event", e.id).length ? " · " + gaesteVon("event", e.id).length + " Gäste" : "") + (s == "in" ? " · du bist dabei" : s == "out" ? " · du bist abgemeldet" : s ? "" : " · noch offen") + "</span>" +
-    (e.organizer_id ? '<span class="sm b">Organisation: ' + esc(nm(e.organizer_id)) + (e.organizer_id == me ? " (du)" : "") + "</span>" + (e.organizer_id != me ? '<button class="btn dash" style="align-self:flex-start;min-height:40px" data-a="takeover" data-id="' + e.id + '">Abend übernehmen · +40</button>' : "")
+    (e.organizer_id ? '<span class="sm b">Organisation: ' + esc(nm(e.organizer_id)) + (e.organizer_id == me ? " (du)" : "") + "</span>"
       : '<span class="sm b" style="color:var(--orange)">Organisator gesucht</span><button class="btn dash" style="align-self:flex-start;min-height:40px" data-a="organize" data-id="' + e.id + '">Ich organisiere den Abend · +40</button>') +
     (s == "virtual" ? '<span class="chip v" style="align-self:flex-start">Virtuell dabei · 1 Magnum spendiert</span>' : "") +
     '<div class="row wrap"><button class="pill ' + (s == "in" ? "on" : "") + '" data-a="rsvp" data-id="' + e.id + '" data-v="in" aria-pressed="' + (s == "in") + '">Bin dabei</button>' +
@@ -989,11 +1024,19 @@ function installCard() {
   return '<section class="card col inst" style="gap:8px" aria-label="App installieren"><span class="b" style="font-size:15px">App installieren</span><span class="sm mu">Auf dem Startbildschirm startet Magnum wie eine richtige App: schneller und im Vollbild.</span>' +
     (INST ? '<button class="btn" data-a="install">Jetzt installieren</button>' : '<span class="sm">' + (PRF.device == "android" ? "In Chrome: Menü ⋮ → «App installieren»" : "In Safari: Teilen → «Zum Home-Bildschirm»") + "</span>") + "</section>";
 }
+function rangZeile(x, me, V) {
+  return '<li class="row' + (x.id == me ? " me" : "") + '"><span class="rk' + (x.place <= 3 ? " g" + x.place : "") + '">' + (x.showNo ? x.place : "") + '</span>' + verschiebung(x.id, x.place, V) + '<span class="grow col" style="gap:1px"><b class="sm">' + (x.place == 1 && x.s.points > 0 ? '<span data-test="krone" aria-label="Führt die Saison">👑 </span>' : "") + esc(nm(x.id)) + (pr(x.id).nickname ? ' <span class="nick">«' + esc(pr(x.id).nickname) + "»</span>" : "") + '</b><span class="xs mu">' + esc(x.s.rank.name) + " · Streak " + x.s.streak + (meineVideos(x.id).length ? ' · <span data-test="video-zahl">🎬 ' + meineVideos(x.id).length + "</span>" : "") + '</span></span><b class="sm">' + x.s.points + "</b></li>";
+}
 function club() {
   var me = uid(), B = board(), st = S();
-  var h = "<h2>Saison-Rangliste</h2><ol class=\"card lst\" aria-label=\"Rangliste\">" + B.map(function (x) {
-    return '<li class="row' + (x.id == me ? " me" : "") + '"><span class="rk' + (x.place <= 3 ? " g" + x.place : "") + '">' + (x.showNo ? x.place : "") + '</span><span class="grow col" style="gap:1px"><b class="sm">' + (x.place == 1 && x.s.points > 0 ? '<span data-test="krone" aria-label="Führt die Saison">👑 </span>' : "") + esc(nm(x.id)) + (pr(x.id).nickname ? ' <span class="nick">«' + esc(pr(x.id).nickname) + "»</span>" : "") + '</b><span class="xs mu">' + esc(x.s.rank.name) + " · Streak " + x.s.streak + (meineVideos(x.id).length ? ' · <span data-test="video-zahl">🎬 ' + meineVideos(x.id).length + "</span>" : "") + '</span></span><b class="sm">' + x.s.points + "</b></li>";
-  }).join("") + "</ol>" + whatsapp(teilenRangliste(), "Rangliste in WhatsApp teilen", "pill");
+  var V = boardVorher(), alle = !!UI.rangAlle, sicht = B.filter(function (x) { return alle || x.place <= 3 || x.id == me });
+  var h = "<h2>Saison-Rangliste</h2><ol class=\"card lst\" aria-label=\"Rangliste\">" + sicht.map(function (x, i) {
+    var luecke = i && sicht[i - 1].place < x.place - 1 && !alle ? '<li class="xs mu" style="justify-content:center" aria-hidden="true">…</li>' : "";
+    return luecke + rangZeile(x, me, V);
+  }).join("") + "</ol>" +
+    (B.length > sicht.length || alle ? '<button class="btn link" data-a="setui" data-k="rangAlle" data-v="' + (alle ? "" : "1") + '" aria-expanded="' + alle + '">' + (alle ? "Nur die Top 3" : "Alle anzeigen (" + B.length + ")") + "</button>" : "") +
+    '<span class="xs mu">▲▼ Verschiebung seit dem letzten Anlass</span>' + whatsapp(teilenRangliste(), "Rangliste in WhatsApp teilen", "pill");
+
   h += '<details class="card"><summary>So gibt es Punkte</summary><div class="lst" style="margin-top:10px">' + POINTS.map(function (p) { return '<div class="row sb sm"><span>' + esc(p[0]) + '</span><b>+' + p[1] + "</b></div>" }).join("") +
     '<div class="sm mu">Ränge: ' + RANKS.map(function (r) { return esc(r.name) + " ab " + r.min }).join(" · ") + "</div></div></details>";
   h += '<h2>Die Mitglieder <span class="sm mu" style="font-family:Inter">' + D.profiles.length + "</span></h2><div class=\"g2\">" + D.profiles.slice().sort(function (a, b) { return nm(a.id).localeCompare(nm(b.id), "de") }).map(function (p) {
@@ -1185,6 +1228,7 @@ function statistik() {
   var tot = 0, ppl = 0; D.restaurant_visits.forEach(function (x) { tot += Number(x.total_chf); ppl += x.people });
   var h = "<h2>Club-Statistik " + yr + '</h2><div class="g2">' + [[py.length, "Anlässe " + yr], [avg.toFixed(1).replace(".", ","), "Ø Teilnehmende"], [D.magnums.length, "Magnums erfasst"], [ppl ? chf(Math.round(tot / ppl * 20) / 20) : "–", "Ø pro Kopf im Restaurant"]]
     .map(function (k) { return '<div class="card" style="padding:12px;gap:2px"><span class="big" style="font-size:24px">' + esc(k[0]) + '</span><span class="sm mu">' + esc(k[1]) + "</span></div>" }).join("") + "</div>";
+  h += duellBilanzHtml();
   var last = past.slice(0, 6).reverse();
   if (last.length) {
     var mx = Math.max.apply(null, [1].concat(last.map(function (e) { return D.rsvps.filter(function (r) { return r.event_id == e.id && r.status == "in" }).length })));
@@ -1329,6 +1373,7 @@ function eventView(e) {
   var R = D.rsvps.filter(function (r) { return r.event_id == e.id });
   var h = '<div class="top"><button class="back" data-a="close" aria-label="Zurück">' + BACK + '</button><span style="font:900 28px/1.1 var(--hf)">' + esc(e.title) + '</span><span class="sm mu">' + esc(fDate(e.starts_at, true)) + (ortText(e) ? " · " + esc(ortText(e)) : "") + "</span>" +
     '<span class="sm b">' + (e.organizer_id ? "Organisation: " + esc(nm(e.organizer_id)) : '<span style="color:var(--orange)">Organisator gesucht</span>') + "</span></div><main>";
+  if (!past && e.organizer_id && e.organizer_id != me) h += '<button class="btn dash" data-a="takeover" data-id="' + e.id + '">Abend von ' + esc(nm(e.organizer_id)) + " übernehmen · +40</button>";
   if (past) h += s ? '<div class="row wrap"><span class="chip" data-test="war-dabei">' + ({ in: "Du warst dabei", virtual: "Virtuell dabei", out: "Abgemeldet" })[s] + "</span></div>" : "";
   else h += '<div class="row wrap"><button class="pill ' + (s == "in" ? "on" : "") + '" data-a="rsvp" data-id="' + e.id + '" data-v="in">Bin dabei</button>' + (e.organizer_id == me ? '<span class="chip" data-test="org-dabei">Als Organisator immer dabei</span>' : '<button class="pill ' + (s == "out" ? "out" : "") + '" data-a="abmelden" data-id="' + e.id + '">Abmelden</button>') +
     (s == "virtual" ? '<span class="chip v">Virtuell dabei · Magnum spendiert</span>' : "") + "</div>";
