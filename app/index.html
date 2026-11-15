@@ -165,7 +165,7 @@ details summary{cursor:pointer;font-weight:700;list-style:none}details summary::
 // ═══════════════════════════════════════════════════════════════════════
 var C = window.MG_CONFIG || {}, sb = null, ME = null, PRF = null, PREV = null, MAINT = false, READY = false;
 var TABLES = ["settings", "profiles", "events", "rsvps", "magnums", "magnum_guests", "rides", "ride_passengers", "trips",
-  "trip_participants", "trip_photos", "proposals", "ballots", "posts", "post_prosts", "cards", "drinks", "sayings", "card_members", "gaeste", "karte_der_woche", "video_karten", "video_ziehungen", "karten_glaeser",
+  "trip_participants", "trip_photos", "proposals", "ballots", "posts", "post_prosts", "cards", "drinks", "sayings", "card_members", "gaeste", "karte_der_woche", "karte_der_woche_fuer", "video_karten", "video_ziehungen", "karten_glaeser",
   "saying_prosts", "restaurants", "restaurant_visits", "restaurant_ratings", "feedback", "admin_log"];
 var D = {}; TABLES.forEach(function (t) { D[t] = [] });
 var TAB = lsGet("mg_tab") || "termine", OV = null, SH = null, UI = {}, AUTH = { mode: "login" }, INVITE = null, INVLIST = null, NEWLINK = null, BUSY = false;
@@ -730,11 +730,26 @@ function termine() {
   return h;
 }
 // Jede Woche wird eine Sammelkarte aufgedeckt (Function "api", Route /taeglich)
+// Karte der Woche: aufgedeckt nur für 3 Mitglieder. Die anderen sehen sie verdeckt und für wen sie aufgedeckt ist.
+function namenListe(L) { return L.length > 1 ? L.slice(0, -1).join(", ") + " und " + L[L.length - 1] : L.join("") }
 function karteDerWoche() {
-  var w = D.karte_der_woche.slice().sort(function (a, b) { return a.woche < b.woche ? 1 : -1 })[0]; if (!w) return "";
+  var neu = function (a, b) { return a.woche < b.woche ? 1 : -1 };
+  var w = D.karte_der_woche.slice().sort(neu)[0], fw = D.karte_der_woche_fuer.slice().sort(neu)[0];
+  var fuer = fw ? D.karte_der_woche_fuer.filter(function (f) { return f.woche == fw.woche }).map(function (f) { return f.member_id }) : [];
+  var namen = namenListe(fuer.map(function (id) { return id == uid() ? "dich" : esc(nm(id)) }));
+  if (fw && (!w || w.woche < fw.woche)) {
+    return '<section class="card" style="border-style:dashed" aria-label="Karte der Woche" data-test="kdw-verdeckt"><span class="lbl">Karte der Woche · verdeckt</span>' +
+      '<div class="row" style="gap:14px"><span class="cimg" style="width:64px;height:84px;flex:none;border:1px dashed var(--ln2)"><b style="font-size:34px;color:var(--mu2)">?</b></span>' +
+      '<span class="col" style="gap:4px"><span class="sm">Diese Woche aufgedeckt für <b>' + namen + "</b>.</span>" +
+      '<span class="xs mu">Frag sie, was drauf ist. Nächsten Montag bist vielleicht du dran.</span></span></div></section>';
+  }
+  if (!w) return "";
   var c = allCards().find(function (x) { return x.id == w.card_id }); if (!c) return "";
-  return '<button type="button" class="card" style="text-align:left;color:var(--tx);border-color:' + RAR[c.r][1] + '" data-a="ov" data-t="card" data-id="' + c.id + '" aria-label="Karte der Woche"><span class="lbl">Karte der Woche · aufgedeckt</span><span class="mid">' + esc(c.title) + '</span><span class="sm mu">' + esc([c.sub, c.place].filter(Boolean).join(" · ")) + "</span></button>" +
-    whatsapp("🃏 Karte der Woche: " + c.title + ([c.sub, c.place].filter(Boolean).length ? " (" + [c.sub, c.place].filter(Boolean).join(" · ") + ")" : "") + "\n\nAlle Karten in der App: " + appLink(), "Karte in WhatsApp teilen", "pill");
+  var meine = fw && fw.woche == w.woche && fuer.indexOf(uid()) >= 0;
+  return '<button type="button" class="card" style="text-align:left;color:var(--tx);border-color:' + RAR[c.r][1] + '" data-a="ov" data-t="card" data-id="' + c.id + '" aria-label="Karte der Woche"><span class="lbl">Karte der Woche · ' + (meine ? "für dich aufgedeckt" : "aufgedeckt") + "</span>" +
+    (meine ? '<span class="xs mu" data-test="kdw-fuer">Nur für ' + namen + " · die anderen sehen sie verdeckt</span>" : "") + '<span class="mid">' + esc(c.title) + '</span><span class="sm mu">' + esc([c.sub, c.place].filter(Boolean).join(" · ")) + "</span></button>" +
+    // Wer sie exklusiv sieht, verrät sie nicht per WhatsApp an alle
+    (meine ? "" : whatsapp("🃏 Karte der Woche: " + c.title + ([c.sub, c.place].filter(Boolean).length ? " (" + [c.sub, c.place].filter(Boolean).join(" · ") + ")" : "") + "\n\nAlle Karten in der App: " + appLink(), "Karte in WhatsApp teilen", "pill"));
 }
 function spruch() {
   var L = D.sayings.slice().map(function (x) { return { x: x, n: D.saying_prosts.filter(function (p) { return p.saying_id == x.id }).length } })
@@ -1204,7 +1219,7 @@ function pushPlan() {
   L.sort(function (a, b) { return a.tag < b.tag ? -1 : a.tag > b.tag ? 1 : 0 });
   return '<section class="card" aria-label="Benachrichtigungen"><span class="b" style="font-size:15px">Benachrichtigungen</span>' +
     '<span class="sm mu">Push-Nachrichten kommen einmal am Tag um ' + pushUhr(heute) + ":</span>" +
-    '<ul class="sm" style="margin:0;padding-left:18px;line-height:1.6"><li><b>7 Tage vor jedem Anlass</b>: Erinnerung zum Anmelden</li><li><b>Montags</b>: die Karte der Woche</li></ul><span class="sm mu" style="margin-top:4px">Sofort:</span><ul class="sm" style="margin:0;padding-left:18px;line-height:1.6"><li><b>Neuer Anlass</b>: an alle</li><li><b>Jemand organisiert oder übernimmt einen Abend</b>: an alle</li><li><b>An- und Abmeldungen</b>: an den Organisator und alle, die schon dabei sind</li><li><b>Volles Glas für deine Karte</b>: an dich, pro Person einmal</li><li><b>Jederzeit</b>: die Test-Benachrichtigung, die du selbst auslöst (Knopf unten)</li></ul>' +
+    '<ul class="sm" style="margin:0;padding-left:18px;line-height:1.6"><li><b>7 Tage vor jedem Anlass</b>: Erinnerung zum Anmelden</li><li><b>Montags</b>: die Karte der Woche, aufgedeckt nur für 3 Mitglieder (nur sie bekommen die Nachricht)</li></ul><span class="sm mu" style="margin-top:4px">Sofort:</span><ul class="sm" style="margin:0;padding-left:18px;line-height:1.6"><li><b>Neuer Anlass</b>: an alle</li><li><b>Jemand organisiert oder übernimmt einen Abend</b>: an alle</li><li><b>An- und Abmeldungen</b>: an den Organisator und alle, die schon dabei sind</li><li><b>Volles Glas für deine Karte</b>: an dich, pro Person einmal</li><li><b>Jederzeit</b>: die Test-Benachrichtigung, die du selbst auslöst (Knopf unten)</li></ul>' +
     '<span class="lbl" style="margin-top:6px">Als Nächstes</span>' +
     (L.length ? '<div class="lst" data-test="push-plan">' + L.slice(0, 4).map(function (x) {
       return '<div class="row sb sm"><span class="grow">' + esc(x.was) + '</span><b style="white-space:nowrap">' + esc(pushTag(x.tag)) + " · " + pushUhr(x.tag) + "</b></div>";
