@@ -351,9 +351,15 @@ test.describe("Sammelkarten & Statistik", () => {
     await page.getByRole("button", { name: "Karte erstellen" }).click();
     await expect(page.locator(".kc", { hasText: "Letzter Zug verpasst" })).toBeVisible();
     await page.locator(".kc", { hasText: "Letzter Zug verpasst" }).click();
-    await expect(page.locator("#ov")).not.toContainText("Übernachtung im Weinkeller.");
-    await page.locator("#ov .bildtipp").click();
-    await expect(page.locator("#ov [data-test=karten-text]")).toContainText("Übernachtung im Weinkeller.");
+    // Vorderseite: Bild und Titel; ein Tipp dreht die Karte, hinten steht die Geschichte
+    await expect(page.locator("#ov .flip")).toHaveAttribute("aria-pressed", "false");
+    await expect(page.locator("#ov .hinten")).toContainText("Übernachtung im Weinkeller.");
+    await expect(page.locator("#ov .hinten")).toHaveAttribute("aria-hidden", "true");
+    await page.locator("#ov .flip").click();
+    await expect(page.locator("#ov .flip")).toHaveClass(/gedreht/);
+    await expect(page.locator("#ov .hinten")).toHaveAttribute("aria-hidden", "false");
+    await page.locator("#ov .flip").click();
+    await expect(page.locator("#ov .flip")).not.toHaveClass(/gedreht/);
   });
 
   test("Restaurant bewerten: drei Kriterien, Google Maps", async ({ page }) => {

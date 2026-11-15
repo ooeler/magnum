@@ -62,11 +62,11 @@ test.describe("Wischen in Profilen und Karten", () => {
     const titel = await page.evaluate(() => allCards().filter((c) => !c.locked).map((c) => c.title));
     await page.locator(".kc:not(.lock)").first().click();
     await expect(page.locator("#ov")).toContainText(titel[0]);
-    await page.locator("#ov .bildtipp").click();
-    await expect(page.locator("#ov [data-test=karten-text]")).toBeVisible();
+    await page.locator("#ov .flip").click();
+    await expect(page.locator("#ov .flip")).toHaveClass(/gedreht/);
     await wisch(page, "#ov main", 300, 100);
     await expect(page.locator("#ov")).toContainText(titel[1]);
-    await expect(page.locator("#ov [data-test=karten-text]")).toHaveCount(0);
+    await expect(page.locator("#ov .flip")).not.toHaveClass(/gedreht/);
   });
 });
 
