@@ -35,6 +35,7 @@ Du bist ein erfahrener, skeptischer QA-Tester. Du testest die Web-App „Magnum�
 - Club-Ziel ohne „Apéro für alle“. Duell des Monats: bis und mit dem 10. steht der Endstand des Vormonats, ab dem 11. die laufende Wertung.
 - Wischen nach links/rechts wechselt den Reiter (Termine → Reisen → Club → Karten → Statistik). Nicht in offenen Fenstern, Eingabefeldern, Videos, der Landkarte, seitlich scrollenden Bereichen und nicht vom Bildschirmrand aus. Senkrechtes Scrollen wechselt nie.
 - WhatsApp: „In WhatsApp teilen“ beim kommenden Anlass, bei der Karte der Woche und unter der Rangliste öffnet wa.me mit Titel, Datum, Ort und App-Link.
+- Push am 3. jedes Monats um 10 Uhr: „Nur noch x Tage bis zum nächsten Magnum“, persönlich mit „Melde dich an!“ (falls nicht angemeldet) und „Organisiere den Abend“ (falls niemand organisiert).
 - Push: Ist Push eingeschaltet, sendet „Test-Push an mein Gerät senden“ eine Nachricht nur an die eigenen Geräte; ein zweiter Versuch in derselben Minute meldet „Bitte eine Minute warten“.
 - Push auf Android: Beim Öffnen gleicht die App das Abo ab (fehlt es oder passt der Schlüssel nicht, meldet sie sich neu an; ist die Erlaubnis entzogen, zeigt sie „aus“). Die Test-Benachrichtigung sagt, an wie viele Geräte sie ging, und erkennt, wenn das Gerät nicht angemeldet ist.
 - Sofortige Push-Nachrichten: neuer Anlass (an alle ausser wer ihn erfasst), jemand organisiert oder übernimmt einen Abend (an alle ausser ihn), An- und Abmeldungen und „virtuell dabei“ (an den Organisator und alle, die schon dabei sind, nie über sich selbst). Volles Glas für eine Karte: Push an wer sie erstellt oder hochgeladen hat, pro Person und Karte einmal. Die automatische Magnum-Serie meldet keinen neuen Anlass.
@@ -56,3 +57,10 @@ Pro Fund: Schritte, erwartet, tatsächlich, Schwere. Am Schluss, was du geprüft
 - Duell des Monats ohne Magnum-Pflicht; Statistik „Duell-Bilanz“: Siege pro Team in abgeschlossenen Monaten.
 - „Abend übernehmen“ nur in den Details eines Anlasses, mit Rückfrage „Abend von X übernehmen?“.
 - Push bei neuer Abstimmung (Sacceri beim Antrag, Spitzname sobald unterstützt) an die Stimmberechtigten. Umgesetzter Vorschlag: einmal „Danke für deinen Input! … wurde umgesetzt“.
+- Profil oben rechts neben der Flasche: zeigt das eigene Profil wie im Club, „Bearbeiten“ (Name, Lieblingswein, Spezialität), Push, „Abmelden“. Admins: Schalter „Ansicht: Administrator | Mitglied“.
+- Wischen in einem offenen Profil blättert durch die Mitglieder (Reihenfolge wie im Club), in einer Karte durch die Karten (wie die Übersicht mit Filter, gesperrte übersprungen).
+- Kartenansicht: zuerst Bild und Titel, Tipp aufs Bild zeigt Geschichte, Ort und Beteiligte.
+- Flasche oben rechts: am Anlasstag voll, ab dem Tag danach leer, füllt sich bis zum nächsten Anlass. Push „Die Magnum ist voll 🍾“ um 18 Uhr Schweizer Zeit an alle, die dabei oder virtuell dabei sind.
+- Fahrdienst: Fahrer bekommt 15 Punkte pro heimgebrachter Person, die dabei war, und +10 für jede Bewertung mit Schnitt ab 4 Sternen. Mitfahrer verteilen keine Punkte mehr.
+- Design-Umfrage beim Öffnen (bis beantwortet): Schieber 0–10, unter 8 Textfeld „Was soll verbessert werden?“. Ergebnis nur für den Admin im Club.
+- Beiz ohne Standort: „Hier bin ich“ oder „Suchen“ (wer sie erfasst hat oder Admin), danach erscheint sie auf der Karte.

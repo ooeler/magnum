@@ -1,5 +1,5 @@
 // Konto: Passwort, Profil, Einladungen verwalten, Wartung und Fehlermeldungen.
-const { test, expect, login, tab, OT, BEAT } = require("./fixtures");
+const { test, expect, login, tab, OT, BEAT, profil, abmelden } = require("./fixtures");
 
 const card = (page, label) => page.locator(`[aria-label="${label}"]`);
 const toast = (page) => page.locator("#toast");
@@ -22,7 +22,7 @@ test.describe("Passwort", () => {
     await page.click("form[data-s=newpw] .btn");
     await expect(toast(page)).toContainText("Passwort gespeichert");
     await tab(page, "Club");
-    await page.getByRole("button", { name: "Abmelden" }).click();
+    await abmelden(page);
     await expect(page.locator("#login")).toBeVisible();
     await page.fill("#login input[name=email]", OT.email);
     await page.fill("#login input[name=pw]", OT.password);
@@ -42,12 +42,14 @@ test.describe("Passwort", () => {
 test.describe("Profil", () => {
   test("eigene Angaben ändern bleibt nach dem Neuladen", async ({ page }) => {
     await login(page);
-    await tab(page, "Club");
+    await profil(page);
+    await page.locator("#ov").getByRole("button", { name: "Bearbeiten" }).click();
     await page.fill("[data-k=pfWine]", "Humagne Rouge");
     await page.click("form[data-s=profile] .btn");
     await expect(toast(page)).toContainText("Profil gespeichert");
     await page.reload();
-    await tab(page, "Club");
+    await profil(page);
+    await page.locator("#ov").getByRole("button", { name: "Bearbeiten" }).click();
     await expect(page.locator("[data-k=pfWine]")).toHaveValue("Humagne Rouge");
   });
 
@@ -90,7 +92,7 @@ test.describe("Einladungen verwalten", () => {
     await inv.getByRole("button", { name: "Zurückziehen" }).click();
     await expect(toast(page)).toContainText("Einladung zurückgezogen");
     await expect(inv.getByRole("button", { name: "Zurückziehen" })).toHaveCount(0);
-    await page.getByRole("button", { name: "Abmelden" }).click();
+    await abmelden(page);
     await page.goto(link);
     await page.reload();
     await expect(page.locator(".auth")).toContainText("Einladung ungültig");

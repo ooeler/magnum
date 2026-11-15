@@ -23,6 +23,13 @@ export default defineConfig({
       cron: "0 9 * * *",
       functionPath: "/taeglich",
     },
+    // Immer um 18 Uhr Schweizer Zeit: läuft um 16 und 17 Uhr UTC, gesendet wird nur, wenn es in Zürich 18 Uhr ist
+    "magnumabend": {
+      type: "schedule",
+      function: "api",
+      cron: "0 16,17 * * *",
+      functionPath: "/abend",
+    },
     "tagessicherung": {
       type: "schedule",
       function: "api",

@@ -1,5 +1,5 @@
 // Funktionstests der App gegen die nachgebaute Datenbank (Android, iPhone, Desktop).
-const { test, expect, login, tab, as, BEAT } = require("./fixtures");
+const { test, expect, login, tab, as, BEAT, profil, abmelden } = require("./fixtures");
 
 const card = (page, label) => page.locator(`[aria-label="${label}"]`);
 const event = (page, title) => page.locator("article.ev", { hasText: title });
@@ -108,10 +108,11 @@ test.describe("Termine", () => {
     await expect(event(page, "Herbst-Stamm")).toContainText("2 Gasttrinker");
   });
 
-  test("Fahrservice: mitfahren, Fahrer bewerten und Punkte verteilen", async ({ page }) => {
+  test("Fahrservice: mitfahren, Fahrer bewerten, Punkte für den Fahrer", async ({ page }) => {
     await login(page);
     await event(page, "Herbst-Stamm").getByRole("button", { name: "Details" }).click();
     const r = card(page, "Heimweg · Fahrservice");
+    await page.locator("#ov").getByRole("button", { name: "Bin dabei" }).click();   // Punkte gibt es nur für Mitfahrer, die dabei waren
     await r.getByRole("button", { name: "Mitfahren" }).click();
     await expect(r).toContainText("Bewerten kannst du nach dem Anlass.");
     await page.clock.setFixedTime(new Date("2026-11-08T10:00:00+01:00"));
@@ -120,10 +121,12 @@ test.describe("Termine", () => {
     const send = r.getByRole("button", { name: /Bewertung senden/ });
     await expect(send).toBeDisabled();
     for (const k of ["Sicher & nüchtern gefahren", "Pünktlich & zuverlässig", "Stimmung im Auto"]) await r.getByRole("button", { name: `${k}: 5 von 5` }).click();
-    await r.getByRole("button", { name: "+30" }).click();
     await send.click();
-    await expect(r).toContainText("Du hast Jürg +30 Punkte gegeben");
-    await expect(r).toContainText("+30 Punkte erhalten");
+    await expect(page.locator("#toast")).toContainText("Jürg erhält +10 für die gute Fahrt");
+    await expect(r).toContainText("Danke für deine Bewertung!");
+    await expect(r).toContainText("5,0 ★");
+    // Jürg: 15 fürs Heimbringen (Ot war dabei) + 10 für die gute Bewertung
+    expect(await page.evaluate(() => { const s = stats("u-jurg"); return [s.parts["Heimgebracht"] || 0, s.parts["Gute Fahrt"] || 0] })).toEqual([15, 10]);
   });
 
   test("Spruch des Tages: Prost und einreichen", async ({ page }) => {
@@ -296,7 +299,7 @@ test.describe("Einladung", () => {
     const link = await inv.locator("[data-test=link]").textContent();
     expect(link).toMatch(/#einladung=[A-Za-z0-9_-]{43}$/);
     await expect(inv.getByRole("link", { name: "Per WhatsApp schicken" })).toHaveAttribute("href", /^https:\/\/wa\.me\//);
-    await page.getByRole("button", { name: "Abmelden" }).click();
+    await abmelden(page);
     await page.goto(link);
     await expect(page.locator(".auth")).toContainText("Du bist eingeladen!");
     await expect(page.locator(".auth")).toContainText("Eingeladen von Ot");
@@ -308,6 +311,8 @@ test.describe("Einladung", () => {
     await page.fill("#join input[name=pw]", "geheim1234");
     await page.click("#join .btn");
     await expect(page.locator("nav")).toBeVisible();
+    await expect(page.locator("#sh")).toContainText("Wie gefällt dir das Design?");
+    await page.locator("#sh").getByRole("button", { name: "Später" }).click();
     await expect(page.locator(".hello")).toContainText("Luca");
     await tab(page, "Club");
     await expect(card(page, "Einladungen")).toContainText("12 Mitglieder");
@@ -346,7 +351,9 @@ test.describe("Sammelkarten & Statistik", () => {
     await page.getByRole("button", { name: "Karte erstellen" }).click();
     await expect(page.locator(".kc", { hasText: "Letzter Zug verpasst" })).toBeVisible();
     await page.locator(".kc", { hasText: "Letzter Zug verpasst" }).click();
-    await expect(page.locator("#ov")).toContainText("Übernachtung im Weinkeller.");
+    await expect(page.locator("#ov")).not.toContainText("Übernachtung im Weinkeller.");
+    await page.locator("#ov .bildtipp").click();
+    await expect(page.locator("#ov [data-test=karten-text]")).toContainText("Übernachtung im Weinkeller.");
   });
 
   test("Restaurant bewerten: drei Kriterien, Google Maps", async ({ page }) => {

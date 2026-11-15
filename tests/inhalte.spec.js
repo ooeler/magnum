@@ -518,13 +518,15 @@ test.describe("Gäste, Beizen und Sichtweise", () => {
 
   test("Admin sieht die App als Mitglied", async ({ page }) => {
     await login(page);
-    await tab(page, "Club");
-    await page.getByRole("button", { name: "App als Mitglied ansehen" }).click();
+    await page.getByRole("button", { name: "Mein Profil" }).click();
+    await page.locator("#ov [aria-label=Ansicht]").getByRole("button", { name: "Mitglied" }).click();
     await expect(page.locator("[data-test=sicht]")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await tab(page, "Club");
     await page.locator(".mem", { hasText: "Beat" }).click();
     await expect(card(page, "Rolle")).toHaveCount(0);
     await page.keyboard.press("Escape");
-    await page.locator("[data-test=sicht]").getByRole("button", { name: "Zurück zur Admin-Ansicht" }).click();
+    await page.getByRole("button", { name: "Zurück zur Admin-Ansicht" }).click();
     await page.locator(".mem", { hasText: "Beat" }).click();
     await expect(card(page, "Rolle")).toBeVisible();
   });

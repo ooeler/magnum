@@ -914,6 +914,20 @@ end $$;
 drop trigger if exists push_abstimmung on public.proposals;
 create trigger push_abstimmung after insert or update of seconded_by on public.proposals for each row execute function public.push_abstimmung();
 
+-- Umfrage «Wie gefällt dir das Design?» (0–10), unter 8 mit Verbesserungsvorschlag. Eine Antwort pro Person.
+-- Lesen: die eigene Antwort und der Admin alle.
+create table if not exists public.design_umfrage (
+  member_id  uuid primary key default public.uid() references public.profiles(id) on delete cascade,
+  wert       int not null check (wert between 0 and 10),
+  text       text check (length(text) <= 1000),
+  created_at timestamptz not null default now()
+);
+alter table public.design_umfrage enable row level security;
+drop policy if exists "Umfrage lesen" on public.design_umfrage;
+drop policy if exists "Umfrage antworten" on public.design_umfrage;
+create policy "Umfrage lesen" on public.design_umfrage for select to authenticated using (member_id = public.uid() or public.is_admin());
+create policy "Umfrage antworten" on public.design_umfrage for insert to authenticated with check (public.is_member() and member_id = public.uid());
+
 -- Jede Woche wird eine Sammelkarte aufgedeckt, aber nur für 3 Mitglieder (karte_der_woche_fuer). So bleibt es spannend:
 -- Alle anderen sehen bis zur nächsten Woche nur, für wen sie aufgedeckt ist.
 create table if not exists public.karte_der_woche (
@@ -1153,6 +1167,7 @@ revoke insert, update, delete on public.karte_der_woche_fuer from authenticated;
 revoke insert, update, delete on public.video_ziehungen from authenticated;
 revoke update on public.video_karten from authenticated;
 revoke update on public.trip_aemtli from authenticated;
+revoke update, delete on public.design_umfrage from authenticated;
 revoke update on public.trip_photos from authenticated;
 grant update (als_karte) on public.trip_photos to authenticated;
 grant select on public.app_status to anonymous;
@@ -1359,7 +1374,7 @@ do $$
 declare t text;
 begin
   foreach t in array array['profiles', 'events', 'rsvps', 'magnums', 'magnum_guests', 'rides', 'ride_passengers',
-    'trips', 'trip_participants', 'trip_photos', 'trip_aemtli', 'trip_absagen', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
+    'trips', 'trip_participants', 'trip_photos', 'trip_aemtli', 'trip_absagen', 'design_umfrage', 'proposals', 'ballots', 'posts', 'post_prosts', 'cards', 'drinks',
     'sayings', 'saying_prosts', 'card_members', 'gaeste', 'karte_der_woche', 'karte_der_woche_fuer', 'video_karten', 'video_ziehungen', 'karten_glaeser', 'restaurants', 'restaurant_visits', 'restaurant_ratings', 'feedback', 'admin_log']
   loop
     execute format('drop trigger if exists sync_bump on public.%I', t);
