@@ -832,6 +832,24 @@ function pushKarte() {
   return '<button class="btn ghost" data-a="push" data-test="push">' + (PUSH ? "Push-Nachrichten ausschalten" : "Push-Nachrichten einschalten · 7 Tage vor dem Magnum und Karte der Woche") + "</button>" +
     (PUSH ? '<button class="btn ghost" data-a="pushtest" data-test="pushtest">Test-Push an mein Gerät senden</button>' : "");
 }
+// Beim Öffnen: Stimmt «eingeschaltet» noch? Fehlt das Abo, ist die Erlaubnis weg oder passt der Schlüssel nicht mehr,
+// meldet sich die App neu an bzw. zeigt «aus». Ein gültiges Abo meldet sie dem Server nochmals (falls es dort fehlt).
+var ABGLEICH = false;
+function pushAbgleich() {
+  if (ABGLEICH || !pushMoeglich() || !window.Notification) return; ABGLEICH = true;
+  navigator.serviceWorker.ready.then(function (reg) {
+    return Promise.all([reg.pushManager.getSubscription(), fetch(C.api + "/push/key").then(function (r) { return r.json() })]).then(function (x) {
+      var abo = x[0], key = b64Bytes(x[1].key), alt = abo && abo.options && abo.options.applicationServerKey;
+      var gleich = alt && new Uint8Array(alt).join() == key.join();
+      if (Notification.permission != "granted" || (!abo && !PUSH)) return false;
+      if (abo && gleich) return abo;
+      return (abo ? abo.unsubscribe() : Promise.resolve()).then(function () { return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }) });
+    }).then(function (abo) {
+      if (!abo) { if (PUSH) { PUSH = false; lsSet("mg_push", "0"); render() } return }
+      return sb.functions.invoke("push/abo", { body: abo.toJSON() }).then(function (r) { if (!(r && r.error) && !PUSH) { PUSH = true; lsSet("mg_push", "1"); render() } });
+    });
+  }).catch(function () {});
+}
 function b64Bytes(s) { var p = (s + "===".slice((s.length + 3) % 4)).replace(/-/g, "+").replace(/_/g, "/"), r = atob(p), a = new Uint8Array(r.length); for (var i = 0; i < r.length; i++) a[i] = r.charCodeAt(i); return a }
 function darfAendern(e) { var me = uid(); return isAdmin() || e.created_by == me || e.organizer_id == me }
 function eventEdit(e) {
@@ -1481,8 +1499,11 @@ var ACT = {
   pushtest: function () {
     sb.functions.invoke("push/test", { body: {} }).then(function (r) {
       return fnErr(r).then(function (e) {
-        if (e) toast(e); else if (!r.data.geraete) toast("Kein Gerät angemeldet. Schalte Push aus und wieder ein.");
-        else toast("Test-Push gesendet. Er sollte gleich erscheinen.");
+        if (e) return toast(e);
+        var n = r.data.geraete, a = r.data.abos == null ? n : r.data.abos;
+        if (!a) { PUSH = false; lsSet("mg_push", "0"); render(); return toast("Dieses Gerät ist nicht angemeldet. Schalte die Benachrichtigungen nochmals ein.") }
+        if (!n) { PUSH = false; lsSet("mg_push", "0"); render(); return toast("Der Push-Dienst hat abgelehnt. Schalte die Benachrichtigungen nochmals ein.") }
+        toast("Test gesendet an " + n + (n == 1 ? " Gerät" : " Geräte") + ". Kommt nichts, sind Benachrichtigungen für Magnum in den Android-Einstellungen aus.");
       });
     });
   },
@@ -1826,7 +1847,7 @@ function start() {
     if (INVITE && INVITE.state != "bad") { INVITE = null; history.replaceState(null, "", location.pathname + location.search) }
     READY = false; render();
     setTimeout(function () {
-      sb.rpc("me").then(function (r) { PREV = r.data && r.data.prev_seen; return sb.rpc("magnum_termine") }).then(function () { return loadAll() }).then(function () { READY = true; render(); loadInvites() });
+      sb.rpc("me").then(function (r) { PREV = r.data && r.data.prev_seen; return sb.rpc("magnum_termine") }).then(function () { return loadAll() }).then(function () { READY = true; render(); pushAbgleich(); loadInvites() });
     }, 0);
   });
   render();

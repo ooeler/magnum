@@ -390,6 +390,9 @@
   function token() { var c = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_", s = ""; for (var i = 0; i < 43; i++) s += c[Math.random() * 64 | 0]; return s }
   var FN = {
     // Push-Warteschlange anstossen: im Nachbau nur zählen
+    // Push-Abo speichern und Test-Push: im Nachbau nur merken bzw. das vorgegebene Ergebnis liefern
+    "push/abo": function (b) { if (!me()) return fnFail("Kein Mitglied"); (window.__mg_abos = window.__mg_abos || []).push(b.endpoint); return ok({ ok: true }) },
+    "push/test": function () { if (!me()) return fnFail("Kein Mitglied"); return ok(Object.assign({ ok: true, geraete: 1, abos: 1 }, window.__mg_testpush || {})) },
     "push/senden": function () { if (!me()) return fnFail("Kein Mitglied"); window.__mg_anstoesse = (window.__mg_anstoesse || 0) + 1; return ok({ gesendet: 0 }) },
     invite: function (b) {
       var d = db(), now = new Date().toISOString(), INVALID = "Dieser Einladungslink ist ungültig, abgelaufen oder wurde schon verwendet.";
