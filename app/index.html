@@ -686,10 +686,10 @@ var WRICHT = null;
 function shell() {
   var t = TABS.filter(function (x) { return x[0] == TAB })[0] || TABS[0];
   var body = { termine: termine, reisen: reisen, club: club, karten: karten, stats: statistik }[t[0]]();
-  // Für Admins schwebt auf jeder Seite (auch über offenen Fenstern) ein Schalter Admin- / Mitglied-Ansicht
-  return (echterAdmin() ? (ALS_MITGLIED
-      ? '<div class="sicht" data-test="sicht"><button class="pill sm" data-a="sicht" aria-label="Zurück zur Admin-Ansicht">👁 Mitglied-Ansicht · zurück</button></div>'
-      : '<div class="sicht" data-test="sicht-admin"><button class="pill sm" data-a="sicht" aria-label="App als Mitglied ansehen">👁 Admin-Ansicht</button></div>') : "") + '<header><div><div class="sub">' + esc(t[2]) + '</div><h1>Magnum</h1><div class="hello">' + esc(hello()) + '</div></div><div class="row" style="gap:12px;align-items:center"><span class="gl">' + flasche() + (isAdvent(today()) ? HAT : "") + '</span><button type="button" class="av kopf" data-a="ov" data-t="member" data-id="' + uid() + '" aria-label="Mein Profil">' + esc(ini(uid())) + "</button></div></header>" +
+  // Nur in der Mitglied-Ansicht schwebt auf jeder Seite (auch über offenen Fenstern) «Zurück zur Admin-Ansicht»; ✕ blendet ihn aus
+  return (echterAdmin() && ALS_MITGLIED && !UI.sichtZu
+      ? '<div class="sicht row" data-test="sicht" style="gap:6px"><button class="pill sm" data-a="sicht" aria-label="Zurück zur Admin-Ansicht">👁 Mitglied-Ansicht · zurück</button><button class="pill sm" data-a="setui" data-k="sichtZu" data-v="1" aria-label="Hinweis ausblenden">✕</button></div>'
+      : "") + '<header><div><div class="sub">' + esc(t[2]) + '</div><h1>Magnum</h1><div class="hello">' + esc(hello()) + '</div></div><div class="row" style="gap:12px;align-items:center"><span class="gl">' + flasche() + (isAdvent(today()) ? HAT : "") + '</span><button type="button" class="av kopf" data-a="ov" data-t="member" data-id="' + uid() + '" aria-label="Mein Profil">' + esc(ini(uid())) + "</button></div></header>" +
     "<main" + (WRICHT ? ' class="von' + WRICHT + '"' : "") + ">" + body + "</main>" +
     '<nav aria-label="Bereiche">' + TABS.map(function (x) { return '<button type="button" data-a="tab" data-v="' + x[0] + '" class="' + (x[0] == TAB ? "on" : "") + '"' + (x[0] == TAB ? ' aria-current="page"' : "") + "><i></i>" + (TAB_ICON[x[0]] || "") + "<span>" + x[1] + "</span></button>" }).join("") + "</nav>" +
     (OV ? overlay() : "") + (SH ? sheet() : "");
@@ -1662,7 +1662,7 @@ var ACT = {
       });
     });
   },
-  sicht: function () { ALS_MITGLIED = !ALS_MITGLIED; lsSet("mg_als_mitglied", ALS_MITGLIED ? "1" : "0"); toast(ALS_MITGLIED ? "Du siehst die App jetzt als Mitglied" : "Admin-Ansicht"); render() },
+  sicht: function () { ALS_MITGLIED = !ALS_MITGLIED; UI.sichtZu = null; lsSet("mg_als_mitglied", ALS_MITGLIED ? "1" : "0"); toast(ALS_MITGLIED ? "Du siehst die App jetzt als Mitglied" : "Admin-Ansicht"); render() },
   ocr: function () { if (UI.rsFile) quittungErkennen(UI.rsFile) },
   anw: function (d) { after(sb.rpc("admin_set_rsvp", { p_event: d.id, p_member: d.m, p_status: d.v || null }), "Anwesenheit von " + nm(d.m) + " gespeichert") },
   delevent: function (d) { if (!confirm("Anlass wirklich löschen?")) return; OV = null; after(sb.from("events").delete().eq("id", d.id), "Anlass gelöscht") },
