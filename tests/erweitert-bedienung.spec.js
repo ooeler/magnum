@@ -6,7 +6,7 @@ test.describe("Bedienbarkeit", () => {
   test("keine Konsolenfehler in allen Bereichen und Overlays (Admin)", async ({ page }) => {
     const fehler = [];
     page.on("pageerror", (e) => fehler.push("pageerror: " + e.message));
-    page.on("console", (m) => { if (m.type() == "error" && !/fonts\.|Failed to load resource|tile|cartocdn/i.test(m.text())) fehler.push("console: " + m.text()) });
+    page.on("console", (m) => { if (m.type() == "error" && !/fonts\.|Failed to load resource|tile|openstreetmap/i.test(m.text())) fehler.push("console: " + m.text()) });
     await login(page, OT);
     for (const t of ["Termine", "Reisen", "Club", "Karten", "Statistik"]) { await tab(page, t); await page.waitForTimeout(200) }
     await tab(page, "Termine");

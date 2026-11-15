@@ -30,17 +30,34 @@ test.describe("Rekord-Serie", () => {
 });
 
 test.describe("Duell", () => {
-  test("Prozent des Monats, Führung und Vormonat", async ({ page }) => {
-    await login(page);
+  test("Prozent des Monats und Führung (ab dem 11.)", async ({ page }) => {
+    await login(page);                                     // 31.10.
     const d = card(page, "Duell des Monats");
     await expect(d.locator("[data-test=duell-android]")).toHaveText("100 %");
     await expect(d.locator("[data-test=duell-iphone]")).toHaveText("75 %");
     await expect(d).toContainText("Android führt.");
-    await expect(d.locator("[data-test=duell-vormonat]")).toHaveText("Letzten Monat: iPhone gewinnt, Android bringt die nächste Magnum.");
+    await expect(d.locator("[data-test=duell-vormonat]")).toHaveCount(0);
+  });
+
+  test("Bis zum 10. des Folgemonats steht der Endstand des Vormonats", async ({ page }) => {
+    await fix(page, "2026-11-10T20:00:00+01:00");
+    await login(page);
+    const d = card(page, "Duell des Monats");
+    await expect(d.locator("[data-test=duell-endstand]")).toHaveText("Endstand Oktober");
+    await expect(d.locator("[data-test=duell-android]")).toHaveText(/^\d+ %$/);
+    await expect(d.locator("[data-test=duell-vormonat]")).toHaveText(/gewinnt, (iPhone|Android) bringt die nächste Magnum.|Unentschieden./);
+    await expect(d).toContainText("ab dem 11. November");
+  });
+
+  test("Ab dem 11. die laufende Wertung", async ({ page }) => {
+    await fix(page, "2026-11-11T08:00:00+01:00");
+    await login(page);
+    const d = card(page, "Duell des Monats");
+    await expect(d.locator("[data-test=duell-endstand]")).toHaveCount(0);
   });
 
   test("Monat ohne Anlass", async ({ page }) => {
-    await fix(page, "2026-12-02T10:00:00+01:00");
+    await fix(page, "2026-12-12T10:00:00+01:00");
     await page.goto("/");
     await page.evaluate(() => { const d = window.__mg.db(); d.events = d.events.filter((e) => e.id.startsWith("e-past")); localStorage.setItem("__mg_db", JSON.stringify(d)) });
     await login(page);

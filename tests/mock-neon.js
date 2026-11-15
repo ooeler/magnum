@@ -21,7 +21,7 @@
   function seed() {
     var P = function (id, n, role, since, dev, extra) { return Object.assign({ id: id, display_name: n, nickname: null, role_title: role, since_year: since, fav_wine: null, specialty: null, device: dev, device_set_by_admin: false, is_admin: false, invited_by: null, last_seen: null, created_at: iso(-400) }, extra || {}) };
     var d = {
-      settings: [{ id: 1, goal_title: "30 Zusagen bis zum Chlaus-Magnum = Apéro für alle", goal_target: 30, magnum_price: 45 }],
+      settings: [{ id: 1, goal_title: "30 Zusagen bis zum Chlaus-Magnum", goal_target: 30, magnum_price: 45 }],
       app_status: [{ id: "main", maintenance: false }],
       profiles: [
         P(M.ot, "Ot", "Präsident", 2009, "iphone", { is_admin: true, fav_wine: "Cornalin", specialty: "Reden nach Mitternacht" }),

@@ -15,12 +15,15 @@ grant execute on function public.uid() to authenticated;
 -- ───────────── Einstellungen & Wartung ─────────────
 create table if not exists public.settings (
   id           int primary key default 1 check (id = 1),
-  goal_title   text not null default '30 Zusagen bis zum Chlaus-Magnum = Apéro für alle',
+  goal_title   text not null default '30 Zusagen bis zum Chlaus-Magnum',
   goal_target  int  not null default 30,
   magnum_price numeric(6,2) not null default 45
 );
 alter table public.settings enable row level security;
 insert into public.settings (id) values (1) on conflict do nothing;
+-- Das Club-Ziel bleibt, der Apéro für alle fällt weg
+alter table public.settings alter column goal_title set default '30 Zusagen bis zum Chlaus-Magnum';
+update public.settings set goal_title = regexp_replace(goal_title, '\s*=\s*Ap[eé]ro für alle\s*$', '', 'i') where goal_title ~* 'Ap[eé]ro für alle';
 
 -- Wartungsseite während eines Updates (schaltet der Release-Workflow)
 create table if not exists public.app_status (

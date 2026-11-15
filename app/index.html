@@ -26,7 +26,9 @@ header{padding:calc(14px + env(safe-area-inset-top,0px)) 18px 14px;display:flex;
 header .sub{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--mu);font-weight:600}
 header h1{margin:2px 0 0;font:900 30px/1 var(--hf);letter-spacing:-.5px}
 .hello{font-size:13px;color:var(--mu);margin-top:4px}
-main,.top{overflow-wrap:anywhere}main{padding:16px 14px 24px;display:flex;flex-direction:column;gap:14px;max-width:640px;margin:0 auto}
+main,.top{overflow-wrap:anywhere}
+/* Knöpfe brechen nie mitten im Wort um und werden in einer Zeile nicht zusammengedrückt; umbrechen darf der Text daneben */
+.btn,.pill,.chip{overflow-wrap:normal;word-break:keep-all}.row>.btn,.row>.pill,.row>.chip,.sb>.btn,.sb>.pill{flex:none;white-space:nowrap}.row>.grow{min-width:0}main{padding:16px 14px 24px;display:flex;flex-direction:column;gap:14px;max-width:640px;margin:0 auto}
 h2{margin:6px 2px 0;font:700 22px var(--hf)}
 .card{background:var(--card);border:1px solid var(--ln);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px}
 .card.gold{border-color:var(--ac);background:#2B1F23}
@@ -81,6 +83,7 @@ ol{list-style:none;margin:0;padding:0}
 .band{min-height:88px;display:flex;align-items:flex-end;justify-content:space-between;padding:12px 16px;gap:8px}
 .band b{font:900 22px var(--hf);color:#FFF8EE}.band span{font-size:12px;font-weight:700;background:var(--bg);color:var(--tx);padding:4px 10px;border-radius:999px;white-space:nowrap}
 .ph{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.ph>*{aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--bg);display:block}
+#beizkarte .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.9) saturate(.6)}
 .ph img,.cimg img{width:100%;height:100%;object-fit:cover;display:block}
 .kgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .glas{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--ln2);background:transparent;color:var(--mu2);font:inherit;align-self:flex-start}
@@ -700,12 +703,16 @@ function duellMonat(m) {
 }
 function duell() {
   if (!D.profiles.some(function (p) { return p.device == "android" }) || !D.profiles.some(function (p) { return p.device == "iphone" })) return "";
-  var d = new Date(), jetzt = duellMonat(today().slice(0, 7)), vor = duellMonat(localDay(new Date(d.getFullYear(), d.getMonth() - 1, 15).toISOString()).slice(0, 7));
+  // Bis und mit dem 10. steht noch der Endstand des Vormonats, ab dem 11. die laufende Wertung
+  var d = new Date(), m = today().slice(0, 7), vm = localDay(new Date(d.getFullYear(), d.getMonth() - 1, 15).toISOString()).slice(0, 7);
+  var jetzt = duellMonat(m), vor = d.getDate() <= 10 ? duellMonat(vm) : null, mn = function (ym) { return MONATE[+ym.slice(5, 7) - 1] };
   var zeile = function (n, q) { return '<div class="col" style="gap:4px"><div class="row sb sm"><span class="b">' + n + '</span><span data-test="duell-' + n.toLowerCase() + '">' + q + ' %</span></div><div class="bar"><i style="width:' + q + '%"></i></div></div>' };
   var h = '<section class="card" aria-label="Duell des Monats"><span class="lbl">Duell des Monats · Android gegen iPhone</span>';
+  if (vor) return h + '<span class="sm b" data-test="duell-endstand">Endstand ' + mn(vm) + "</span>" + zeile("Android", vor.android) + zeile("iPhone", vor.iphone) +
+    '<span class="sm b" data-test="duell-vormonat">' + (vor.android == vor.iphone ? "Unentschieden." : (vor.android > vor.iphone ? "Android gewinnt, iPhone" : "iPhone gewinnt, Android") + " bringt die nächste Magnum.") + "</span>" +
+    '<span class="xs mu">Das Duell im ' + mn(m) + " zählt schon. Die Zwischenwertung erscheint ab dem 11. " + mn(m) + ".</span></section>";
   h += jetzt ? zeile("Android", jetzt.android) + zeile("iPhone", jetzt.iphone) + '<span class="sm mu">' + (jetzt.android == jetzt.iphone ? "Unentschieden." : (jetzt.android > jetzt.iphone ? "Android" : "iPhone") + " führt.") + "</span>"
     : '<span class="sm mu">Diesen Monat gab es noch keinen Anlass. Das nächste Treffen eröffnet das Duell.</span>';
-  if (vor) h += '<span class="sm b" data-test="duell-vormonat">Letzten Monat: ' + (vor.android == vor.iphone ? "unentschieden." : (vor.android > vor.iphone ? "Android gewinnt, iPhone" : "iPhone gewinnt, Android") + " bringt die nächste Magnum.") + "</span>";
   return h + "</section>";
 }
 function termine() {
@@ -772,7 +779,7 @@ function goal() {
   n += D.magnum_guests.filter(function (g) { return mIds.indexOf(g.magnum_id) >= 0 }).length;
   var pct = Math.min(100, Math.round(100 * n / Math.max(1, st.goal_target)));
   return '<section class="card" aria-label="Club-Ziel"><span class="lbl">Gemeinsames Club-Ziel</span><span class="mid">' + esc(st.goal_title) + '</span><div class="bar teal" style="height:12px"><i style="width:' + pct + '%"></i></div><span class="sm mu" data-test="ziel">' +
-    (n >= st.goal_target ? "Geschafft! Der Apéro geht auf den Club." : n + " / " + st.goal_target + " Zusagen · jede Anmeldung und jeder Gasttrinker zählt für alle") + "</span></section>";
+    (n >= st.goal_target ? "Geschafft! Ziel erreicht. Prost!" : n + " / " + st.goal_target + " Zusagen · jede Anmeldung und jeder Gasttrinker zählt für alle") + "</span></section>";
 }
 function eventCard(e) {
   var me = uid(), s = rsvp(e.id, me), d = new Date(e.starts_at);
@@ -1250,8 +1257,9 @@ function karteHtml() {
 }
 function karte() {
   var el = document.getElementById("beizkarte"); if (!el || !window.L) return;
-  var m = L.map(el, { scrollWheelZoom: false, attributionControl: true }), P = mitStandort();
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap © CARTO" }).addTo(m);
+  var m = L.map(el, { scrollWheelZoom: false, attributionControl: true, fadeAnimation: false }), P = mitStandort();
+  // OpenStreetMap ohne Schlüssel (CARTO verlangt inzwischen einen API-Schlüssel), per CSS dunkel eingefärbt
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(m);
   P.forEach(function (r) {
     var t = document.createElement("span"); t.textContent = r.name;
     L.circleMarker([r.lat, r.lng], { radius: 8, color: "#E8B95A", weight: 2, fillColor: "#8E1F36", fillOpacity: 1 }).addTo(m).bindPopup(t).on("dblclick", function () { OV = { t: "resto", id: r.id }; render() });

@@ -31,7 +31,8 @@ Du bist ein erfahrener, skeptischer QA-Tester. Du testest die Web-App „Magnum�
 - Karten liken mit einem vollen Weinglas (kein Daumen): in der Karte „Volles Glas geben“, nochmals tippen nimmt es zurück. Zahl und „Prost von …“ unter dem Knopf, die Zahl auch auf der Kachel. Pro Person und Karte ein Glas. 4 volle Gläser geben eine Flasche (z. B. 9 = 2 Flaschen und 1 Glas). Gilt für Sammel-, Sacceri-, Collage- und gezogene Videokarten, nicht für geheime Karten.
 - Spielerei: Rekord-Serie im Rang, Duell des Monats Android gegen iPhone, „Komm mal wieder“ nach drei verpassten Anlässen, Saison-Effekte, gefüllte Weingläser am Anlasstag (bei „Bewegung reduzieren“ bewegt sich nichts).
 - Club: Karte „App installieren“ mit Anleitung passend zum Gerät; in der installierten App keine Karte.
-- Am Handy (390 px) kein seitliches Scrollen, alle Knöpfe gut antippbar.
+- Am Handy (390 px) kein seitliches Scrollen, alle Knöpfe gut antippbar. Text in Knöpfen bricht nie um (z. B. „Prost 0“, „Posten“).
+- Club-Ziel ohne „Apéro für alle“. Duell des Monats: bis und mit dem 10. steht der Endstand des Vormonats, ab dem 11. die laufende Wertung.
 - Wischen nach links/rechts wechselt den Reiter (Termine → Reisen → Club → Karten → Statistik). Nicht in offenen Fenstern, Eingabefeldern, Videos, der Landkarte, seitlich scrollenden Bereichen und nicht vom Bildschirmrand aus. Senkrechtes Scrollen wechselt nie.
 - WhatsApp: „In WhatsApp teilen“ beim kommenden Anlass, bei der Karte der Woche und unter der Rangliste öffnet wa.me mit Titel, Datum, Ort und App-Link.
 - Push: Ist Push eingeschaltet, sendet „Test-Push an mein Gerät senden“ eine Nachricht nur an die eigenen Geräte; ein zweiter Versuch in derselben Minute meldet „Bitte eine Minute warten“.
