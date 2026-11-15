@@ -69,6 +69,12 @@ label.f{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:60
 .file{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
 .file input{position:absolute;inset:0;opacity:0;cursor:pointer}
 .av{width:44px;height:44px;flex:0 0 44px;border-radius:50%;background:var(--wine);display:flex;align-items:center;justify-content:center;font:900 18px var(--hf);color:var(--tx)}
+.flip{display:block;width:100%;padding:0;border:0;background:none;color:inherit;text-align:left;cursor:pointer;perspective:1400px}
+.flip .innen{display:grid;transition:transform .6s cubic-bezier(.3,.7,.3,1);transform-style:preserve-3d}
+.flip.gedreht .innen{transform:rotateY(180deg)}
+.flip .seite{grid-area:1/1;backface-visibility:hidden;-webkit-backface-visibility:hidden;display:flex;flex-direction:column;gap:8px}
+.flip .hinten{transform:rotateY(180deg)}
+@media (prefers-reduced-motion:reduce){.flip .innen{transition:none}}
 .bildtipp{display:block;width:100%;padding:0;border:0;background:none;color:inherit;text-align:left;cursor:pointer}
 .av.kopf{border:2px solid var(--ac);cursor:pointer;padding:0}
 .av.s{width:36px;height:36px;flex-basis:36px;font-size:14px}.av.l{width:64px;height:64px;flex-basis:64px;font-size:26px}.av.drv{background:#2C4A5A}
@@ -1263,11 +1269,16 @@ function cardView(c) {
   var col = RAR[c.r][1];
   var pic = c.collage ? '<div class="ph">' + c.collage.map(function (p) { return "<span>" + img(p, "Reisefoto") + "</span>" }).join("") + "</div>"
     : '<div class="cimg" style="height:190px;flex:none;border:1px dashed var(--ln2)">' + (c.photo ? img(c.photo, c.title) : '<span class="sm mu">Kein Foto</span>') + "</div>";
-  return '<div class="top"><button class="back" data-a="close" aria-label="Zurück">' + BACK + '</button></div><main><article class="kc" style="--c:' + col + ';min-height:0;box-shadow:0 0 0 6px var(--bg),0 0 0 7px ' + col + '"><span class="r">' + esc(c.tag || RAR[c.r][0]) + "</span>" +
-    '<button type="button" class="bildtipp" data-a="setui" data-k="kText" data-v="' + (UI.kText == c.id ? "" : esc(c.id)) + '" aria-expanded="' + (UI.kText == c.id) + '" aria-label="Geschichte zur Karte ' + (UI.kText == c.id ? "verstecken" : "zeigen") + '">' + pic + "</button>" +
-    '<span style="font:900 24px/1.15 var(--hf)">' + esc(c.title) + "</span>" +
-    (UI.kText == c.id ? '<div class="col" data-test="karten-text" style="gap:8px"><span class="sm mu">' + esc([c.sub, c.place].filter(Boolean).join(" · ")) + "</span>" + (c.story ? '<p style="margin:0;line-height:1.5">' + esc(c.story) + "</p>" : "") +
-      (c.who ? '<span class="sm mu" style="border-top:1px solid var(--ln);padding-top:10px">Beteiligt: ' + esc(c.who) + "</span>" : "") + "</div>" : '<span class="xs mu">Tippe aufs Bild für die Geschichte</span>') + "</article>" +
+  var rahmen = 'style="--c:' + col + ';min-height:0;box-shadow:0 0 0 6px var(--bg),0 0 0 7px ' + col + '"', hinten = UI.kText == c.id;
+  return '<div class="top"><button class="back" data-a="close" aria-label="Zurück">' + BACK + '</button></div><main>' +
+    '<button type="button" class="flip' + (hinten ? " gedreht" : "") + '" data-a="drehen" data-id="' + esc(c.id) + '" aria-pressed="' + hinten + '" aria-label="Karte umdrehen"><span class="innen">' +
+    '<span class="seite kc vorne" ' + rahmen + ' aria-hidden="' + hinten + '"><span class="r">' + esc(c.tag || RAR[c.r][0]) + "</span>" + pic +
+      '<span style="font:900 24px/1.15 var(--hf)">' + esc(c.title) + '</span><span class="xs mu">Tippe, um die Karte umzudrehen ↻</span></span>' +
+    '<span class="seite kc hinten" ' + rahmen + ' data-test="karten-text" aria-hidden="' + !hinten + '"><span class="r">' + esc(c.tag || RAR[c.r][0]) + " · Rückseite</span>" +
+      '<span style="font:900 20px/1.15 var(--hf)">' + esc(c.title) + '</span><span class="sm mu">' + esc([c.sub, c.place].filter(Boolean).join(" · ")) + "</span>" +
+      (c.story ? '<span style="display:block;line-height:1.5">' + esc(c.story) + "</span>" : '<span class="sm mu">Noch keine Geschichte.</span>') +
+      (c.who ? '<span class="sm mu" style="border-top:1px solid var(--ln);padding-top:10px">Beteiligt: ' + esc(c.who) + "</span>" : "") + '<span class="xs mu">Tippe, um zurückzudrehen ↻</span></span>' +
+    "</span></button>" +
     (glasKey(c) ? glasKnopf(glasKey(c)) : "") + kartePersonen(c) + (c.own ? '<button class="btn ghost" data-a="delcard" data-id="' + c.id + '">Karte löschen</button>' : "") + "</main>";
 }
 // Personen auf der Karte: Wer eingetragen ist, bekommt +10 Punkte
@@ -1562,6 +1573,12 @@ var ACT = {
   },
   close: function () { if (!SH && OV && history.state && history.state.mgOv) { history.back(); return } zu() },
   authmode: function (d) { AUTH = { mode: d.v }; render() },
+  drehen: function (d, el) {
+    var hinten = !el.classList.contains("gedreht");
+    UI.kText = hinten ? d.id : null;
+    el.classList.toggle("gedreht", hinten); el.setAttribute("aria-pressed", hinten);
+    el.querySelector(".vorne").setAttribute("aria-hidden", hinten); el.querySelector(".hinten").setAttribute("aria-hidden", !hinten);
+  },
   umspaeter: function () { SH = null; render() },
   noinvite: function () { INVITE = null; history.replaceState(null, "", location.pathname + location.search); render() },
   logout: function () { sb.auth.signOut() },

@@ -60,7 +60,7 @@ Pro Fund: Schritte, erwartet, tatsächlich, Schwere. Am Schluss, was du geprüft
 - Push bei neuer Abstimmung (Sacceri beim Antrag, Spitzname sobald unterstützt) an die Stimmberechtigten. Umgesetzter Vorschlag: einmal „Danke für deinen Input! … wurde umgesetzt“.
 - Profil oben rechts neben der Flasche: zeigt das eigene Profil wie im Club, „Bearbeiten“ (Name, Lieblingswein, Spezialität), Push, „Abmelden“. Admins: Schalter „Ansicht: Administrator | Mitglied“.
 - Wischen in einem offenen Profil blättert durch die Mitglieder (Reihenfolge wie im Club), in einer Karte durch die Karten (wie die Übersicht mit Filter, gesperrte übersprungen).
-- Kartenansicht: zuerst Bild und Titel, Tipp aufs Bild zeigt Geschichte, Ort und Beteiligte.
+- Kartenansicht: Wendekarte. Vorne Bild und Titel, Tipp dreht die Karte (3D, bei «Bewegung reduzieren» ohne Animation), hinten Geschichte, Datum, Ort und Beteiligte. Nochmals tippen dreht zurück.
 - Flasche oben rechts: am Anlasstag voll, ab dem Tag danach leer, füllt sich bis zum nächsten Anlass. Push „Die Magnum ist voll 🍾“ um 18 Uhr Schweizer Zeit an alle, die dabei oder virtuell dabei sind.
 - Fahrdienst: Fahrer bekommt 15 Punkte pro heimgebrachter Person, die dabei war, und +10 für jede Bewertung mit Schnitt ab 4 Sternen. Mitfahrer verteilen keine Punkte mehr.
 - Design-Umfrage beim Öffnen (bis beantwortet): Schieber 0–10, unter 8 Textfeld „Was soll verbessert werden?“. Ergebnis nur für den Admin im Club.
