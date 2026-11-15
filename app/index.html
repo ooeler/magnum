@@ -531,12 +531,17 @@ function after(p, msg) {
 function pushAnstoss(p) {
   return Promise.resolve(p).then(function (r) { if (!(r && r.error)) try { sb.functions.invoke("push/senden", { body: {} }).catch(function () {}) } catch (e) {} return r });
 }
-function dankHinweis() {
+// Danke-Banner: Wer einen Vorschlag eingereicht hat, der umgesetzt wurde, sieht oben unter Termine einen Dank, bis er ihn schliesst
+function dankHinweis() {}
+function dankBanner() {
   var gesehen = (lsGet("mg_fb_dank") || "").split(",");
-  var f = D.feedback.filter(function (x) { return x.user_id == uid() && x.status == "umgesetzt" && gesehen.indexOf(String(x.id)) < 0 })[0];
-  if (!f) return;
-  gesehen.push(String(f.id)); lsSet("mg_fb_dank", gesehen.filter(Boolean).join(","));
-  toast("Danke für deinen Input! «" + f.title + "» wurde umgesetzt · +8 Punkte");
+  var L = D.feedback.filter(function (x) { return x.user_id == uid() && x.status == "umgesetzt" && gesehen.indexOf(String(x.id)) < 0 });
+  if (!L.length) return "";
+  return '<section class="card gold" aria-label="Danke" data-test="dank"><div class="row sb"><span class="b" style="font-size:16px">🎉 Danke für deine guten Inputs!</span>' +
+    '<button class="pill sm" data-a="dankzu" aria-label="Danke-Banner schliessen">✕</button></div>' +
+    '<span class="sm">' + (L.length == 1 ? "Dein Vorschlag ist umgesetzt:" : "Deine Vorschläge sind umgesetzt:") + "</span>" +
+    '<ul class="sm" style="margin:0;padding-left:18px;line-height:1.6">' + L.map(function (x) { return "<li>" + esc(x.title) + "</li>" }).join("") + "</ul>" +
+    '<span class="xs mu">+8 Punkte pro umgesetztem Vorschlag. Weiter so!</span></section>';
 }
 function wartung() {
   return sb.from("app_status").select("maintenance").eq("id", "main").maybeSingle().then(function (r) {
@@ -784,7 +789,7 @@ function duell() {
 }
 function termine() {
   var me = uid(), s = stats(me), b = board(), place = (b.find(function (x) { return x.id == me }) || {}).place;
-  var h = ziehBox() + spruch() + karteDerWoche();
+  var h = dankBanner() + ziehBox() + spruch() + karteDerWoche();
   h += '<section class="card gold" aria-label="Dein Rang"><div class="row sb"><div class="col" style="gap:2px"><span class="lbl">Dein Rang</span><span class="big" style="font-size:22px;color:var(--ac)">' + esc(s.rank.name) + '</span></div>' +
     '<div class="col" style="gap:0;align-items:flex-end"><span class="big" data-test="punkte">' + s.points + '</span><span class="xs mu">Punkte</span></div></div>' +
     '<div class="col"><div class="bar"><i style="width:' + s.pct + '%"></i></div><span class="sm mu">' + (s.next ? "Noch " + (s.next.min - s.points) + " Punkte bis «" + esc(s.next.name) + "»" : "Höchster Rang erreicht") + "</span></div>" +
@@ -893,10 +898,11 @@ function pastForm() {
 // Gäste ohne Konto bei Anlässen und Reisen. Austragen darf, wer eingetragen hat, oder der Admin.
 function gaesteVon(art, id) { return D.gaeste.filter(function (g) { return art == "event" ? g.event_id == id : g.trip_id == id }) }
 function gaesteBox(art, id) {
-  var L = gaesteVon(art, id);
+  var L = gaesteVon(art, id), e = art == "event" && D.events.find(function (x) { return x.id == id });
+  var gesperrt = e && localDay(e.starts_at) < today() && !isAdmin();   // vergangene Anlässe: nur der Admin trägt nach
   return '<section class="card" aria-label="Gäste"><span class="b" style="font-size:15px">Gäste (' + L.length + ')</span>' +
     (L.length ? '<div class="chips">' + L.map(function (g) { return g.added_by == uid() || isAdmin() ? '<button class="chip guest" data-a="gastweg" data-id="' + g.id + '" aria-label="' + esc(g.name) + ' austragen">' + esc(g.name) + " ×</button>" : '<span class="chip guest">' + esc(g.name) + "</span>" }).join("") + "</div>" : "") +
-    '<form class="row" data-s="gast" data-id="' + id + '" data-f="' + art + '"><input class="t" data-k="gast' + id + '" value="' + esc(v("gast" + id)) + '" placeholder="Name des Gasts" maxlength="60" aria-label="Name des Gasts"><button class="btn">Eintragen</button></form></section>';
+    (gesperrt ? '<span class="xs mu" data-test="gast-gesperrt">Gäste bei vergangenen Anlässen trägt der Administrator nach.</span>' : '<form class="row" data-s="gast" data-id="' + id + '" data-f="' + art + '"><input class="t" data-k="gast' + id + '" value="' + esc(v("gast" + id)) + '" placeholder="Name des Gasts" maxlength="60" aria-label="Name des Gasts"><button class="btn">Eintragen</button></form>') + "</section>";
 }
 // Push: braucht einen Service Worker, auf dem iPhone die installierte App (Zum Home-Bildschirm)
 var PUSH = lsGet("mg_push") == "1";
@@ -1508,7 +1514,8 @@ function rides(e) {
       (P.length ? '<div class="chips">' + P.map(function (p) { return '<span class="chip' + (p.rated_at ? " ja" : "") + '">' + esc(first(p.passenger_id)) + (p.rated_at ? " · " + ((p.stars_safe + p.stars_punctual + p.stars_mood) / 3).toFixed(1).replace(".", ",") + " ★" : "") + "</span>" }).join("") + "</div>" : "") +
       (mine ? rideRate(myRide, r, e) : "") + "</div>";
   }).join("") + "</div>" : '<span class="empty">Noch niemand fährt. Biete Plätze an!</span>';
-  if (!mineDrive && !myRide) h += UI.rideForm ? '<form class="col tile" data-s="ride" data-id="' + e.id + '" style="gap:8px;padding:12px"><div class="g2"><label class="f">Richtung<input class="t" data-k="rdDir" value="' + esc(v("rdDir")) + '" maxlength="60" placeholder="z.B. Wil"></label><label class="f">Plätze<input class="t" type="number" min="1" max="8" data-k="rdSeats" value="' + esc(v("rdSeats", "3")) + '"></label></div><div class="row"><button class="btn grow">Plätze anbieten</button><button type="button" class="btn ghost" data-a="ui" data-k="rideForm" data-v="">Abbrechen</button></div></form>'
+  if (localDay(e.starts_at) < today()) h += '<span class="xs mu" data-test="fahrt-vorbei">Fahrten anbieten geht nur bis und mit dem Anlasstag.</span>';
+  else if (!mineDrive && !myRide) h += UI.rideForm ? '<form class="col tile" data-s="ride" data-id="' + e.id + '" style="gap:8px;padding:12px"><div class="g2"><label class="f">Richtung<input class="t" data-k="rdDir" value="' + esc(v("rdDir")) + '" maxlength="60" placeholder="z.B. Wil"></label><label class="f">Plätze<input class="t" type="number" min="1" max="8" data-k="rdSeats" value="' + esc(v("rdSeats", "3")) + '"></label></div><div class="row"><button class="btn grow">Plätze anbieten</button><button type="button" class="btn ghost" data-a="ui" data-k="rideForm" data-v="">Abbrechen</button></div></form>'
     : '<button class="btn dash" data-a="ui" data-k="rideForm" data-v="1">Ich fahre · Plätze anbieten</button>';
   return h + "</section>";
 }
@@ -1588,6 +1595,11 @@ var ACT = {
     UI.kText = hinten ? d.id : null;
     el.classList.toggle("gedreht", hinten); el.setAttribute("aria-pressed", hinten);
     el.querySelector(".vorne").setAttribute("aria-hidden", hinten); el.querySelector(".hinten").setAttribute("aria-hidden", !hinten);
+  },
+  dankzu: function () {
+    var gesehen = (lsGet("mg_fb_dank") || "").split(",");
+    D.feedback.forEach(function (x) { if (x.user_id == uid() && x.status == "umgesetzt") gesehen.push(String(x.id)) });
+    lsSet("mg_fb_dank", gesehen.filter(Boolean).join(",")); render();
   },
   umspaeter: function () { SH = null; render() },
   noinvite: function () { INVITE = null; history.replaceState(null, "", location.pathname + location.search); render() },

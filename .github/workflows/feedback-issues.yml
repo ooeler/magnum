@@ -1,4 +1,4 @@
-# Legt Verbesserungsvorschläge aus der App als GitHub-Issues an (alle 10 Minuten).
+# Legt Verbesserungsvorschläge aus der App als GitHub-Issues an (alle 10 Minuten) und meldet geschlossene Issues sofort an die App zurück.
 # Nutzt den eingebauten GITHUB_TOKEN – es muss kein persönliches Token erstellt oder erneuert werden.
 # Schlägt ein Lauf fehl, schickt GitHub dem Repository-Besitzer eine Mail.
 name: Vorschläge → Issues
@@ -6,6 +6,10 @@ name: Vorschläge → Issues
 on:
   schedule:
     - cron: "*/10 * * * *"
+  # Geplante Läufe lässt GitHub bei Last oft aus: Wird ein Issue geschlossen, sofort abgleichen,
+  # damit die App den Vorschlag gleich als «umgesetzt» zeigt (und das Danke erscheint).
+  issues:
+    types: [closed, reopened]
   workflow_dispatch:
 
 permissions:
