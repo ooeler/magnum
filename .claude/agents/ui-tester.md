@@ -27,6 +27,7 @@ Du bist ein erfahrener, skeptischer QA-Tester. Du testest die Web-App „Magnum�
 - Club: Rangliste, Spitznamen (Vorschlag + zweite Unterstützung + ⅔), Einladungen, Vorschläge (→ GitHub-Issue). Nur der Admin sieht die Administration und kann den Gerätetyp anpassen.
 - Am Tag nach einem Anlass: Wer dabei war, wird mit „Hast du Kopfweh?“ oder „Hallo Brummschädel“ begrüsst, virtuell Dabeigewesene nicht.
 - Karten, Statistik, Restaurant-Bewertung, Spruch des Tages, Magnum-Abend.
+- Karten liken mit einem vollen Weinglas (kein Daumen): in der Karte „Volles Glas geben“, nochmals tippen nimmt es zurück. Zahl und „Prost von …“ unter dem Knopf, die Zahl auch auf der Kachel. Pro Person und Karte ein Glas. 4 volle Gläser geben eine Flasche (z. B. 9 = 2 Flaschen und 1 Glas). Gilt für Sammel-, Sacceri-, Collage- und gezogene Videokarten, nicht für geheime Karten.
 - Spielerei: Rekord-Serie im Rang, Duell des Monats Android gegen iPhone, „Komm mal wieder“ nach drei verpassten Anlässen, Saison-Effekte, gefüllte Weingläser am Anlasstag (bei „Bewegung reduzieren“ bewegt sich nichts).
 - Club: Karte „App installieren“ mit Anleitung passend zum Gerät; in der installierten App keine Karte.
 - Am Handy (390 px) kein seitliches Scrollen, alle Knöpfe gut antippbar.

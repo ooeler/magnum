@@ -540,6 +540,34 @@ with x as (delete from public.video_karten where id in (select karte_id from pub
 select pg_temp.check((select count(*) from x) = 0, 'Gezogene Karte löscht der Ersteller nicht mehr');
 with x as (delete from public.video_karten where id not in (select karte_id from public.video_ziehungen) returning 1)
 select pg_temp.check((select count(*) from x) = 1, 'Ungezogene eigene Karte löschbar');
+
+-- Volle Gläser (Likes) für Karten
+select pg_temp.als('B');
+insert into public.karten_glaeser (karte) select 'video-' || karte_id from public.video_ziehungen where member_id = public.uid();
+insert into public.karten_glaeser (karte) values ('video-60000000-0000-0000-0000-000000000003');
+select pg_temp.check((select count(*) from public.karten_glaeser) = 2, 'Glas für gezogene und eigene Videokarte');
+do $$ begin
+  insert into public.karten_glaeser (karte) values ('video-60000000-0000-0000-0000-000000000003');
+  raise exception 'FEHLER: zweites Glas für dieselbe Karte';
+exception when unique_violation then raise notice 'ok – Pro Karte nur ein Glas';
+end $$;
+select pg_temp.verboten($q$insert into public.karten_glaeser (karte, member_id) values ('video-60000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-00000000000c')$q$, 'Kein Glas im Namen anderer');
+select pg_temp.verboten($q$insert into public.karten_glaeser (karte) values ('karte-70000000-0000-0000-0000-000000000099')$q$, 'Kein Glas für Karten, die es nicht gibt');
+do $$ begin
+  insert into public.karten_glaeser (karte) values ('geheim-streak');
+  raise exception 'FEHLER: Glas für geheime Karte';
+exception when check_violation then raise notice 'ok – Geheime Karten bekommen keine Gläser';
+end $$;
+select pg_temp.als('D');
+select pg_temp.verboten($q$insert into public.karten_glaeser (karte) values ('video-60000000-0000-0000-0000-000000000003')$q$, 'Kein Glas für verdeckte Videokarten');
+select pg_temp.check((select count(*) from public.karten_glaeser) = 2, 'Alle sehen die Gläser');
+with x as (delete from public.karten_glaeser returning 1)
+select pg_temp.check((select count(*) from x) = 0, 'Fremde Gläser nimmt niemand weg');
+select pg_temp.als('B');
+delete from public.video_karten where id = '60000000-0000-0000-0000-000000000003';
+select pg_temp.check((select count(*) from public.karten_glaeser) = 1, 'Gläser gehen mit der gelöschten Karte');
+with x as (delete from public.karten_glaeser where member_id = public.uid() returning 1)
+select pg_temp.check((select count(*) from x) = 1, 'Eigenes Glas zurücknehmen');
 reset role;
 select pg_temp.als('');
 
