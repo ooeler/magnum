@@ -41,7 +41,8 @@
       ],
       rsvps: [], magnums: [{ id: "m-1", event_id: "e-1", wine: "Cornalin 2019", brought_by: M.kurt, created_at: iso(-2) }],
       magnum_guests: [{ id: "g-1", magnum_id: "m-1", name: "Peter (Gast von Kurt)", added_by: M.kurt, created_at: iso(-2) }],
-      rides: [{ id: "r-1", event_id: "e-1", driver_id: M.jurg, direction: "Richtung Wil", seats: 3, created_at: iso(-1) }], ride_passengers: [], card_members: [], gaeste: [], karte_der_woche: [], karte_der_woche_fuer: [], karten_glaeser: [], video_karten: [], video_ziehungen: [],
+      rides: [{ id: "r-1", event_id: "e-1", driver_id: M.jurg, direction: "Richtung Wil", seats: 3, created_at: iso(-1) }], ride_passengers: [], card_members: [], gaeste: [], karte_der_woche: [], karte_der_woche_fuer: [], trip_absagen: [],
+      trip_aemtli: [{ trip_id: "t-bordeaux", member_id: M.chris, rolle: "ok", added_by: null }, { trip_id: "t-bordeaux", member_id: M.beat, rolle: "kassier", added_by: null }, { trip_id: "t-wallis", member_id: M.chris, rolle: "ok", added_by: null }], karten_glaeser: [], video_karten: [], video_ziehungen: [],
       trips: [
         { id: "t-bordeaux", title: "Bordeaux", starts_on: day(-60), ends_on: day(-57), program: "Saint-Émilion, Médoc, Austern in Arcachon", seats: 12, color: "#5A1F2E", ok_id: M.chris, kassier_id: M.beat, sacceri_id: M.dani, created_by: M.chris, created_at: iso(-200) },
         { id: "t-wallis", title: "Wallis", starts_on: day(190), ends_on: day(192), program: "Weinwanderung Sierre–Salgesch, Raclette", seats: 12, color: "#6E2433", ok_id: M.chris, kassier_id: null, sacceri_id: null, created_by: M.chris, created_at: iso(-20) }
@@ -89,29 +90,29 @@
     [M.beat, M.chris, M.dani, M.kurt, M.jurg, M.hans].forEach(function (m) { d.rsvps.push({ event_id: "e-1", member_id: m, status: "in", redeemed: false, updated_at: iso(-2) }) });
     [M.ot, M.beat, M.chris, M.dani].forEach(function (m) { d.trip_participants.push({ trip_id: "t-wallis", member_id: m }) });
     [M.ot, M.beat, M.chris, M.dani, M.erich, M.gabi].forEach(function (m) { d.trip_participants.push({ trip_id: "t-bordeaux", member_id: m }) });
-    for (var i = 0; i < 6; i++) d.trip_photos.push({ id: "tp-" + i, trip_id: "t-bordeaux", path: "seed/bordeaux-" + i + ".jpg", uploaded_by: M.chris, created_at: iso(-55 + i / 10) });
+    for (var i = 0; i < 6; i++) d.trip_photos.push({ id: "tp-" + i, trip_id: "t-bordeaux", path: "seed/bordeaux-" + i + ".jpg", uploaded_by: M.chris, als_karte: i >= 3, created_at: iso(-55 + i / 10) });
     // Getränkefotos: Beat standfest, Chris solide
     [[M.beat, -12, ["wein", "wein", "magnum", "wein", "bier"]], [M.beat, -40, ["wein", "magnum", "wein", "schnaps"]], [M.chris, -12, ["wein", "wasser", "wein"]], [M.ot, -12, ["wein", "magnum", "wasser"]]].forEach(function (x) {
       x[2].forEach(function (k, j) { d.drinks.push({ id: uuid(), member_id: x[0], drunk_on: day(x[1]), kind: k, photo_path: null, created_at: iso(x[1] + j / 100) }) });
     });
     return d;
   }
-  function db() { var d = get(DBK); if (!d) { d = seed(); set(DBK, d) } if (!d.karten_glaeser) d.karten_glaeser = []; if (!d.karte_der_woche_fuer) d.karte_der_woche_fuer = []; return d }
+  function db() { var d = get(DBK); if (!d) { d = seed(); set(DBK, d) } if (!d.karten_glaeser) d.karten_glaeser = []; if (!d.karte_der_woche_fuer) d.karte_der_woche_fuer = []; if (!d.trip_aemtli) d.trip_aemtli = []; if (!d.trip_absagen) d.trip_absagen = []; return d }
   function save(d) { set(DBK, d) }
 
   // ───────────── Regeln (Spiegel von db/setup.sql) ─────────────
-  var OWNER = { restaurant_ratings: "member_id", rsvps: "member_id", trip_participants: "member_id", drinks: "member_id", saying_prosts: "member_id", post_prosts: "member_id", karten_glaeser: "member_id",
+  var OWNER = { restaurant_ratings: "member_id", rsvps: "member_id", trip_participants: "member_id", drinks: "member_id", saying_prosts: "member_id", post_prosts: "member_id", karten_glaeser: "member_id", trip_absagen: "member_id", trip_aemtli: "added_by",
     ride_passengers: "passenger_id", rides: "driver_id", restaurants: "created_by", restaurant_visits: "created_by", events: "created_by", magnums: "brought_by", magnum_guests: "added_by",
     trip_photos: "uploaded_by", cards: "created_by", video_karten: "created_by", gaeste: "added_by", sayings: "author_id", posts: "author_id", trips: "created_by" };
   var PK = { card_members: ["card_id", "member_id"], rsvps: ["event_id", "member_id"], restaurant_ratings: ["restaurant_id", "member_id"], trip_participants: ["trip_id", "member_id"], saying_prosts: ["saying_id", "member_id"],
-    post_prosts: ["post_id", "member_id"], karten_glaeser: ["karte", "member_id"], ride_passengers: ["ride_id", "passenger_id"], ballots: ["proposal_id", "voter_id"] };
-  var PERSONAL = ["restaurant_ratings", "rsvps", "trip_participants", "drinks", "saying_prosts", "post_prosts", "karten_glaeser", "ride_passengers", "rides"];
+    post_prosts: ["post_id", "member_id"], karten_glaeser: ["karte", "member_id"], trip_absagen: ["trip_id", "member_id"], trip_aemtli: ["trip_id", "member_id", "rolle"], ride_passengers: ["ride_id", "passenger_id"], ballots: ["proposal_id", "voter_id"] };
+  var PERSONAL = ["restaurant_ratings", "rsvps", "trip_participants", "drinks", "saying_prosts", "post_prosts", "karten_glaeser", "trip_absagen", "ride_passengers", "rides"];
   var COLS = { profiles: ["display_name", "fav_wine", "specialty"], trips: ["title", "starts_on", "ends_on", "program", "seats", "color", "ok_id", "kassier_id"],
     events: ["title", "starts_at", "location", "ortschaft"], ride_passengers: ["stars_safe", "stars_punctual", "stars_mood", "points_given", "rated_at"],
-    rsvps: ["event_id", "member_id", "status", "updated_at"], posts: ["text"], sayings: ["text"], rides: [] };
+    rsvps: ["event_id", "member_id", "status", "updated_at"], posts: ["text"], sayings: ["text"], rides: [], trip_photos: ["als_karte"], trip_aemtli: [] };
   var READONLY = ["karte_der_woche", "karte_der_woche_fuer", "video_ziehungen", "settings", "proposals", "ballots", "admin_log", "feedback"];
   var CASCADE = { events: [["rsvps", "event_id"], ["magnums", "event_id"], ["rides", "event_id"], ["gaeste", "event_id"], ["video_ziehungen", "event_id"]], video_karten: [["video_ziehungen", "karte_id"]], magnums: [["magnum_guests", "magnum_id"]], rides: [["ride_passengers", "ride_id"]],
-    cards: [["card_members", "card_id"]], trips: [["gaeste", "trip_id"], ["trip_participants", "trip_id"], ["trip_photos", "trip_id"], ["proposals", "trip_id"]], posts: [["post_prosts", "post_id"]], sayings: [["saying_prosts", "saying_id"]],
+    cards: [["card_members", "card_id"]], trips: [["gaeste", "trip_id"], ["trip_participants", "trip_id"], ["trip_photos", "trip_id"], ["trip_aemtli", "trip_id"], ["trip_absagen", "trip_id"], ["proposals", "trip_id"]], posts: [["post_prosts", "post_id"]], sayings: [["saying_prosts", "saying_id"]],
     restaurants: [["restaurant_visits", "restaurant_id"], ["restaurant_ratings", "restaurant_id"]], proposals: [["ballots", "proposal_id"]] };
   var AS = null; // Tests: als andere Person handeln (window.__mg.as)
   function me() { if (AS) return AS; var s = get(SESS); return s ? s.user.id : null }
@@ -125,6 +126,7 @@
     var F = d.karte_der_woche_fuer.filter(function (f) { return f.woche == w.woche });
     return w.woche < mo || !F.length || F.some(function (f) { return f.member_id == me() });
   }
+  function reiseDabei(d, trip) { return d.trip_participants.some(function (p) { return p.trip_id == trip && p.member_id == me() }) }
   function videoSichtbar(d, k) { return admin(d) || k.created_by == me() || d.video_ziehungen.some(function (z) { return z.karte_id == k.id && z.member_id == me() }) }
   function pkMatch(t, a, b) { var k = PK[t] || ["id"]; return k.every(function (c) { return a[c] == b[c] }) }
   function removeCascade(d, t, row) {
@@ -157,6 +159,11 @@
       if (old && !loeschen && r.event_id != old.event_id) return "Der Anlass lässt sich nicht ändern";
       if (tag(eventOf(d, r.event_id).starts_at) < day(0)) return "Der Anlass ist vorbei, die Anmeldung ist geschlossen";
       if (eventOf(d, r.event_id).organizer_id == r.member_id && (loeschen || r.status != "in")) return "Der Organisator ist immer dabei. Gib den Abend zuerst ab.";
+    }
+    if (t == "trip_photos" && !old && !reiseDabei(d, r.trip_id)) return "Fotos laden nur Mitreisende hoch";
+    if (t == "trip_absagen" && !old) {
+      var ta = d.trips.find(function (x) { return x.id == r.trip_id });
+      if (ta && ta.starts_on < day(0)) return "Die Reise hat schon begonnen";
     }
     if (t == "karten_glaeser" && !loeschen) {
       var m = /^(karte|video|sac|col)-(.+)$/.exec(r.karte || ""), id = m && m[2], k;
@@ -209,7 +216,7 @@
     if (t == "app_status" && q.op == "select") return Promise.resolve(shape(q, d.app_status.filter(function (r) { return match(q, r) })));
     if (!u) return fail("JWT expired");
     if (!d[t]) return fail('relation "public.' + t + '" does not exist');
-    if (q.op == "select") return Promise.resolve(shape(q, member(d) ? d[t].filter(function (r) { return match(q, r) && (t != "video_karten" || videoSichtbar(d, r)) && (t != "karte_der_woche" || kdwSichtbar(d, r)) }) : []));
+    if (q.op == "select") return Promise.resolve(shape(q, member(d) ? d[t].filter(function (r) { return match(q, r) && (t != "video_karten" || videoSichtbar(d, r)) && (t != "karte_der_woche" || kdwSichtbar(d, r)) && (t != "trip_photos" || r.als_karte || reiseDabei(d, r.trip_id)) }) : []));
     if (d.app_status[0].maintenance) return fail("Datenbank nicht erreichbar");
     if (!member(d) || READONLY.indexOf(t) >= 0) return RLS(t);
     var own = OWNER[t], out = [];
@@ -234,6 +241,9 @@
         if (!PK[t] && r.id == null) r.id = uuid();
         if ("created_at" in (d[t][0] || { created_at: 1 }) && !r.created_at && !PK[t]) r.created_at = new Date().toISOString();
         if (t == "rsvps" && r.redeemed == null) r.redeemed = false;
+        if (t == "trip_absagen") d.trip_participants = d.trip_participants.filter(function (p) { return !(p.trip_id == r.trip_id && p.member_id == r.member_id) });
+        if (t == "trip_participants") d.trip_absagen = d.trip_absagen.filter(function (p) { return !(p.trip_id == r.trip_id && p.member_id == r.member_id) });
+        if (t == "trip_photos" && r.als_karte == null) r.als_karte = false;
         d[t].push(r); out.push(r);
       }
       save(d); notify();
@@ -255,7 +265,7 @@
     }
     if (q.op == "delete") {
       for (var k = 0; k < hit.length; k++) {
-        var r2 = hit[k], darf = t == "video_karten" ? (admin(d) || (r2.created_by == u && !d.video_ziehungen.some(function (z) { return z.karte_id == r2.id }))) : t == "card_members" ? (admin(d) || d.cards.some(function (c) { return c.id == r2.card_id && c.created_by == u })) : t == "trips" ? (r2.created_by == u || admin(d)) : own && (r2[own] == u || admin(d));
+        var r2 = hit[k], darf = t == "video_karten" ? (admin(d) || (r2.created_by == u && !d.video_ziehungen.some(function (z) { return z.karte_id == r2.id }))) : t == "card_members" ? (admin(d) || d.cards.some(function (c) { return c.id == r2.card_id && c.created_by == u })) : t == "trips" ? (r2.created_by == u || admin(d)) : t == "trip_aemtli" ? true : own && (r2[own] == u || admin(d));
         if (!darf) continue;
         var e3 = t == "rsvps" ? checkRow(d, t, r2, r2, true) : null; if (e3) return fail(e3);
         d[t] = d[t].filter(function (x) { return x !== r2 }); removeCascade(d, t, r2); out.push(r2);
@@ -291,6 +301,7 @@
   var RPC = {
     me: function (d, u) { var p = d.profiles.find(function (x) { return x.id == u }); if (!p) return null; var prev = p.last_seen; p.last_seen = new Date().toISOString(); return { id: u, is_admin: p.is_admin, prev_seen: prev } },
     magnum_termine: function () { return 0 },
+    reise_fotos: function (d) { var n = {}; d.trip_photos.forEach(function (p) { n[p.trip_id] = (n[p.trip_id] || 0) + 1 }); return Object.keys(n).map(function (k) { return { trip_id: k, anzahl: n[k] } }) },
     video_bestand: function (d) { return d.video_karten.length },
     video_ziehbar: function (d, u) { return d.video_karten.filter(function (k) { return k.created_by != u && !d.video_ziehungen.some(function (z) { return z.karte_id == k.id && z.member_id == u }) }).length },
     karte_ziehen: function (d, u, a) {
@@ -381,7 +392,7 @@
     if (fn != "me" && !member(d)) return fail("Nur Mitglieder");
     if (fn == "me" && window.__mg_warten) return new Promise(function (ok2) { window.__mg_weiter = function () { window.__mg_warten = false; ok2(rpc(fn, a)) } });
     // Nur lesende Funktionen melden keine Änderung (sonst lädt die App endlos neu)
-    if (fn == "video_bestand" || fn == "video_ziehbar") return ok(RPC[fn](d, u, a || {}));
+    if (fn == "video_bestand" || fn == "video_ziehbar" || fn == "reise_fotos") return ok(RPC[fn](d, u, a || {}));
     try { var r = RPC[fn](d, u, a || {}); save(d); notify(); return ok(r === undefined ? null : r) } catch (e) { return fail(String(e.message || e)) }
   }
 

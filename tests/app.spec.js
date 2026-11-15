@@ -67,7 +67,15 @@ test.describe("Termine", () => {
     const ev = event(page, "Herbst-Stamm");
     await expect(ev).toContainText("Organisation: Kurt");
     await expect(ev.getByRole("button", { name: /Ich organisiere/ })).toHaveCount(0);
-    await ev.getByRole("button", { name: "Abend übernehmen" }).click();
+    // Übernehmen nur in den Details, mit Rückfrage
+    await expect(ev.getByRole("button", { name: /übernehmen/ })).toHaveCount(0);
+    let frage = "";
+    page.removeAllListeners("dialog");
+    page.on("dialog", (d) => { frage = d.message(); d.accept() });
+    await ev.getByRole("button", { name: "Details" }).click();
+    await page.locator("#ov").getByRole("button", { name: "Abend von Kurt übernehmen · +40" }).click();
+    await expect.poll(() => frage).toBe("Abend von Kurt übernehmen?");
+    await page.locator("#ov .back").click();
     await expect(ev).toContainText("Organisation: Ot (du)");
     await expect(ev).toContainText("du bist dabei");
     await expect(page.locator("#toast")).toContainText("Du organisierst jetzt den Abend");
@@ -172,18 +180,14 @@ test.describe("Reisen", () => {
     await expect(card(page, "Auszeichnung De Sacceri")).toContainText("mit 2 von 3 Stimmen");
   });
 
-  test("OK und Kassier eintragen, mitreisen, Bilder: 3 sichtbar, Rest als Collage", async ({ page }) => {
+  test("Ämtli in der Reiseliste, Fotos für Mitreisende mit Auswahl für die Karte", async ({ page }) => {
     await login(page);
     await tab(page, "Reisen");
-    await page.locator(".trip", { hasText: "Wallis" }).click();
-    await page.locator("select[data-f=kassier_id]").selectOption({ label: "Beat" });
-    await expect(page.locator("#toast")).toContainText("Gespeichert");
-    await page.locator("#ov [data-a=close]").click();
-    await expect(page.locator(".trip", { hasText: "Wallis" })).toContainText("Kassier: Beat");
+    await expect(page.locator(".trip", { hasText: "Bordeaux" }).locator("[data-test=aemtli-kurz]")).toContainText("OK: Chris · Kassier: Beat");
     await page.locator(".trip", { hasText: "Bordeaux" }).click();
-    await expect(page.locator("#ov")).toContainText("6 hochgeladen · 3 sichtbar");
-    await expect(page.locator("#ov")).toContainText("Die übrigen 3 Bilder liegen als Collage-Karte");
-    await expect(page.locator("#ov .ph img")).toHaveCount(3);
+    await expect(page.locator("#ov [data-test=foto-anzahl]")).toHaveText("6 hochgeladen · 3 auf der Karte");
+    await expect(page.locator("#ov .ph img")).toHaveCount(6);
+    await expect(page.locator("#ov .ph .chip.v")).toHaveCount(3);
   });
 });
 
@@ -247,11 +251,38 @@ test.describe("Club", () => {
   test("Rangliste: gleiche Punkte = gleicher Rang, Nummer nur beim ersten", async ({ page }) => {
     await login(page);
     await tab(page, "Club");
-    const rows = page.locator("ol li");
+    const rows = page.locator("ol li.row");
+    // Zuerst die Top 3 (und die eigene Zeile), «Alle anzeigen» zeigt den Rest
+    const kurz = await rows.count();
+    expect(kurz).toBeLessThan(11);
+    await page.getByRole("button", { name: "Alle anzeigen (11)" }).click();
     await expect(rows).toHaveCount(11);
+    await expect(page.getByRole("button", { name: "Nur die Top 3" })).toBeVisible();
     const nums = await rows.locator(".rk").allTextContents();
     expect(nums[0]).toBe("1");
     expect(nums.filter((x) => x != "").length).toBeLessThan(11); // es gibt Gleichstände
+  });
+});
+
+test.describe("Rangliste", () => {
+  test("Verschiebung seit dem letzten Anlass", async ({ page }) => {
+    await page.goto("/");
+    // Beat war beim letzten Anlass nicht dabei, Erich schon: Beat verliert Plätze, Erich gewinnt
+    await page.evaluate(() => {
+      const d = window.__mg.db(), e = "e-letzt";
+      d.events.push({ id: e, title: "Letzter Abend", starts_at: new Date(Date.now() - 2 * 864e5).toISOString(), location: null, organizer_id: null, created_by: "u-ot", created_at: new Date().toISOString() });
+      ["u-erich", "u-fritz", "u-gabi", "u-hans"].forEach((m) => d.rsvps.push({ event_id: e, member_id: m, status: "in", redeemed: false, updated_at: new Date().toISOString() }));
+      localStorage.setItem("__mg_db", JSON.stringify(d));
+    });
+    await login(page);
+    await tab(page, "Club");
+    await page.getByRole("button", { name: /Alle anzeigen/ }).click();
+    const trend = page.locator("ol li.row [data-test=trend]");
+    await expect(trend).toHaveCount(11);
+    const t = await trend.allTextContents();
+    expect(t.some((x) => x.startsWith("▲"))).toBe(true);
+    expect(t.some((x) => x.startsWith("▼"))).toBe(true);
+    await expect(page.locator("ol li.row", { hasText: "Erich" }).locator("[data-test=trend]")).toHaveText(/^▲\d+$/);
   });
 });
 

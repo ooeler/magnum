@@ -227,6 +227,14 @@ app.post("/fotos/links", async (c) => {
       or exists (select 1 from public.profiles p where p.id = $2 and p.is_admin))`, [videos, m.id])).map((r: { path: string }) => r.path));
     paths = paths.filter((p) => !istVideo(p) || frei.has(p));
   }
+  // Reisefotos: nur für die Mitreisenden, ausser das Foto ist für die Collage-Karte freigegeben
+  const reise = paths.filter((p) => p.startsWith("trips/"));
+  if (reise.length) {
+    const frei = new Set((await q(`select tp.path from public.trip_photos tp where tp.path = any($1) and (tp.als_karte
+      or exists (select 1 from public.trip_participants t where t.trip_id = tp.trip_id and t.member_id = $2)
+      or exists (select 1 from public.profiles p where p.id = $2 and p.is_admin))`, [reise, m.id])).map((r: { path: string }) => r.path));
+    paths = paths.filter((p) => !p.startsWith("trips/") || frei.has(p));
+  }
   const links = await Promise.all(paths.map(async (path) => ({
     path, signedUrl: await getSignedUrl(s3, new GetObjectCommand({ Bucket: BUCKET, Key: path }), { expiresIn: 3600 }),
   })));

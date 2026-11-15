@@ -638,4 +638,65 @@ select pg_temp.check((select count(*) from public.karte_der_woche) = 2, 'Für di
 reset role;
 select pg_temp.als('');
 
+-- Reisen: Fotos nur für Mitreisende, «als Karte» für alle, Anzahl für alle; Ämtli-Liste; Abmelden
+set role authenticated;
+select pg_temp.als('A');
+insert into public.trips (id, title, starts_on, seats) values ('10000000-0000-0000-0000-000000000009', 'Fotoreise', current_date + 40, 10);
+insert into public.trip_participants (trip_id) values ('10000000-0000-0000-0000-000000000009');
+insert into public.trip_photos (id, trip_id, path) values
+  ('80000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000009', 'trips/00000000-0000-0000-0000-00000000000a/1.jpg'),
+  ('80000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000009', 'trips/00000000-0000-0000-0000-00000000000a/2.jpg');
+update public.trip_photos set als_karte = true where id = '80000000-0000-0000-0000-000000000002';
+select pg_temp.verboten($q$update public.trip_photos set path = 'x' where id = '80000000-0000-0000-0000-000000000001'$q$, 'Am Foto nur «als Karte» änderbar');
+select pg_temp.als('B');
+select pg_temp.check((select count(*) from public.trip_photos where trip_id = '10000000-0000-0000-0000-000000000009') = 1, 'Daheimgeblieben: nur das Foto für die Karte sichtbar');
+select pg_temp.check((select anzahl from public.reise_fotos() where trip_id = '10000000-0000-0000-0000-000000000009') = 2, 'Daheimgeblieben: Anzahl aller Fotos sichtbar');
+select pg_temp.verboten($q$insert into public.trip_photos (trip_id, path) values ('10000000-0000-0000-0000-000000000009', 'trips/00000000-0000-0000-0000-00000000000b/x.jpg')$q$, 'Fotos laden nur Mitreisende hoch');
+with x as (update public.trip_photos set als_karte = false returning 1)
+select pg_temp.check((select count(*) from x) = 0, 'Fremde Fotos nicht umstellen');
+-- Ämtli
+insert into public.trip_aemtli (trip_id, member_id, rolle, added_by) values ('10000000-0000-0000-0000-000000000009', '00000000-0000-0000-0000-00000000000c', 'organisator', public.uid());
+insert into public.trip_aemtli (trip_id, member_id, rolle, added_by) values ('10000000-0000-0000-0000-000000000009', '00000000-0000-0000-0000-00000000000c', 'kassier', public.uid());
+select pg_temp.check((select count(*) from public.trip_aemtli where trip_id = '10000000-0000-0000-0000-000000000009') = 2, 'Ämtli: eine Person mit zwei Rollen');
+do $$ begin
+  insert into public.trip_aemtli (trip_id, member_id, rolle, added_by) values ('10000000-0000-0000-0000-000000000009', public.uid(), 'chef', public.uid());
+  raise exception 'FEHLER: unbekannte Rolle';
+exception when check_violation then raise notice 'ok – Nur OK, Organisator, Kassier';
+end $$;
+select pg_temp.verboten($q$insert into public.trip_aemtli (trip_id, member_id, rolle, added_by) values ('10000000-0000-0000-0000-000000000009', public.uid(), 'ok', '00000000-0000-0000-0000-00000000000c')$q$, 'Ämtli nicht im Namen anderer eintragen');
+select pg_temp.als('D');
+with x as (delete from public.trip_aemtli where rolle = 'kassier' and trip_id = '10000000-0000-0000-0000-000000000009' returning 1)
+select pg_temp.check((select count(*) from x) = 1, 'Ämtli: andere Mitglieder können entfernen');
+-- Abmelden
+insert into public.trip_participants (trip_id) values ('10000000-0000-0000-0000-000000000009');
+insert into public.trip_absagen (trip_id) values ('10000000-0000-0000-0000-000000000009');
+select pg_temp.check(not exists (select 1 from public.trip_participants where trip_id = '10000000-0000-0000-0000-000000000009' and member_id = public.uid()), 'Abmelden nimmt von der Reise');
+insert into public.trip_participants (trip_id) values ('10000000-0000-0000-0000-000000000009');
+select pg_temp.check(not exists (select 1 from public.trip_absagen where trip_id = '10000000-0000-0000-0000-000000000009' and member_id = public.uid()), 'Wieder dabei löscht die Abmeldung');
+-- Neue Abstimmung meldet sich bei den Stimmberechtigten
+reset role;
+select pg_temp.als('');
+delete from public.push_queue;
+set role authenticated;
+select pg_temp.als('A');
+select public.propose_sacceri('10000000-0000-0000-0000-000000000009', '00000000-0000-0000-0000-00000000000d');
+reset role;
+select pg_temp.als('');
+select pg_temp.check((select count(*) from public.push_queue where titel = 'Neue Abstimmung: De Sacceri') = 0, 'Sacceri: niemand sonst stimmberechtigt, keine Meldung');
+select pg_temp.check((select count(*) from public.push_queue where an = '00000000-0000-0000-0000-00000000000a') = 0, 'Wer den Antrag stellt, bekommt keine Meldung');
+-- Spitzname: Meldung erst, wenn unterstützt (dann wird abgestimmt), an alle ausser Person, Antragsteller und Unterstützer
+set role authenticated;
+select pg_temp.als('B');
+select public.propose_nickname('00000000-0000-0000-0000-00000000000c', 'Kellermeister');
+reset role;
+select pg_temp.als('');
+select pg_temp.check((select count(*) from public.push_queue where titel = 'Neue Abstimmung: Spitzname') = 0, 'Spitzname: vor der Unterstützung keine Meldung');
+set role authenticated;
+select pg_temp.als('D');
+select public.second_proposal((select id from public.proposals where value = 'Kellermeister'));
+reset role;
+select pg_temp.als('');
+select pg_temp.check((select count(*) from public.push_queue where titel = 'Neue Abstimmung: Spitzname' and an = '00000000-0000-0000-0000-00000000000a') = 1, 'Spitzname: Meldung an die übrigen Stimmberechtigten');
+select pg_temp.check((select count(*) from public.push_queue where titel = 'Neue Abstimmung: Spitzname' and an in ('00000000-0000-0000-0000-00000000000b', '00000000-0000-0000-0000-00000000000c', '00000000-0000-0000-0000-00000000000d')) = 0, 'Keine Meldung an Person, Antragsteller und Unterstützer');
+
 select 'ALLE DB-TESTS GRÜN' as ergebnis;

@@ -45,7 +45,8 @@ test.describe("Duell", () => {
     const d = card(page, "Duell des Monats");
     await expect(d.locator("[data-test=duell-endstand]")).toHaveText("Endstand Oktober");
     await expect(d.locator("[data-test=duell-android]")).toHaveText(/^\d+ %$/);
-    await expect(d.locator("[data-test=duell-vormonat]")).toHaveText(/gewinnt, (iPhone|Android) bringt die nächste Magnum.|Unentschieden./);
+    await expect(d.locator("[data-test=duell-vormonat]")).toHaveText(/^(iPhone|Android) gewinnt den Oktober\.$|^Unentschieden\.$/);
+    await expect(d).not.toContainText("Magnum");
     await expect(d).toContainText("ab dem 11. November");
   });
 
@@ -54,6 +55,18 @@ test.describe("Duell", () => {
     await login(page);
     const d = card(page, "Duell des Monats");
     await expect(d.locator("[data-test=duell-endstand]")).toHaveCount(0);
+  });
+
+  test("Statistik: Bilanz, welches Team am meisten Monate gewonnen hat", async ({ page }) => {
+    await fix(page, "2026-12-15T10:00:00+01:00");
+    await login(page);
+    await tab(page, "Statistik");
+    const b = card(page, "Duell-Bilanz");
+    const a = Number(await b.locator("[data-test=bilanz-android]").textContent()), i = Number(await b.locator("[data-test=bilanz-iphone]").textContent());
+    expect(a + i).toBeGreaterThan(0);
+    await expect(b.locator("[data-test=bilanz-fuehrt]")).toHaveText(a == i ? "Gleichstand" : (a > i ? "Android" : "iPhone") + " führt");
+    // Der laufende Monat zählt noch nicht
+    await expect(b).not.toContainText("Dezember 2026");
   });
 
   test("Monat ohne Anlass", async ({ page }) => {
