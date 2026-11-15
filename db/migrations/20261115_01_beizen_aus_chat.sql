@@ -1,0 +1,160 @@
+-- Einmaliger Import: Magnum-Abende 2016–2026 mit Restaurant, aus dem WhatsApp-Chat «Gmüetlichs Magnum trinke».
+-- Legt fehlende Beizen an (mit Standort für die Karte), vergangene Anlässe (ausser an Tagen, an denen schon ein Anlass besteht)
+-- und je einen Besuch, der Beiz und Anlass verknüpft. Nur in einer Datenbank mit Mitgliedern (nicht in der leeren Test-Datenbank). Keine Anwesenheiten, keine Punkte. Mehrfach ausführbar ohne Duplikate.
+begin;
+create temp table imp_beiz (name text, ort text, lat double precision, lng double precision) on commit drop;
+create temp table imp_abend (tag date, name text, ort text) on commit drop;
+insert into imp_beiz values
+  ('Werk 1', 'Gossau', 47.414850, 9.253350),
+  ('Pizzeria Pergola', 'Gossau', 47.415500, 9.254800),
+  ('Sala Città', 'Wil', 47.461500, 9.043500),
+  ('Lindenhof', 'Zuzwil', 47.466122, 9.119981),
+  ('Toggenburg', 'Gossau', 47.415996, 9.250097),
+  ('Henessen', 'Gossau', 47.445241, 9.223163),
+  ('Rössli', 'Flawil', 47.413809, 9.186600),
+  ('Hotel Herisau', 'Herisau', 47.386100, 9.279200),
+  ('Dolce Vita', 'Gossau', 47.415311, 9.268224),
+  ('Schönau', 'Andwil', 47.438100, 9.273500),
+  ('Pflüegli', 'Gossau', 47.417839, 9.269316),
+  ('Acquarello', 'St. Gallen', 47.424500, 9.376700),
+  ('Wyburg', 'Herisau', 47.382230, 9.277791),
+  ('Löwen', 'Tübach', 47.485441, 9.452182),
+  ('Schützenhaus Bettenauer Weiher', 'Oberuzwil', 47.431200, 9.121300),
+  ('Steakhouse Hot Stone', 'Niederuzwil', 47.446700, 9.142800),
+  ('Hotel Hecht', 'Rheineck', 47.464785, 9.591821),
+  ('Hugs Ochsen', 'Gossau', 47.415500, 9.254800),
+  ('Herberge', 'Niederbüren', 47.466757, 9.203596),
+  ('Freihof', 'Gossau', 47.412793, 9.239874),
+  ('National', 'Wattwil', 47.300730, 9.087091),
+  ('Rössli', 'Hundwil', 47.364638, 9.315896),
+  ('Fondue-Stadel', 'Gossau', 47.415500, 9.254800),
+  ('Muelt', 'Gossau', 47.415500, 9.254800),
+  ('Rüti', 'Herisau', 47.396439, 9.285302),
+  ('Sonne', 'Wolfertswil', 47.395300, 9.181700),
+  ('Bergholz', 'Wil', 47.459450, 9.035789),
+  ('La Vigna', 'St. Gallen', 47.426540, 9.374704),
+  ('Rössli', 'Niederwil', 47.440500, 9.196400),
+  ('Hotel Uzwil', 'Uzwil', 47.436437, 9.131746),
+  ('Hirschen Flawiler Egg', 'Flawil', 47.413100, 9.183300),
+  ('Donatello', 'St. Gallen', 47.424500, 9.376700),
+  ('Winterbar', 'Niederwil', 47.440500, 9.196400),
+  ('Tapas Juan', 'Gossau', 47.415500, 9.254800),
+  ('Pizzeria Da Taki', 'Scuol', 46.796300, 10.297900),
+  ('Netts', 'St. Gallen', 47.429710, 9.379027),
+  ('Atticum', 'Tübach', 47.485600, 9.454700),
+  ('Klosterhof Rössli', 'Magdenau', 47.401299, 9.171740),
+  ('Markthalle', 'Gossau', 47.413936, 9.250670),
+  ('Zum Goldenen Schäfli', 'St. Gallen', 47.426610, 9.375566),
+  ('La Terrassa', 'Scuol', 46.796759, 10.296577),
+  ('Freudenberg', 'Oberuzwil', 47.435966, 9.127655),
+  ('Frohsinn', 'Oberbüren', 47.451243, 9.163582),
+  ('Casa Grande', 'Wilen bei Wil', 47.453477, 9.037700),
+  ('Kostas der Grieche', 'St. Gallen', 47.427858, 9.376888),
+  ('El Pincho', 'Wil', 47.466323, 9.048118),
+  ('Bären', 'Herisau', 47.383397, 9.275279),
+  ('Adler', 'Zuckenriet', 47.485351, 9.161239),
+  ('Kreuz', 'Zuzwil', 47.477005, 9.112996),
+  ('Brauwerk', 'St. Gallen', 47.424725, 9.371722),
+  ('Lagerhaus', 'St. Gallen', 47.424500, 9.376700),
+  ('Barcelona Central', 'Wil', 47.461500, 9.043500),
+  ('La Cucina', 'Gossau', 47.415500, 9.254800),
+  ('Popcorn', 'Arosa', 46.778300, 9.676500),
+  ('Krone', 'Altnau', 47.622673, 9.267595),
+  ('Pastarella', 'Gossau', 47.415500, 9.254800),
+  ('Quellenhof', 'Gossau', 47.412229, 9.253161);
+insert into imp_abend values
+  ('2016-01-29', 'Werk 1', 'Gossau'),
+  ('2016-02-26', 'Pizzeria Pergola', 'Gossau'),
+  ('2016-03-25', 'Sala Città', 'Wil'),
+  ('2016-05-27', 'Lindenhof', 'Zuzwil'),
+  ('2016-07-29', 'Toggenburg', 'Gossau'),
+  ('2016-08-26', 'Henessen', 'Gossau'),
+  ('2016-11-25', 'Rössli', 'Flawil'),
+  ('2016-12-23', 'Werk 1', 'Gossau'),
+  ('2017-01-27', 'Hotel Herisau', 'Herisau'),
+  ('2017-02-24', 'Dolce Vita', 'Gossau'),
+  ('2017-03-31', 'Schönau', 'Andwil'),
+  ('2017-04-28', 'Pflüegli', 'Gossau'),
+  ('2017-09-29', 'Acquarello', 'St. Gallen'),
+  ('2017-10-27', 'Wyburg', 'Herisau'),
+  ('2017-11-24', 'Löwen', 'Tübach'),
+  ('2017-12-22', 'Schützenhaus Bettenauer Weiher', 'Oberuzwil'),
+  ('2018-01-26', 'Steakhouse Hot Stone', 'Niederuzwil'),
+  ('2018-02-23', 'Hotel Hecht', 'Rheineck'),
+  ('2018-03-30', 'Hugs Ochsen', 'Gossau'),
+  ('2018-05-25', 'Herberge', 'Niederbüren'),
+  ('2018-07-27', 'Toggenburg', 'Gossau'),
+  ('2018-09-28', 'Freihof', 'Gossau'),
+  ('2018-11-30', 'National', 'Wattwil'),
+  ('2018-12-21', 'Rössli', 'Hundwil'),
+  ('2019-01-25', 'Fondue-Stadel', 'Gossau'),
+  ('2019-02-22', 'Muelt', 'Gossau'),
+  ('2019-03-29', 'Rüti', 'Herisau'),
+  ('2019-04-26', 'Hugs Ochsen', 'Gossau'),
+  ('2019-05-24', 'Sonne', 'Wolfertswil'),
+  ('2019-06-28', 'Henessen', 'Gossau'),
+  ('2019-07-26', 'Bergholz', 'Wil'),
+  ('2019-10-25', 'Rössli', 'Flawil'),
+  ('2019-11-29', 'Werk 1', 'Gossau'),
+  ('2019-12-20', 'Wyburg', 'Herisau'),
+  ('2020-01-31', 'La Vigna', 'St. Gallen'),
+  ('2020-02-28', 'Rössli', 'Niederwil'),
+  ('2020-05-29', 'Herberge', 'Niederbüren'),
+  ('2020-09-25', 'Hotel Uzwil', 'Uzwil'),
+  ('2021-06-25', 'Hirschen Flawiler Egg', 'Flawil'),
+  ('2021-10-29', 'Donatello', 'St. Gallen'),
+  ('2021-11-26', 'Winterbar', 'Niederwil'),
+  ('2021-12-17', 'Wyburg', 'Herisau'),
+  ('2022-01-28', 'Rössli', 'Niederwil'),
+  ('2022-02-25', 'Tapas Juan', 'Gossau'),
+  ('2022-03-25', 'Pizzeria Da Taki', 'Scuol'),
+  ('2022-04-29', 'Schützenhaus Bettenauer Weiher', 'Oberuzwil'),
+  ('2022-05-27', 'Netts', 'St. Gallen'),
+  ('2022-06-24', 'Atticum', 'Tübach'),
+  ('2022-10-28', 'Klosterhof Rössli', 'Magdenau'),
+  ('2023-01-27', 'Markthalle', 'Gossau'),
+  ('2023-02-24', 'Zum Goldenen Schäfli', 'St. Gallen'),
+  ('2023-03-24', 'La Terrassa', 'Scuol'),
+  ('2023-05-26', 'Freudenberg', 'Oberuzwil'),
+  ('2023-06-30', 'Frohsinn', 'Oberbüren'),
+  ('2023-07-28', 'Casa Grande', 'Wilen bei Wil'),
+  ('2023-09-29', 'Pizzeria Pergola', 'Gossau'),
+  ('2023-11-24', 'Toggenburg', 'Gossau'),
+  ('2023-12-22', 'Kostas der Grieche', 'St. Gallen'),
+  ('2024-01-26', 'El Pincho', 'Wil'),
+  ('2024-02-23', 'Bären', 'Herisau'),
+  ('2024-05-31', 'Adler', 'Zuckenriet'),
+  ('2024-10-25', 'Kreuz', 'Zuzwil'),
+  ('2024-11-29', 'Brauwerk', 'St. Gallen'),
+  ('2024-12-20', 'Lagerhaus', 'St. Gallen'),
+  ('2025-01-31', 'Rüti', 'Herisau'),
+  ('2025-02-28', 'Dolce Vita', 'Gossau'),
+  ('2025-06-27', 'Barcelona Central', 'Wil'),
+  ('2025-08-29', 'La Cucina', 'Gossau'),
+  ('2025-10-31', 'Herberge', 'Niederbüren'),
+  ('2026-02-27', 'Adler', 'Zuckenriet'),
+  ('2026-03-27', 'Popcorn', 'Arosa'),
+  ('2026-06-26', 'Krone', 'Altnau'),
+  ('2026-07-31', 'Pastarella', 'Gossau'),
+  ('2026-10-30', 'Quellenhof', 'Gossau');
+
+-- Beizen: nur fehlende (gleicher Name und Ort, ohne Gross-/Kleinschreibung); bestehenden ohne Standort den Standort ergänzen
+insert into public.restaurants (name, place, lat, lng, created_by)
+select b.name, b.ort, b.lat, b.lng, null from imp_beiz b
+ where exists (select 1 from public.profiles) and not exists (select 1 from public.restaurants r where lower(r.name) = lower(b.name) and lower(coalesce(r.place, '')) = lower(b.ort));
+update public.restaurants r set lat = b.lat, lng = b.lng from imp_beiz b
+ where exists (select 1 from public.profiles) and lower(r.name) = lower(b.name) and lower(coalesce(r.place, '')) = lower(b.ort) and r.lat is null and b.lat is not null;
+
+-- Vergangene Anlässe um 19 Uhr Zürcher Zeit, Titel wie die Magnum-Serie; nur an Tagen ohne bestehenden Anlass
+insert into public.events (title, starts_at, location, ortschaft, created_by, archiv)
+select public.magnum_titel(a.tag), (a.tag + time '19:00') at time zone 'Europe/Zurich', a.name, a.ort, null, true from imp_abend a
+ where exists (select 1 from public.profiles) and not exists (select 1 from public.events e where (e.starts_at at time zone 'Europe/Zurich')::date = a.tag);
+
+-- Besuch je Abend: verknüpft Beiz und Anlass (ohne Rechnung: Betrag 0, zählt nicht im Schnitt pro Kopf)
+insert into public.restaurant_visits (restaurant_id, event_id, visited_on, people, total_chf, created_by)
+select r.id, e.id, a.tag, 1, 0, null
+  from imp_abend a
+  join public.restaurants r on lower(r.name) = lower(a.name) and lower(coalesce(r.place, '')) = lower(a.ort)
+  join lateral (select id from public.events e where (e.starts_at at time zone 'Europe/Zurich')::date = a.tag order by starts_at limit 1) e on true
+ where exists (select 1 from public.profiles) and not exists (select 1 from public.restaurant_visits v where v.restaurant_id = r.id and v.visited_on = a.tag);
+commit;

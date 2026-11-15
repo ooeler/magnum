@@ -7,7 +7,7 @@ const { execSync } = require("child_process");
 
 const root = path.join(__dirname, "..");
 const read = (f) => fs.readFileSync(path.join(root, f), "utf8");
-const sqlFiles = ["db/setup.sql", ...fs.readdirSync(path.join(root, "db/migrations")).filter((f) => f.endsWith(".sql")).map((f) => "supabase/migrations/" + f)];
+const sqlFiles = ["db/setup.sql", ...fs.readdirSync(path.join(root, "db/migrations")).filter((f) => f.endsWith(".sql")).map((f) => "db/migrations/" + f)];
 const sql = sqlFiles.map(read).join("\n");
 const workflows = fs.readdirSync(path.join(root, ".github/workflows")).map((f) => [f, read(".github/workflows/" + f)]);
 
