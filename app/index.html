@@ -1318,11 +1318,14 @@ function statistik() {
       return '<div class="' + (i == last.length - 1 ? "last" : "") + '"><span class="xs b">' + n + '</span><i style="height:' + Math.round(n / mx * 90) + 'px"></i><span class="xs mu">' + MON[d.getMonth()] + "</span></div>";
     }).join("") + "</div></section>";
   }
-  var R = D.restaurants.map(function (r) { return { r: r, s: rScore(r.id), v: D.restaurant_visits.filter(function (x) { return x.restaurant_id == r.id }) } }).sort(function (a, b) { return ((b.s || {}).all || 0) - ((a.s || {}).all || 0) });
+  var R = D.restaurants.map(function (r) { return { r: r, s: rScore(r.id), v: D.restaurant_visits.filter(function (x) { return x.restaurant_id == r.id }) } }).map(function (x) { x.zuletzt = x.v.reduce(function (m, y) { return y.visited_on > m ? y.visited_on : m }, (x.r.created_at || "").slice(0, 10)); return x })
+    .sort(function (a, b) { return a.zuletzt < b.zuletzt ? 1 : a.zuletzt > b.zuletzt ? -1 : 0 });   // zuletzt besucht zuerst
+  var RA = R.length; if (!UI.beizenAlle) R = R.slice(0, 5);
   h += '<section class="card" aria-label="Unsere Beizen"><div class="row sb"><span class="b" style="font-size:15px">Unsere Beizen</span><span class="sm mu">' + D.restaurants.length + " Beizen · " + D.restaurant_visits.length + " Besuche</span></div>" +
     (R.length ? '<div class="lst">' + R.map(function (x) {
       return '<button type="button" class="row" style="background:none;border:0;border-top:1px solid var(--ln);width:100%;text-align:left;color:var(--tx)" data-a="ov" data-t="resto" data-id="' + x.r.id + '"><span class="grow col" style="gap:2px"><b class="sm">' + esc(x.r.name) + '</b><span class="xs mu">' + esc(x.r.place || "") + (x.v.length ? " · " + x.v.length + " Besuch" + (x.v.length > 1 ? "e" : "") : "") + '</span></span><span class="col" style="gap:0;align-items:flex-end"><b style="font:900 20px var(--hf);color:var(--ac)">' + (x.s ? x.s.all.toFixed(1).replace(".", ",") : "–") + '</b><span class="xs mu">' + (x.s ? x.s.n + " Bew." : "neu") + "</span></span></button>";
     }).join("") + "</div>" : '<span class="empty">Noch keine Beiz erfasst.</span>') +
+    (RA > 5 ? '<button class="btn link" data-a="setui" data-k="beizenAlle" data-v="' + (UI.beizenAlle ? "" : "1") + '" aria-expanded="' + !!UI.beizenAlle + '">' + (UI.beizenAlle ? "Weniger anzeigen" : "Mehr anzeigen (" + (RA - 5) + " weitere)") + "</button>" : "") +
     "</section>";
   h += karteHtml();
   h += '<section class="card row"><span class="grow sm">Dein Gerät: <b>' + (PRF.device == "android" ? "Android" : "iPhone") + "</b></span></section>";
