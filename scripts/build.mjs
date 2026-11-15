@@ -22,7 +22,7 @@ export function csp(html, neon = hosts) {
     "font-src 'self' https://fonts.gstatic.com",
     `connect-src 'self' https://nominatim.openstreetmap.org ${neon.join(" ")}`,
     // Fotos kommen als signierte Links aus dem privaten Neon-Speicher
-    `img-src 'self' data: blob: https://*.basemaps.cartocdn.com ${neon.join(" ")}`,
+    `img-src 'self' data: blob: https://tile.openstreetmap.org ${neon.join(" ")}`,
     // Videokarten: signierte Links aus dem Speicher, beim Kürzen ein blob:
     `media-src 'self' blob: ${neon.join(" ")}`,
     "worker-src 'self' blob:",
