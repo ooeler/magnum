@@ -1303,11 +1303,13 @@ function rScore(id) {
 }
 function mapsUrl(r) { var q = r.lat != null && r.lng != null ? r.lat + "," + r.lng : r.name + " " + (r.place || ""); return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q) }
 function statistik() {
-  var yr = String(new Date().getFullYear()), past = pastEvents(), py = past.filter(function (e) { return localDay(e.starts_at).slice(0, 4) == yr });
+  var yr = String(new Date().getFullYear()), past = pastEvents(), imJahr = function (e) { return localDay(e.starts_at).slice(0, 4) == yr };
+  // Anlässe zählen auch das Archiv (aus dem Chat nachgetragen); Teilnahme nur, wo Anwesenheiten erfasst sind
+  var py = past.filter(imJahr), pyAlle = pastEventsAlle().filter(imJahr);
   var att = py.map(function (e) { return D.rsvps.filter(function (r) { return r.event_id == e.id && r.status == "in" }).length });
   var avg = att.length ? att.reduce(function (a, b) { return a + b }, 0) / att.length : 0;
   var tot = 0, ppl = 0; D.restaurant_visits.forEach(function (x) { if (Number(x.total_chf) > 0) { tot += Number(x.total_chf); ppl += x.people } });   // nur Besuche mit Rechnung
-  var h = "<h2>Club-Statistik " + yr + '</h2><div class="g2">' + [[py.length, "Anlässe " + yr], [avg.toFixed(1).replace(".", ","), "Ø Teilnehmende"], [D.magnums.length, "Magnums erfasst"], [ppl ? chf(Math.round(tot / ppl * 20) / 20) : "–", "Ø pro Kopf im Restaurant"]]
+  var h = "<h2>Club-Statistik " + yr + '</h2><div class="g2">' + [[pyAlle.length, "Anlässe " + yr], [att.length ? avg.toFixed(1).replace(".", ",") : "–", "Ø Teilnehmende" + (pyAlle.length > py.length ? " (in der App erfasst)" : "")], [D.magnums.length, "Magnums erfasst"], [ppl ? chf(Math.round(tot / ppl * 20) / 20) : "–", "Ø pro Kopf im Restaurant"]]
     .map(function (k) { return '<div class="card" style="padding:12px;gap:2px"><span class="big" style="font-size:24px">' + esc(k[0]) + '</span><span class="sm mu">' + esc(k[1]) + "</span></div>" }).join("") + "</div>";
   h += duellBilanzHtml();
   var last = past.slice(0, 6).reverse();

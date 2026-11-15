@@ -564,3 +564,20 @@ test.describe("Archiv aus dem Chat", () => {
     expect(vorher).toBeGreaterThan(0);
   });
 });
+
+test.describe("Statistik mit Archiv", () => {
+  test("Anlässe des Jahres zählen das Archiv mit, Ø Teilnehmende nur erfasste", async ({ page }) => {
+    await page.goto("/");
+    const vorher = await page.evaluate(() => window.__mg.db().events.filter((e) => e.starts_at.slice(0, 4) == "2026" && new Date(e.starts_at) < new Date()).length);
+    await page.evaluate(() => {
+      const d = window.__mg.db();
+      ["2026-02-27T18:00:00Z", "2026-03-27T18:00:00Z"].forEach((t, i) => d.events.push({ id: "e-a" + i, title: "Archiv", starts_at: t, location: "Adler", ortschaft: "Zuckenriet", organizer_id: null, created_by: null, created_at: t, archiv: true }));
+      localStorage.setItem("__mg_db", JSON.stringify(d));
+    });
+    await login(page);
+    await tab(page, "Statistik");
+    const kachel = page.locator(".card", { hasText: "Anlässe 2026" });
+    await expect(kachel).toContainText(String(vorher + 2));
+    await expect(page.locator(".card", { hasText: "Ø Teilnehmende" })).toContainText("in der App erfasst");
+  });
+});
