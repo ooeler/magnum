@@ -42,6 +42,8 @@
       rsvps: [], magnums: [{ id: "m-1", event_id: "e-1", wine: "Cornalin 2019", brought_by: M.kurt, created_at: iso(-2) }],
       magnum_guests: [{ id: "g-1", magnum_id: "m-1", name: "Peter (Gast von Kurt)", added_by: M.kurt, created_at: iso(-2) }],
       rides: [{ id: "r-1", event_id: "e-1", driver_id: M.jurg, direction: "Richtung Wil", seats: 3, created_at: iso(-1) }], ride_passengers: [], card_members: [], gaeste: [], karte_der_woche: [], karte_der_woche_fuer: [], trip_absagen: [],
+      // Die Testkonten haben die Design-Umfrage schon beantwortet (sonst erscheint sie bei jedem Login)
+      design_umfrage: [{ member_id: M.ot, wert: 9, text: null, created_at: iso(-1) }, { member_id: M.beat, wert: 6, text: "Mehr Kontrast", created_at: iso(-1) }, { member_id: M.chris, wert: 8, text: null, created_at: iso(-1) }],
       trip_aemtli: [{ trip_id: "t-bordeaux", member_id: M.chris, rolle: "ok", added_by: null }, { trip_id: "t-bordeaux", member_id: M.beat, rolle: "kassier", added_by: null }, { trip_id: "t-wallis", member_id: M.chris, rolle: "ok", added_by: null }], karten_glaeser: [], video_karten: [], video_ziehungen: [],
       trips: [
         { id: "t-bordeaux", title: "Bordeaux", starts_on: day(-60), ends_on: day(-57), program: "Saint-Émilion, Médoc, Austern in Arcachon", seats: 12, color: "#5A1F2E", ok_id: M.chris, kassier_id: M.beat, sacceri_id: M.dani, created_by: M.chris, created_at: iso(-200) },
@@ -97,19 +99,19 @@
     });
     return d;
   }
-  function db() { var d = get(DBK); if (!d) { d = seed(); set(DBK, d) } if (!d.karten_glaeser) d.karten_glaeser = []; if (!d.karte_der_woche_fuer) d.karte_der_woche_fuer = []; if (!d.trip_aemtli) d.trip_aemtli = []; if (!d.trip_absagen) d.trip_absagen = []; return d }
+  function db() { var d = get(DBK); if (!d) { d = seed(); set(DBK, d) } if (!d.karten_glaeser) d.karten_glaeser = []; if (!d.karte_der_woche_fuer) d.karte_der_woche_fuer = []; if (!d.trip_aemtli) d.trip_aemtli = []; if (!d.design_umfrage) d.design_umfrage = []; if (!d.trip_absagen) d.trip_absagen = []; return d }
   function save(d) { set(DBK, d) }
 
   // ───────────── Regeln (Spiegel von db/setup.sql) ─────────────
-  var OWNER = { restaurant_ratings: "member_id", rsvps: "member_id", trip_participants: "member_id", drinks: "member_id", saying_prosts: "member_id", post_prosts: "member_id", karten_glaeser: "member_id", trip_absagen: "member_id", trip_aemtli: "added_by",
+  var OWNER = { restaurant_ratings: "member_id", rsvps: "member_id", trip_participants: "member_id", drinks: "member_id", saying_prosts: "member_id", post_prosts: "member_id", karten_glaeser: "member_id", trip_absagen: "member_id", trip_aemtli: "added_by", design_umfrage: "member_id",
     ride_passengers: "passenger_id", rides: "driver_id", restaurants: "created_by", restaurant_visits: "created_by", events: "created_by", magnums: "brought_by", magnum_guests: "added_by",
     trip_photos: "uploaded_by", cards: "created_by", video_karten: "created_by", gaeste: "added_by", sayings: "author_id", posts: "author_id", trips: "created_by" };
   var PK = { card_members: ["card_id", "member_id"], rsvps: ["event_id", "member_id"], restaurant_ratings: ["restaurant_id", "member_id"], trip_participants: ["trip_id", "member_id"], saying_prosts: ["saying_id", "member_id"],
-    post_prosts: ["post_id", "member_id"], karten_glaeser: ["karte", "member_id"], trip_absagen: ["trip_id", "member_id"], trip_aemtli: ["trip_id", "member_id", "rolle"], ride_passengers: ["ride_id", "passenger_id"], ballots: ["proposal_id", "voter_id"] };
+    post_prosts: ["post_id", "member_id"], karten_glaeser: ["karte", "member_id"], trip_absagen: ["trip_id", "member_id"], design_umfrage: ["member_id"], trip_aemtli: ["trip_id", "member_id", "rolle"], ride_passengers: ["ride_id", "passenger_id"], ballots: ["proposal_id", "voter_id"] };
   var PERSONAL = ["restaurant_ratings", "rsvps", "trip_participants", "drinks", "saying_prosts", "post_prosts", "karten_glaeser", "trip_absagen", "ride_passengers", "rides"];
   var COLS = { profiles: ["display_name", "fav_wine", "specialty"], trips: ["title", "starts_on", "ends_on", "program", "seats", "color", "ok_id", "kassier_id"],
     events: ["title", "starts_at", "location", "ortschaft"], ride_passengers: ["stars_safe", "stars_punctual", "stars_mood", "points_given", "rated_at"],
-    rsvps: ["event_id", "member_id", "status", "updated_at"], posts: ["text"], sayings: ["text"], rides: [], trip_photos: ["als_karte"], trip_aemtli: [] };
+    rsvps: ["event_id", "member_id", "status", "updated_at"], posts: ["text"], sayings: ["text"], rides: [], trip_photos: ["als_karte"], trip_aemtli: [], design_umfrage: [] };
   var READONLY = ["karte_der_woche", "karte_der_woche_fuer", "video_ziehungen", "settings", "proposals", "ballots", "admin_log", "feedback"];
   var CASCADE = { events: [["rsvps", "event_id"], ["magnums", "event_id"], ["rides", "event_id"], ["gaeste", "event_id"], ["video_ziehungen", "event_id"]], video_karten: [["video_ziehungen", "karte_id"]], magnums: [["magnum_guests", "magnum_id"]], rides: [["ride_passengers", "ride_id"]],
     cards: [["card_members", "card_id"]], trips: [["gaeste", "trip_id"], ["trip_participants", "trip_id"], ["trip_photos", "trip_id"], ["trip_aemtli", "trip_id"], ["trip_absagen", "trip_id"], ["proposals", "trip_id"]], posts: [["post_prosts", "post_id"]], sayings: [["saying_prosts", "saying_id"]],
@@ -161,6 +163,7 @@
       if (eventOf(d, r.event_id).organizer_id == r.member_id && (loeschen || r.status != "in")) return "Der Organisator ist immer dabei. Gib den Abend zuerst ab.";
     }
     if (t == "trip_photos" && !old && !reiseDabei(d, r.trip_id)) return "Fotos laden nur Mitreisende hoch";
+    if (t == "design_umfrage" && !(r.wert >= 0 && r.wert <= 10)) return "new row violates check constraint";
     if (t == "trip_absagen" && !old) {
       var ta = d.trips.find(function (x) { return x.id == r.trip_id });
       if (ta && ta.starts_on < day(0)) return "Die Reise hat schon begonnen";
@@ -216,7 +219,7 @@
     if (t == "app_status" && q.op == "select") return Promise.resolve(shape(q, d.app_status.filter(function (r) { return match(q, r) })));
     if (!u) return fail("JWT expired");
     if (!d[t]) return fail('relation "public.' + t + '" does not exist');
-    if (q.op == "select") return Promise.resolve(shape(q, member(d) ? d[t].filter(function (r) { return match(q, r) && (t != "video_karten" || videoSichtbar(d, r)) && (t != "karte_der_woche" || kdwSichtbar(d, r)) && (t != "trip_photos" || r.als_karte || reiseDabei(d, r.trip_id)) }) : []));
+    if (q.op == "select") return Promise.resolve(shape(q, member(d) ? d[t].filter(function (r) { return match(q, r) && (t != "video_karten" || videoSichtbar(d, r)) && (t != "karte_der_woche" || kdwSichtbar(d, r)) && (t != "trip_photos" || r.als_karte || reiseDabei(d, r.trip_id)) && (t != "design_umfrage" || r.member_id == me() || admin(d)) }) : []));
     if (d.app_status[0].maintenance) return fail("Datenbank nicht erreichbar");
     if (!member(d) || READONLY.indexOf(t) >= 0) return RLS(t);
     var own = OWNER[t], out = [];

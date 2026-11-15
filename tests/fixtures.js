@@ -24,6 +24,16 @@ async function login(page, user = OT) {
   await base.expect(page.locator("nav")).toBeVisible();
 }
 
+// Profil oben rechts neben der Flasche
+async function profil(page) {
+  await page.getByRole("button", { name: "Mein Profil" }).first().click();
+  await base.expect(page.locator("#ov")).toBeVisible();
+}
+async function abmelden(page) {
+  await profil(page);
+  await page.locator("#ov").getByRole("button", { name: "Abmelden" }).click();
+}
+
 async function tab(page, name) {
   await page.locator("nav button", { hasText: name }).click();
 }
@@ -40,4 +50,4 @@ const test = base.test.extend({
   },
 });
 
-module.exports = { test, expect: base.expect, setup, login, tab, as, OT, BEAT, CHRIS };
+module.exports = { test, expect: base.expect, setup, login, tab, as, profil, abmelden, OT, BEAT, CHRIS };

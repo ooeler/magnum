@@ -38,6 +38,12 @@ export function dreiWaehlen(mitglieder, bisher, zufall = Math.random) {
   return mitglieder.map((id) => ({ id, k: (n[id] || 0) + zufall() * 0.999 })).sort((a, b) => a.k - b.k).slice(0, AUFGEDECKT_FUER).map((x) => x.id);
 }
 
+// Stunde in Zürich (0–23)
+export function stundeZuerich(d) {
+  const p = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Zurich", hour: "2-digit", hourCycle: "h23" }).formatToParts(new Date(d));
+  return Number(p.find((x) => x.type == "hour").value);
+}
+
 // Prüft ein Push-Abo aus dem Browser, bevor es gespeichert wird
 export function checkAbo(b) {
   const endpoint = String(b?.endpoint ?? ""), p256dh = String(b?.keys?.p256dh ?? ""), auth = String(b?.keys?.auth ?? "");

@@ -20,7 +20,7 @@ import { Pool } from "pg";
 import { checkFoto, checkPfad, checkVideo, istVideo, MAX_FOTO, MAX_VIDEO, verwaisteVideos, videoTyp } from "./fotos.mjs";
 import { checkJoin, checkToken, hashToken, INVITE_DAYS, joinError, newToken } from "./invite.mjs";
 import webpush from "web-push";
-import { checkAbo, dreiWaehlen, erinnerungen, karteWaehlen, tagZuerich, wochenStart } from "./push.mjs";
+import { checkAbo, dreiWaehlen, stundeZuerich, erinnerungen, karteWaehlen, tagZuerich, wochenStart } from "./push.mjs";
 import { safeEqual } from "./sicherheit.mjs";
 import { buildIssue, DAILY_LIMIT } from "./vorschlag.mjs";
 
@@ -348,6 +348,22 @@ app.post("/push/test", async (c) => {
   const [{ abos }] = await q("select count(*)::int as abos from public.push_abos where member_id = $1", [m.id]);
   const n = await senden("Magnum", "Test-Push: Es funktioniert! 🍷", "./", m.id);
   return c.json({ ok: true, geraete: n, abos });
+});
+
+// Am Magnum-Abend um 18 Uhr: an alle, die dabei oder virtuell dabei sind, einmal pro Anlass
+app.post("/abend", async (c) => {
+  const t = await parseTriggerDelivery(c.req.raw);
+  if (!t.ok) return c.json({ error: t.error }, t.error === "invalid_body" ? 400 : 401);
+  if (stundeZuerich(new Date()) != 18) return c.json({ ok: true, gesendet: 0, grund: "nicht 18 Uhr in Zürich" });
+  const heute = tagZuerich(new Date());
+  const E = await q("select id, title from public.events where (starts_at at time zone 'Europe/Zurich')::date = $1::date", [heute]);
+  let n = 0;
+  for (const e of E) {
+    if (!(await einmal("abend", e.id))) continue;
+    const L = await q("select member_id from public.rsvps where event_id = $1 and status in ('in', 'virtual')", [e.id]);
+    for (const r of L) n += await senden("Die Magnum ist voll 🍾", "Zeit zum Austrinken! " + e.title, "./", r.member_id);
+  }
+  return c.json({ ok: true, gesendet: n });
 });
 
 // Täglich: Erinnerung 7 Tage vor jedem Anlass, montags wird eine Sammelkarte aufgedeckt

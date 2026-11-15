@@ -277,7 +277,7 @@ test.describe("Push und Karte der Woche", () => {
 
   test("ohne installierte App: Hinweis statt Knopf", async ({ page }) => {
     await login(page);
-    await tab(page, "Club");
+    await page.getByRole("button", { name: "Mein Profil" }).click();
     await expect(page.locator("[data-test=push]")).toContainText("installierten App");
   });
 

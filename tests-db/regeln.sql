@@ -699,4 +699,18 @@ select pg_temp.als('');
 select pg_temp.check((select count(*) from public.push_queue where titel = 'Neue Abstimmung: Spitzname' and an = '00000000-0000-0000-0000-00000000000a') = 1, 'Spitzname: Meldung an die übrigen Stimmberechtigten');
 select pg_temp.check((select count(*) from public.push_queue where titel = 'Neue Abstimmung: Spitzname' and an in ('00000000-0000-0000-0000-00000000000b', '00000000-0000-0000-0000-00000000000c', '00000000-0000-0000-0000-00000000000d')) = 0, 'Keine Meldung an Person, Antragsteller und Unterstützer');
 
+-- Design-Umfrage: eine Antwort pro Person, lesen nur sich selbst und der Admin
+set role authenticated;
+select pg_temp.als('B');
+insert into public.design_umfrage (wert, text) values (6, 'Mehr Kontrast');
+select pg_temp.verboten($q$insert into public.design_umfrage (member_id, wert) values ('00000000-0000-0000-0000-00000000000c', 10)$q$, 'Umfrage nicht im Namen anderer');
+select pg_temp.verboten($q$update public.design_umfrage set wert = 10$q$, 'Antwort nicht nachträglich ändern');
+select pg_temp.als('C');
+insert into public.design_umfrage (wert) values (9);
+select pg_temp.check((select count(*) from public.design_umfrage) = 1, 'Mitglied sieht nur die eigene Antwort');
+select pg_temp.als('A');
+select pg_temp.check((select count(*) from public.design_umfrage) = 2, 'Admin sieht alle Antworten');
+reset role;
+select pg_temp.als('');
+
 select 'ALLE DB-TESTS GRÜN' as ergebnis;

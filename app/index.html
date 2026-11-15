@@ -69,6 +69,8 @@ label.f{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:60
 .file{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
 .file input{position:absolute;inset:0;opacity:0;cursor:pointer}
 .av{width:44px;height:44px;flex:0 0 44px;border-radius:50%;background:var(--wine);display:flex;align-items:center;justify-content:center;font:900 18px var(--hf);color:var(--tx)}
+.bildtipp{display:block;width:100%;padding:0;border:0;background:none;color:inherit;text-align:left;cursor:pointer}
+.av.kopf{border:2px solid var(--ac);cursor:pointer;padding:0}
 .av.s{width:36px;height:36px;flex-basis:36px;font-size:14px}.av.l{width:64px;height:64px;flex-basis:64px;font-size:26px}.av.drv{background:#2C4A5A}
 .ev{display:flex;gap:14px}
 .dt{width:58px;flex:0 0 58px;border-radius:12px;background:var(--wine);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 0;align-self:flex-start}
@@ -168,7 +170,7 @@ details summary{cursor:pointer;font-weight:700;list-style:none}details summary::
 // ═══════════════════════════════════════════════════════════════════════
 var C = window.MG_CONFIG || {}, sb = null, ME = null, PRF = null, PREV = null, MAINT = false, READY = false;
 var TABLES = ["settings", "profiles", "events", "rsvps", "magnums", "magnum_guests", "rides", "ride_passengers", "trips",
-  "trip_participants", "trip_photos", "trip_aemtli", "trip_absagen", "proposals", "ballots", "posts", "post_prosts", "cards", "drinks", "sayings", "card_members", "gaeste", "karte_der_woche", "karte_der_woche_fuer", "video_karten", "video_ziehungen", "karten_glaeser",
+  "trip_participants", "trip_photos", "trip_aemtli", "trip_absagen", "design_umfrage", "proposals", "ballots", "posts", "post_prosts", "cards", "drinks", "sayings", "card_members", "gaeste", "karte_der_woche", "karte_der_woche_fuer", "video_karten", "video_ziehungen", "karten_glaeser",
   "saying_prosts", "restaurants", "restaurant_visits", "restaurant_ratings", "feedback", "admin_log"];
 var D = {}; TABLES.forEach(function (t) { D[t] = [] });
 var TAB = lsGet("mg_tab") || "termine", OV = null, SH = null, UI = {}, AUTH = { mode: "login" }, INVITE = null, INVLIST = null, NEWLINK = null, BUSY = false;
@@ -217,7 +219,7 @@ document.getElementById("toast").addEventListener("click", function () { this.hi
 // ═════════════ Spielregeln (Punkte, Streak, Ränge, Trinkfestigkeit) ═════════════
 var RANKS = [{ min: 0, name: "Neuling" }, { min: 200, name: "Stammgast" }, { min: 400, name: "Kellermeister" }, { min: 600, name: "Magnum-Ritter" }, { min: 900, name: "Club-Legende" }];
 var POINTS = [["Auf einer Sammelkarte dabei", 10], ["Dabei an einem Anlass", 50], ["Virtuell dabei mit gespendeter Magnum", 20], ["Anlass organisiert", 40], ["Gasttrinker mitgebracht", 15],
-  ["Reise mitgemacht", 30], ["Punkte von Mitfahrern (als Fahrer)", "10–50"], ["Fahrt bewertet", 5], ["Restaurant bewertet", 5], ["Sammelkarte erstellt", 10], ["Verbesserungsvorschlag", 10]];
+  ["Reise mitgemacht", 30], ["Heimgebracht (als Fahrer, pro Person)", 15], ["Gute Bewertung der Fahrt (Schnitt ab 4 Sternen)", 10], ["Fahrt bewertet", 5], ["Restaurant bewertet", 5], ["Sammelkarte erstellt", 10], ["Verbesserungsvorschlag", 10]];
 var LEVELS = ["Apfelschorle", "Ein-Glas-Typ", "Solide", "Standfest", "Magnum-Legende"];
 var UNITS = { wein: 1, bier: 1, schnaps: 1, magnum: 1.5, wasser: 0 };
 var KINDS = [["wein", "Wein"], ["magnum", "Magnum-Glas"], ["bier", "Bier"], ["schnaps", "Schnaps"], ["wasser", "Wasser"]];
@@ -245,7 +247,11 @@ function stats(id) {
   if (trips) add("Reisen", trips * 30);
   D.ride_passengers.forEach(function (rp) {
     var r = D.rides.find(function (x) { return x.id == rp.ride_id }); if (!r) return;
-    if (r.driver_id == id && rp.points_given) add("Als Fahrer", rp.points_given);
+    var ev = D.events.find(function (e) { return e.id == r.event_id });
+    if (r.driver_id == id && ev && new Date(ev.starts_at).getTime() < now() && rsvp(ev.id, rp.passenger_id) == "in") {
+      add("Heimgebracht", 15);
+      if (rp.rated_at && (rp.stars_safe + rp.stars_punctual + rp.stars_mood) / 3 >= 4) add("Gute Fahrt", 10);
+    }
     if (rp.passenger_id == id && rp.rated_at) add("Fahrt bewertet", 5);
   });
   D.restaurant_ratings.forEach(function (r) { if (r.member_id == id) add("Restaurant bewertet", 5) });
@@ -608,7 +614,9 @@ var GLASS = '<svg width="30" height="40" viewBox="0 0 34 44" aria-hidden="true" 
 function fuellung() {
   var t = now(), n = D.events.map(function (e) { return new Date(e.starts_at).getTime() }).filter(function (x) { return x >= t }).sort(function (a, b) { return a - b })[0];
   if (!n) return 1;
-  var p = pastEvents()[0], a = p ? new Date(p.starts_at).getTime() : n - 30 * 864e5;
+  var p = pastEvents()[0];
+  if (p && localDay(p.starts_at) == today()) return 1;               // am Magnum-Abend: voll
+  var a = p ? new Date(localDay(p.starts_at) + "T00:00:00").getTime() + 864e5 : n - 30 * 864e5;   // leer ab dem Tag danach
   return Math.max(0, Math.min(1, (t - a) / (n - a)));
 }
 function flasche() {
@@ -677,7 +685,7 @@ var WRICHT = null;
 function shell() {
   var t = TABS.filter(function (x) { return x[0] == TAB })[0] || TABS[0];
   var body = { termine: termine, reisen: reisen, club: club, karten: karten, stats: statistik }[t[0]]();
-  return (ALS_MITGLIED && echterAdmin() ? '<div class="row sb sm" style="padding:8px 18px;background:var(--lila);color:#fff" data-test="sicht"><span>Ansicht als Mitglied</span><button class="pill sm" data-a="sicht">Zurück zur Admin-Ansicht</button></div>' : "") + '<header><div><div class="sub">' + esc(t[2]) + '</div><h1>Magnum</h1><div class="hello">' + esc(hello()) + '</div></div><span class="gl">' + flasche() + (isAdvent(today()) ? HAT : "") + "</span></header>" +
+  return (ALS_MITGLIED && echterAdmin() ? '<div class="row sb sm" style="padding:8px 18px;background:var(--lila);color:#fff" data-test="sicht"><span>Ansicht als Mitglied</span><button class="pill sm" data-a="sicht">Zurück zur Admin-Ansicht</button></div>' : "") + '<header><div><div class="sub">' + esc(t[2]) + '</div><h1>Magnum</h1><div class="hello">' + esc(hello()) + '</div></div><div class="row" style="gap:12px;align-items:center"><span class="gl">' + flasche() + (isAdvent(today()) ? HAT : "") + '</span><button type="button" class="av kopf" data-a="ov" data-t="member" data-id="' + uid() + '" aria-label="Mein Profil">' + esc(ini(uid())) + "</button></div></header>" +
     "<main" + (WRICHT ? ' class="von' + WRICHT + '"' : "") + ">" + body + "</main>" +
     '<nav aria-label="Bereiche">' + TABS.map(function (x) { return '<button type="button" data-a="tab" data-v="' + x[0] + '" class="' + (x[0] == TAB ? "on" : "") + '"' + (x[0] == TAB ? ' aria-current="page"' : "") + "><i></i>" + (TAB_ICON[x[0]] || "") + "<span>" + x[1] + "</span></button>" }).join("") + "</nav>" +
     (OV ? overlay() : "") + (SH ? sheet() : "");
@@ -1087,15 +1095,10 @@ function club() {
       '<span class="sm mu">' + esc(p.role_title) + '</span><span class="xs mu b" style="letter-spacing:1px;text-transform:uppercase">Trinkfestigkeit</span><div style="width:100%">' + segs(s.drink.level) + "</div></button>";
   }).join("") + "</div>";
   h += invites() + feedback();
+  if (isAdmin()) h += '<section class="card" style="border-color:var(--lila)" aria-label="Umfrage"><span class="b" style="color:var(--lila)">Umfrage</span>' + umfrageErgebnis() + "</section>";
   if (isAdmin()) h += '<section class="card" style="border-color:var(--lila)"><span class="b" style="color:var(--lila)">Administration</span><span class="sm mu">Gerätetyp und Funktion passt du im Profil des Mitglieds an. Jede Änderung wird hier protokolliert.</span>' +
     (D.admin_log.length ? '<div class="lst">' + D.admin_log.slice().sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1 }).slice(0, 10).map(function (l) { return '<span class="sm mu">' + esc(nm(l.member_id)) + ": " + esc(l.action) + " · durch " + esc(nm(l.admin_id)) + " · " + esc(fDate(l.created_at)) + "</span>" }).join("") + "</div>" : '<span class="empty">Noch keine Änderungen.</span>') + "</section>";
-  h += '<section class="card"><span class="b" style="font-size:15px">Mein Profil</span><form class="col" data-s="profile" style="gap:10px"><label class="f">Name<input class="t" data-k="pfName" value="' + esc(v("pfName", PRF.display_name)) + '" maxlength="40" required></label>' +
-    '<label class="f">Lieblingswein<input class="t" data-k="pfWine" value="' + esc(v("pfWine", PRF.fav_wine || "")) + '" maxlength="60"></label>' +
-    '<label class="f">Spezialität<input class="t" data-k="pfSpec" value="' + esc(v("pfSpec", PRF.specialty || "")) + '" maxlength="80"></label><button class="btn">Speichern</button></form>' +
-    '<span class="sm mu">Gerät: ' + deviceText(PRF) + " · ändern kann es nur der Administrator.</span>" +
-    pushKarte() +
-    (echterAdmin() ? '<button class="btn ghost" data-a="sicht">' + (ALS_MITGLIED ? "Zurück zur Admin-Ansicht" : "App als Mitglied ansehen") + "</button>" : "") +
-    '<button class="btn ghost" data-a="logout">Abmelden</button></section>';
+  h += '<button class="btn ghost" data-a="ov" data-t="member" data-id="' + me + '">Mein Profil ansehen und bearbeiten</button>';
   h += installCard();
   return h;
 }
@@ -1124,6 +1127,20 @@ function feedback() {
     '<label class="f">Beschreibung<textarea class="t" data-k="fbText" maxlength="4000" placeholder="Was soll besser werden und warum?">' + esc(v("fbText")) + "</textarea></label>" +
     '<div class="row"><button class="btn grow"' + (v("fbTitle").trim().length >= 3 && !BUSY ? "" : " disabled") + '>Als Issue erfassen</button><button type="button" class="btn ghost" data-a="ui" data-k="fbOpen" data-v="">Abbrechen</button></div></form></section>';
 }
+// Eigene Profilseite: Ansicht für Admins, bearbeiten, Push, abmelden
+function meinProfil() {
+  var h = "";
+  if (echterAdmin()) h += '<section class="card" style="border-color:var(--lila)" aria-label="Ansicht"><span class="lbl" style="color:var(--lila)">Ansicht zum Testen</span><div class="g2">' +
+    [[false, "Administrator"], [true, "Mitglied"]].map(function (x) { var on = !!ALS_MITGLIED == x[0]; return '<button class="pill' + (on ? " on" : "") + '" ' + (on ? "" : 'data-a="sicht"') + ' aria-pressed="' + on + '">' + x[1] + "</button>" }).join("") +
+    '</div><span class="xs mu">Als Mitglied siehst du die App wie alle anderen. Deine Admin-Rechte in der Datenbank bleiben.</span></section>';
+  h += '<section class="card" aria-label="Profil bearbeiten"><div class="row sb"><span class="b" style="font-size:15px">Mein Profil</span><button class="pill sm" data-a="setui" data-k="pfEdit" data-v="' + (UI.pfEdit ? "" : "1") + '" aria-pressed="' + !!UI.pfEdit + '">' + (UI.pfEdit ? "Fertig" : "Bearbeiten") + "</button></div>" +
+    (UI.pfEdit ? '<form class="col" data-s="profile" style="gap:10px"><label class="f">Name<input class="t" data-k="pfName" value="' + esc(v("pfName", PRF.display_name)) + '" maxlength="40" required></label>' +
+      '<label class="f">Lieblingswein<input class="t" data-k="pfWine" value="' + esc(v("pfWine", PRF.fav_wine || "")) + '" maxlength="60"></label>' +
+      '<label class="f">Spezialität<input class="t" data-k="pfSpec" value="' + esc(v("pfSpec", PRF.specialty || "")) + '" maxlength="80"></label><button class="btn">Speichern</button></form>' : "") +
+    '<span class="sm mu">Gerät: ' + deviceText(PRF) + " · ändern kann es nur der Administrator.</span>" + pushKarte() +
+    '<button class="btn ghost" data-a="logout">Abmelden</button></section>';
+  return h;
+}
 function memberView(p) {
   var me = uid(), s = stats(p.id), self = p.id == me;
   var h = '<div class="top"><button class="back" data-a="close" aria-label="Zurück">' + BACK + '</button><div class="row"><span class="av l">' + esc(ini(p.id)) + '</span><div class="col" style="gap:2px"><span style="font:900 26px/1.1 var(--hf)">' + esc(nm(p.id)) + "</span>" +
@@ -1140,6 +1157,7 @@ function memberView(p) {
     [["iphone", "iPhone"], ["android", "Android"]].map(function (d) { var on = p.device == d[0]; return '<button class="pill' + (on ? " on" : "") + '" style="' + (on ? "background:var(--lila);border-color:var(--lila)" : "") + '" data-a="setdevice" data-id="' + p.id + '" data-v="' + d[0] + '" aria-pressed="' + on + '">' + d[1] + "</button>" }).join("") +
     '</div><span class="xs mu">Zählt nur fürs Duell des Monats. Änderungen werden protokolliert.</span><form class="row" data-s="role" data-id="' + p.id + '"><input class="t" data-k="role' + p.id + '" value="' + esc(v("role" + p.id, p.role_title)) + '" maxlength="40" aria-label="Funktion"><button class="btn lila">Funktion</button></form></section>';
   h += nickname(p);
+  if (self) h += meinProfil();
   return h + "</main>";
 }
 function nickname(p) {
@@ -1240,9 +1258,11 @@ function cardView(c) {
   var col = RAR[c.r][1];
   var pic = c.collage ? '<div class="ph">' + c.collage.map(function (p) { return "<span>" + img(p, "Reisefoto") + "</span>" }).join("") + "</div>"
     : '<div class="cimg" style="height:190px;flex:none;border:1px dashed var(--ln2)">' + (c.photo ? img(c.photo, c.title) : '<span class="sm mu">Kein Foto</span>') + "</div>";
-  return '<div class="top"><button class="back" data-a="close" aria-label="Zurück">' + BACK + '</button></div><main><article class="kc" style="--c:' + col + ';min-height:0;box-shadow:0 0 0 6px var(--bg),0 0 0 7px ' + col + '"><span class="r">' + esc(c.tag || RAR[c.r][0]) + "</span>" + pic +
-    '<span style="font:900 24px/1.15 var(--hf)">' + esc(c.title) + '</span><span class="sm mu">' + esc([c.sub, c.place].filter(Boolean).join(" · ")) + "</span>" + (c.story ? '<p style="margin:0;line-height:1.5">' + esc(c.story) + "</p>" : "") +
-    (c.who ? '<span class="sm mu" style="border-top:1px solid var(--ln);padding-top:10px">Beteiligt: ' + esc(c.who) + "</span>" : "") + "</article>" +
+  return '<div class="top"><button class="back" data-a="close" aria-label="Zurück">' + BACK + '</button></div><main><article class="kc" style="--c:' + col + ';min-height:0;box-shadow:0 0 0 6px var(--bg),0 0 0 7px ' + col + '"><span class="r">' + esc(c.tag || RAR[c.r][0]) + "</span>" +
+    '<button type="button" class="bildtipp" data-a="setui" data-k="kText" data-v="' + (UI.kText == c.id ? "" : esc(c.id)) + '" aria-expanded="' + (UI.kText == c.id) + '" aria-label="Geschichte zur Karte ' + (UI.kText == c.id ? "verstecken" : "zeigen") + '">' + pic + "</button>" +
+    '<span style="font:900 24px/1.15 var(--hf)">' + esc(c.title) + "</span>" +
+    (UI.kText == c.id ? '<div class="col" data-test="karten-text" style="gap:8px"><span class="sm mu">' + esc([c.sub, c.place].filter(Boolean).join(" · ")) + "</span>" + (c.story ? '<p style="margin:0;line-height:1.5">' + esc(c.story) + "</p>" : "") +
+      (c.who ? '<span class="sm mu" style="border-top:1px solid var(--ln);padding-top:10px">Beteiligt: ' + esc(c.who) + "</span>" : "") + "</div>" : '<span class="xs mu">Tippe aufs Bild für die Geschichte</span>') + "</article>" +
     (glasKey(c) ? glasKnopf(glasKey(c)) : "") + kartePersonen(c) + (c.own ? '<button class="btn ghost" data-a="delcard" data-id="' + c.id + '">Karte löschen</button>' : "") + "</main>";
 }
 // Personen auf der Karte: Wer eingetragen ist, bekommt +10 Punkte
@@ -1398,6 +1418,8 @@ function restoView(r) {
   var V = D.restaurant_visits.filter(function (x) { return x.restaurant_id == r.id }).sort(function (a, b) { return a.visited_on < b.visited_on ? 1 : -1 });
   var h = '<div class="top"><button class="back" data-a="close" aria-label="Zurück">' + BACK + '</button><div class="row sb"><div class="col" style="gap:2px"><span style="font:900 28px/1.05 var(--hf)">' + esc(r.name) + '</span><span class="sm mu">' + esc(r.place || "") + "</span></div>" +
     '<div class="col" style="gap:0;align-items:flex-end"><span style="font:900 34px/1 var(--hf);color:var(--ac)" data-test="score">' + (s ? s.all.toFixed(1).replace(".", ",") : "–") + '</span><span class="xs mu">Club-Wertung</span></div></div></div><main>';
+  if (r.lat == null && (r.created_by == uid() || isAdmin())) h += '<section class="card" aria-label="Standort"><span class="b" style="font-size:15px">Standort fehlt</span><span class="sm mu">Ohne Standort erscheint die Beiz nicht auf der Karte.</span>' +
+    '<div class="g2"><button class="btn ghost" data-a="standorthier" data-id="' + r.id + '">Hier bin ich</button><button class="btn ghost" data-a="standortsuche" data-id="' + r.id + '">Suchen</button></div></section>';
   h += '<section class="card"><span class="b" style="font-size:15px">Deine Bewertung</span>' + CRIT.map(function (c) {
     return '<div class="col"><div class="row sb"><span class="sm b">' + esc(c[1]) + '</span><span class="xs mu">Club Ø ' + (s ? s[c[0]].toFixed(1).replace(".", ",") : "–") + "</span></div>" + stars("r:" + r.id + ":" + c[0], mine[c[0]] || 0, c[1]) + "</div>";
   }).join("") + (mine.preis ? "" : '<span class="xs mu">Alle drei Kriterien bewerten, dann wird gespeichert · +5 Punkte</span>') + "</section>";
@@ -1448,7 +1470,7 @@ function rides(e) {
   var me = uid(), RD = D.rides.filter(function (r) { return r.event_id == e.id });
   var mineDrive = RD.filter(function (r) { return r.driver_id == me })[0];
   var myRide = D.ride_passengers.filter(function (p) { return p.passenger_id == me && RD.some(function (r) { return r.id == p.ride_id }) })[0];
-  var h = '<section class="card" aria-label="Heimweg · Fahrservice"><div class="col" style="gap:1px"><span class="b" style="font-size:15px">Heimweg · Fahrservice</span><span class="sm mu">Mitfahrer bewerten den Fahrer und verteilen Punkte</span></div>';
+  var h = '<section class="card" aria-label="Heimweg · Fahrservice"><div class="col" style="gap:1px"><span class="b" style="font-size:15px">Heimweg · Fahrservice</span><span class="sm mu">Der Fahrer bekommt 15 Punkte pro Person, die er heimbringt, und 10 dazu für jede gute Bewertung</span></div>';
   h += RD.length ? '<div class="lst">' + RD.map(function (r) {
     var P = D.ride_passengers.filter(function (p) { return p.ride_id == r.id }), got = 0, rated = P.filter(function (p) { return p.rated_at });
     P.forEach(function (p) { got += p.points_given || 0 });
@@ -1457,7 +1479,7 @@ function rides(e) {
     return '<div class="col"><div class="row"><span class="av s drv">' + esc(ini(r.driver_id)) + '</span><span class="grow col" style="gap:1px"><b class="sm">' + esc(nm(r.driver_id)) + (r.driver_id == me ? " (du)" : "") + '</b><span class="xs mu">' + esc(r.direction || "Richtung offen") + " · " + (r.seats - P.length) + " freie Plätze" + (avg ? " · " + avg.toFixed(1).replace(".", ",") + " Sterne" : "") + (got ? " · +" + got + " Punkte erhalten" : "") + "</span></span>" +
       (r.driver_id != me && !myRide && P.length < r.seats ? '<button class="pill sm" style="border-color:var(--teal);color:var(--teal)" data-a="ridejoin" data-id="' + r.id + '">Mitfahren</button>' : "") +
       (r.driver_id == me ? '<button class="pill sm" data-a="ridedel" data-id="' + r.id + '">Zurückziehen</button>' : "") + "</div>" +
-      (P.length ? '<div class="chips">' + P.map(function (p) { return '<span class="chip' + (p.rated_at ? " ja" : "") + '">' + esc(first(p.passenger_id)) + (p.rated_at ? " · +" + p.points_given : "") + "</span>" }).join("") + "</div>" : "") +
+      (P.length ? '<div class="chips">' + P.map(function (p) { return '<span class="chip' + (p.rated_at ? " ja" : "") + '">' + esc(first(p.passenger_id)) + (p.rated_at ? " · " + ((p.stars_safe + p.stars_punctual + p.stars_mood) / 3).toFixed(1).replace(".", ",") + " ★" : "") + "</span>" }).join("") + "</div>" : "") +
       (mine ? rideRate(myRide, r, e) : "") + "</div>";
   }).join("") + "</div>" : '<span class="empty">Noch niemand fährt. Biete Plätze an!</span>';
   if (!mineDrive && !myRide) h += UI.rideForm ? '<form class="col tile" data-s="ride" data-id="' + e.id + '" style="gap:8px;padding:12px"><div class="g2"><label class="f">Richtung<input class="t" data-k="rdDir" value="' + esc(v("rdDir")) + '" maxlength="60" placeholder="z.B. Wil"></label><label class="f">Plätze<input class="t" type="number" min="1" max="8" data-k="rdSeats" value="' + esc(v("rdSeats", "3")) + '"></label></div><div class="row"><button class="btn grow">Plätze anbieten</button><button type="button" class="btn ghost" data-a="ui" data-k="rideForm" data-v="">Abbrechen</button></div></form>'
@@ -1466,12 +1488,12 @@ function rides(e) {
 }
 function rideRate(p, r, e) {
   if (new Date(e.starts_at).getTime() > now()) return '<div class="tile" style="padding:12px;gap:8px"><span class="sm mu">Bewerten kannst du nach dem Anlass.</span><button class="btn link" data-a="rideleave" data-id="' + r.id + '">Mitfahrt absagen</button></div>';
-  if (p.rated_at) return '<span class="sm ok">Du hast ' + esc(first(r.driver_id)) + " +" + p.points_given + " Punkte gegeben. Danke!</span>";
+  if (p.rated_at) return '<span class="sm ok">Danke für deine Bewertung!</span>';
   var k = "rr" + r.id, cur = UI[k] || {};
   return '<div class="tile" style="padding:12px;gap:8px"><span class="b">Gut angekommen? Wie war die Fahrt mit ' + esc(first(r.driver_id)) + "?</span>" +
     RCRIT.map(function (c) { return '<span class="sm b">' + c[1] + "</span>" + stars("ride:" + r.id + ":" + c[0], cur[c[0]] || 0, c[1]) }).join("") +
-    '<span class="sm b">Punkte für den Fahrer</span><div class="g3" style="grid-template-columns:repeat(4,minmax(0,1fr))">' + [10, 20, 30, 50].map(function (n) { return '<button class="pill ' + (cur.points == n ? "on" : "") + '" style="' + (cur.points == n ? "background:var(--teal);border-color:var(--teal)" : "") + '" data-a="ridepts" data-id="' + r.id + '" data-v="' + n + '">+' + n + "</button>" }).join("") + "</div>" +
-    '<button class="btn" data-a="riderate" data-id="' + r.id + '"' + (cur.points && cur.stars_safe && cur.stars_punctual && cur.stars_mood ? "" : " disabled") + ">Bewertung senden · +5</button>" +
+    '<div hidden>' + [].map(function (n) { return '<button class="pill ' + (cur.points == n ? "on" : "") + '" style="' + (cur.points == n ? "background:var(--teal);border-color:var(--teal)" : "") + '" data-a="ridepts" data-id="' + r.id + '" data-v="' + n + '">+' + n + "</button>" }).join("") + "</div>" +
+    '<button class="btn" data-a="riderate" data-id="' + r.id + '"' + (cur.stars_safe && cur.stars_punctual && cur.stars_mood ? "" : " disabled") + ">Bewertung senden · +5</button>" +
     '<button class="btn link" data-a="rideleave" data-id="' + r.id + '">Mitfahrt absagen</button></div>';
 }
 
@@ -1485,9 +1507,25 @@ function overlay() {
   else if (o.t == "card") x = allCards().find(function (c) { return c.id == o.id }), x = x && cardView(x);
   else if (o.t == "video") x = videoKarte(o.id), x = x && videoView(x);
   if (!x) { OV = null; return "" }
+  if (WRICHT) x = x.replace("<main>", '<main class="von' + WRICHT + '">');
   return '<div id="ov" role="dialog" aria-modal="true">' + x + "</div>";
 }
+function umfrageSheet() {
+  var w = +v("umWert", "7");
+  return '<div id="sh"><section role="dialog" aria-modal="true" aria-label="Umfrage zum Design"><span class="lbl">Kurze Frage</span><span class="mid">Wie gefällt dir das Design?</span>' +
+    '<form class="col" data-s="umfrage" style="gap:12px"><div class="row sb sm"><span>0 · gar nicht</span><b style="font-size:22px;color:var(--ac)" data-wert="umWert">' + w + '</b><span>10 · sehr</span></div>' +
+    '<input type="range" min="0" max="10" step="1" data-k="umWert" value="' + w + '" aria-label="Wie gefällt dir das Design, 0 bis 10" style="width:100%;accent-color:var(--ac)">' +
+    '<label class="f" data-unter8' + (w >= 8 ? " hidden" : "") + '>Was soll verbessert werden?<textarea class="t" data-k="umText" maxlength="1000" placeholder="z. B. Farben, Schrift, Übersicht …">' + esc(v("umText")) + "</textarea></label>" +
+    '<button class="btn">Senden</button><button type="button" class="btn link" data-a="umspaeter">Später</button></form></section></div>';
+}
+function umfrageErgebnis() {
+  var L = D.design_umfrage; if (!L.length) return '<span class="sm mu">Design-Umfrage: noch keine Antworten.</span>';
+  var s = 0; L.forEach(function (x) { s += x.wert });
+  return '<div class="col" data-test="umfrage-ergebnis" style="gap:6px"><span class="sm b">Design-Umfrage: Ø ' + (s / L.length).toFixed(1).replace(".", ",") + " von 10 · " + L.length + (L.length == 1 ? " Antwort" : " Antworten") + "</span>" +
+    L.filter(function (x) { return x.text }).map(function (x) { return '<span class="xs"><b>' + esc(nm(x.member_id)) + " (" + x.wert + "):</b> " + esc(x.text) + "</span>" }).join("") + "</div>";
+}
 function sheet() {
+  if (SH.t == "umfrage") return umfrageSheet();
   if (SH.t == "party") {
     var g = "";
     for (var i = 0; i < 10; i++) g += '<span class="gx" style="top:' + (120 + (i * 53) % 420) + "px;--dx:" + (3.2 + (i % 4) * 0.9) + "s;--d:" + (-i * 0.7) + 's"><span class="gy" style="--dy:' + (0.9 + (i % 3) * 0.25) + "s;--d2:" + (-i * 0.3) + 's"><svg width="44" height="70" viewBox="0 0 44 70" aria-hidden="true" fill="none"><path d="M6 4h32c0 16-5 26-16 26S6 20 6 4z" fill="#F3EBDD" fill-opacity="0.18" stroke="#F3EBDD" stroke-width="2.5" stroke-linejoin="round"/><path d="M8.5 13h27c-1.5 9-6 15-13.5 15S10 22 8.5 13z" fill="#B3243A"/><path d="M22 30v28M12 66h20" stroke="#F3EBDD" stroke-width="2.5" stroke-linecap="round"/></svg></span></span>';
@@ -1519,6 +1557,7 @@ var ACT = {
   },
   close: function () { if (!SH && OV && history.state && history.state.mgOv) { history.back(); return } zu() },
   authmode: function (d) { AUTH = { mode: d.v }; render() },
+  umspaeter: function () { SH = null; render() },
   noinvite: function () { INVITE = null; history.replaceState(null, "", location.pathname + location.search); render() },
   logout: function () { sb.auth.signOut() },
   rsvp: function (d) {
@@ -1651,8 +1690,9 @@ var ACT = {
   riderate: function (d) {
     var c = UI["rr" + d.id] || {}, r = D.rides.find(function (x) { return x.id == d.id });
     UI["rr" + d.id] = null;
-    after(sb.from("ride_passengers").update({ stars_safe: c.stars_safe, stars_punctual: c.stars_punctual, stars_mood: c.stars_mood, points_given: c.points, rated_at: new Date().toISOString() }).eq("ride_id", d.id).eq("passenger_id", uid()),
-      first(r.driver_id) + " erhält +" + c.points + " Punkte · du +5 fürs Bewerten");
+    var gut = (c.stars_safe + c.stars_punctual + c.stars_mood) / 3 >= 4;
+    after(sb.from("ride_passengers").update({ stars_safe: c.stars_safe, stars_punctual: c.stars_punctual, stars_mood: c.stars_mood, rated_at: new Date().toISOString() }).eq("ride_id", d.id).eq("passenger_id", uid()),
+      "Danke! " + first(r.driver_id) + (gut ? " erhält +10 für die gute Fahrt" : " hat die Bewertung erhalten") + " · du +5 fürs Bewerten");
   },
   ridejoin: function (d) { var r = D.rides.find(function (x) { return x.id == d.id }); after(sb.from("ride_passengers").insert({ ride_id: d.id, passenger_id: uid() }), "Du fährst mit " + first(r.driver_id)) },
   rideleave: function (d) { after(sb.from("ride_passengers").delete().eq("ride_id", d.id).eq("passenger_id", uid()), "Mitfahrt abgesagt") },
@@ -1670,6 +1710,17 @@ var ACT = {
   },
   copylink: function () { if (navigator.clipboard) navigator.clipboard.writeText(NEWLINK).then(function () { toast("Link kopiert") }, function () { toast("Kopieren nicht möglich") }) },
   revoke: function (d) { sb.functions.invoke("invite", { body: { action: "revoke", id: +d.id } }).then(function (r) { fnErr(r).then(function (e) { toast(e || "Einladung zurückgezogen"); loadInvites() }) }) },
+  standorthier: function (d) {
+    if (!navigator.geolocation) return toast("Standort nicht verfügbar");
+    navigator.geolocation.getCurrentPosition(function (p) { after(sb.from("restaurants").update({ lat: p.coords.latitude, lng: p.coords.longitude }).eq("id", d.id), "Standort gespeichert") }, function () { toast("Standort nicht freigegeben") }, { timeout: 10000 });
+  },
+  standortsuche: function (d) {
+    var r = D.restaurants.find(function (x) { return x.id == d.id }); if (!r) return;
+    standortSuchen(r.name + " " + (r.place || "")).then(function (pos) {
+      if (!pos) return toast("Nicht gefunden. Versuch es vor Ort mit «Hier bin ich».");
+      after(sb.from("restaurants").update({ lat: pos.lat, lng: pos.lng }).eq("id", d.id), "Standort gefunden und gespeichert");
+    });
+  },
   geo: function () {
     if (!navigator.geolocation) return toast("Standort nicht verfügbar");
     navigator.geolocation.getCurrentPosition(function (p) { UI.rsLat = p.coords.latitude; UI.rsLng = p.coords.longitude; render() }, function () { toast("Standort nicht freigegeben") }, { timeout: 10000 });
@@ -1753,6 +1804,10 @@ var SUBMIT = {
   amt: function (f) {
     var id = f.getAttribute("data-id"), m = v("amtPerson", ""), r = v("amtRolle", "ok"); if (!m) return toast("Bitte eine Person wählen");
     after(sb.from("trip_aemtli").insert({ trip_id: id, member_id: m, rolle: r, added_by: uid() }), nm(m) + " ist " + rolleName(r)).then(function () { UI.amtPerson = null; render() });
+  },
+  umfrage: function () {
+    var w = +v("umWert", "7"), t = w < 8 ? v("umText").trim() : "";
+    after(sb.from("design_umfrage").insert({ member_id: uid(), wert: w, text: t || null }), "Danke für deine Meinung!").then(function () { SH = null; UI.umWert = UI.umText = null; render() });
   },
   event: function () {
     var at = new Date(v("evDate", evStandard()) + "T" + v("evTime", "19:00")); if (!v("evTitle").trim() || isNaN(at)) return toast("Bitte Titel und Datum angeben");
@@ -1863,11 +1918,23 @@ var CHANGE = {
 // Wischen nach links/rechts wechselt den Reiter. Nicht in Fenstern, Eingaben, Videos, Karten (Leaflet)
 // und nicht in Bereichen, die selbst seitlich scrollen. Der Rand bleibt frei für die Zurück-Geste des iPhones.
 var WISCH = null;
+function ovListe() {
+  if (OV.t == "member") return D.profiles.slice().sort(function (a, b) { return nm(a.id).localeCompare(nm(b.id), "de") }).map(function (p) { return p.id });
+  var f = UI.kf || "alle";
+  return allCards().filter(function (c) { return !c.locked && (f == "alle" || c.r == f) }).map(function (c) { return c.id });
+}
+function ovBlaettern(r) {
+  var L = ovListe(), i = L.indexOf(OV.id) + r;
+  if (i < 0 || i >= L.length) return;
+  DRUCK = 0; UI.kText = null; OV = { t: OV.t, id: L[i] }; WRICHT = r > 0 ? "r" : "l"; render(); WRICHT = null;
+  var o = document.getElementById("ov"); if (o) o.scrollTop = 0;
+}
 document.addEventListener("touchstart", function (e) {
   WISCH = null;
   var t = e.target;
-  if (e.touches.length != 1 || OV || SH || !ME || !READY || !PRF || !t.closest || !t.closest("#app main")) return;
-  if (t.closest("input, textarea, select, video, .leaflet-container, #ov, #sh")) return;
+  var ovWisch = OV && (OV.t == "member" || OV.t == "card") && t.closest && t.closest("#ov");
+  if (e.touches.length != 1 || SH || !ME || !READY || !PRF || !t.closest || (OV ? !ovWisch : !t.closest("#app main"))) return;
+  if (t.closest("input, textarea, select, video, .leaflet-container, #sh") || (!OV && t.closest("#ov"))) return;
   for (var n = t; n && n.tagName != "MAIN"; n = n.parentElement) if (n.scrollWidth > n.clientWidth + 2 && /auto|scroll/.test(getComputedStyle(n).overflowX)) return;
   var p = e.touches[0];
   if (p.clientX < 24 || p.clientX > innerWidth - 24) return;
@@ -1876,10 +1943,11 @@ document.addEventListener("touchstart", function (e) {
 document.addEventListener("touchcancel", function () { WISCH = null }, { passive: true });
 document.addEventListener("touchend", function (e) {
   var w = WISCH; WISCH = null;
-  if (!w || OV || SH || e.touches.length) return;
+  if (!w || SH || e.touches.length) return;
   var p = e.changedTouches[0], dx = p.clientX - w.x, dy = p.clientY - w.y;
   if (Date.now() - w.t > 700 || Math.abs(dx) < 70 || Math.abs(dx) < 2 * Math.abs(dy)) return;
   if (window.getSelection && String(window.getSelection())) return;
+  if (OV) return ovBlaettern(dx < 0 ? 1 : -1);
   var i = TABS.map(function (x) { return x[0] }).indexOf(TAB) + (dx < 0 ? 1 : -1);
   if (i < 0 || i >= TABS.length) return;
   DRUCK = 0; WRICHT = dx < 0 ? "r" : "l"; ACT.tab({ v: TABS[i][0] }); WRICHT = null;
@@ -1906,6 +1974,12 @@ document.addEventListener("submit", function (e) {
 });
 document.addEventListener("input", function (e) {
   var k = e.target.getAttribute && e.target.getAttribute("data-k"); if (!k) return;
+  if (e.target.type == "range") {
+    UI[k] = e.target.value;
+    var o = document.querySelector('[data-wert="' + k + '"]'); if (o) o.textContent = e.target.value;
+    var u = document.querySelector("[data-unter8]"); if (u) u.hidden = +e.target.value >= 8;
+    return;
+  }
   var before = !!String(UI[k] || "").trim();
   UI[k] = e.target.type == "checkbox" ? e.target.checked : e.target.value;
   // Knöpfe freischalten, sobald etwas eingegeben ist (ohne bei jedem Zeichen neu zu zeichnen)
@@ -1962,7 +2036,7 @@ function start() {
     if (INVITE && INVITE.state != "bad") { INVITE = null; history.replaceState(null, "", location.pathname + location.search) }
     READY = false; render();
     setTimeout(function () {
-      sb.rpc("me").then(function (r) { PREV = r.data && r.data.prev_seen; return sb.rpc("magnum_termine") }).then(function () { return loadAll() }).then(function () { READY = true; render(); pushAbgleich(); dankHinweis(); loadInvites() });
+      sb.rpc("me").then(function (r) { PREV = r.data && r.data.prev_seen; return sb.rpc("magnum_termine") }).then(function () { return loadAll() }).then(function () { READY = true; if (!D.design_umfrage.some(function (x) { return x.member_id == uid() })) SH = { t: "umfrage" }; render(); pushAbgleich(); dankHinweis(); loadInvites() });
     }, 0);
   });
   render();
