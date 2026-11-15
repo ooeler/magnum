@@ -533,16 +533,34 @@ test.describe("Gäste, Beizen und Sichtweise", () => {
 });
 
 test.describe("Vorschläge", () => {
-  test("Umgesetzter Vorschlag: einmal ein Danke-Hinweis", async ({ page }) => {
+  test("Umgesetzter Vorschlag: Danke-Banner bleibt, bis man ihn schliesst", async ({ page }) => {
     await page.goto("/");
     await page.evaluate(() => { const d = window.__mg.db(); d.feedback.push({ id: 99, user_id: "u-ot", kind: "idee", title: "Push Benachrichtigung", body: "x", labels: [], status: "umgesetzt", created_at: new Date().toISOString() }); localStorage.setItem("__mg_db", JSON.stringify(d)) });
     await login(page);
-    await expect(page.locator("#toast")).toContainText("Danke für deinen Input! «Push Benachrichtigung» wurde umgesetzt");
-    await page.evaluate(() => { document.getElementById("toast").hidden = true });
+    const banner = page.locator("[data-test=dank]");
+    await expect(banner).toContainText("Danke für deine guten Inputs!");
+    await expect(banner).toContainText("Push Benachrichtigung");
+    await page.reload();
+    await expect(banner).toBeVisible();                                   // bleibt nach dem Neuladen
+    await banner.getByRole("button", { name: "Danke-Banner schliessen" }).click();
+    await expect(banner).toHaveCount(0);
     await page.reload();
     await expect(page.locator("header h1")).toHaveText("Magnum");
-    await page.waitForTimeout(500);
-    await expect(page.locator("#toast")).toBeHidden();
+    await expect(banner).toHaveCount(0);
+  });
+
+  test("Vergangener Anlass: Gäste nur der Admin, Fahrten nur bis zum Anlasstag", async ({ page }) => {
+    await login(page, BEAT);
+    await page.locator("summary", { hasText: "Vergangene Anlässe" }).click();
+    await page.locator('[data-a=ov][data-t=event][data-id="e-past2"]').click();
+    await expect(page.locator("#ov [data-test=gast-gesperrt]")).toBeVisible();
+    await expect(page.locator("#ov form[data-s=gast]")).toHaveCount(0);
+    await expect(page.locator("#ov [data-test=fahrt-vorbei]")).toBeVisible();
+    await expect(page.locator("#ov").getByRole("button", { name: /Ich fahre/ })).toHaveCount(0);
+    const g = await page.evaluate(() => window.__mg.asId("u-beat", (sb) => sb.from("gaeste").insert({ event_id: "e-past2", name: "Hans", added_by: "u-beat" })));
+    expect(g.error.message).toContain("nur der Administrator");
+    const r = await page.evaluate(() => window.__mg.asId("u-beat", (sb) => sb.from("rides").insert({ event_id: "e-past2", driver_id: "u-beat", direction: "Gossau", seats: 3 })));
+    expect(r.error.message).toContain("bis und mit dem Anlasstag");
   });
 });
 
@@ -562,6 +580,30 @@ test.describe("Archiv aus dem Chat", () => {
     await page.locator("summary", { hasText: "Vergangene Anlässe" }).click();
     await expect(page.locator('[data-a=ov][data-id="e-arch"]')).toContainText("Quellenhof");
     expect(vorher).toBeGreaterThan(0);
+  });
+});
+
+test.describe("Unsere Beizen", () => {
+  test("zuerst die 5 zuletzt besuchten, «Mehr anzeigen» zeigt den Rest", async ({ page }) => {
+    await page.goto("/");
+    await page.evaluate(() => {
+      const d = window.__mg.db();
+      for (let i = 1; i <= 6; i++) {
+        d.restaurants.push({ id: "re-x" + i, name: "Beiz " + i, place: "Gossau", lat: null, lng: null, created_by: "u-ot", created_at: "2020-01-01T10:00:00Z" });
+        d.restaurant_visits.push({ id: "rv-x" + i, restaurant_id: "re-x" + i, visited_on: "2026-10-2" + i, people: 1, total_chf: 0, created_by: null, created_at: "2026-01-01T10:00:00Z" });
+      }
+      localStorage.setItem("__mg_db", JSON.stringify(d));
+    });
+    await login(page);
+    await tab(page, "Statistik");
+    const b = page.locator("[aria-label='Unsere Beizen']");
+    const zeilen = b.locator("button[data-t=resto]");
+    await expect(zeilen).toHaveCount(5);
+    await expect(zeilen.first()).toContainText("Beiz 6");                 // zuletzt besucht zuerst
+    await b.getByRole("button", { name: /Mehr anzeigen/ }).click();
+    await expect(zeilen).toHaveCount(await page.evaluate(() => D.restaurants.length));
+    await b.getByRole("button", { name: "Weniger anzeigen" }).click();
+    await expect(zeilen).toHaveCount(5);
   });
 });
 

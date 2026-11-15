@@ -483,8 +483,12 @@ select pg_temp.check((select count(*) from public.profiles) > 15, 'Keine Obergre
 
 -- 22) Gäste bei Anlass und Reise, keine Obergrenze beim Mitreisen
 set role authenticated;
+select pg_temp.als('A');
+insert into public.events (id, title, starts_at) values ('20000000-0000-0000-0000-000000000008', 'Gästeabend', now() + interval '10 days');
 select pg_temp.als('C');
-insert into public.gaeste (event_id, name) values ('20000000-0000-0000-0000-000000000001', 'Peter');
+insert into public.gaeste (event_id, name) values ('20000000-0000-0000-0000-000000000008', 'Peter');
+select pg_temp.verboten($q$insert into public.gaeste (event_id, name) values ('20000000-0000-0000-0000-000000000001', 'Nachzügler')$q$, 'Gäste bei vergangenen Anlässen nur der Admin');
+select pg_temp.verboten($q$insert into public.rides (event_id, direction, seats) values ('20000000-0000-0000-0000-000000000001', 'Wil', 2)$q$, 'Fahrten anbieten nur bis und mit dem Anlasstag');
 insert into public.gaeste (trip_id, name) values ('10000000-0000-0000-0000-000000000001', 'Maria');
 select pg_temp.check((select count(*) from public.gaeste) = 2, 'Gäste bei Anlass und Reise');
 do $$ begin

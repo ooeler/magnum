@@ -614,6 +614,22 @@ create table if not exists public.gaeste (
 );
 alter table public.gaeste enable row level security;
 
+-- Vergangene Anlässe: Gäste trägt nur der Administrator nach. Fahrten anbieten geht bis und mit dem Anlasstag.
+create or replace function public.check_nachtrag() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare v_tag date;
+begin
+  if public.uid() is null or public.is_admin() or new.event_id is null then return new; end if;
+  select (starts_at at time zone 'Europe/Zurich')::date into v_tag from public.events where id = new.event_id;
+  if v_tag < public.heute() then
+    raise exception '%', case tg_table_name when 'gaeste' then 'Gäste bei vergangenen Anlässen trägt nur der Administrator ein'
+                                             else 'Fahrten anbieten geht nur bis und mit dem Anlasstag' end;
+  end if;
+  return new;
+end $$;
+drop trigger if exists gast_nachtrag on public.gaeste;
+create trigger gast_nachtrag before insert on public.gaeste for each row execute function public.check_nachtrag();
+
 -- ───────────── Prost-Wand ─────────────
 create table if not exists public.posts (
   id         uuid primary key default gen_random_uuid(),
@@ -1306,6 +1322,8 @@ grant update (event_id, member_id, status, updated_at) on public.rsvps to authen
 
 -- Fahrangebote ändert niemand nachträglich (sonst weniger Plätze als Mitfahrer); zurückziehen geht
 revoke update on public.rides from authenticated;
+drop trigger if exists fahrt_nachtrag on public.rides;
+create trigger fahrt_nachtrag before insert on public.rides for each row execute function public.check_nachtrag();
 
 -- Fahrten bewerten: Passagiere ändern nur die Bewertung, nicht die Fahrt
 revoke update on public.ride_passengers from authenticated;
@@ -1344,6 +1362,7 @@ revoke execute on function public.check_ride_passenger() from public, anonymous,
 revoke execute on function public.heute() from public, anonymous, authenticated;
 revoke execute on function public.check_event() from public, anonymous, authenticated;
 revoke execute on function public.check_rsvp() from public, anonymous, authenticated;
+revoke execute on function public.check_nachtrag() from public, anonymous, authenticated;
 revoke execute on function public.push_abstimmung() from public, anonymous, authenticated;
 revoke execute on function public.check_trip_photo() from public, anonymous, authenticated;
 revoke execute on function public.trip_absage() from public, anonymous, authenticated;
