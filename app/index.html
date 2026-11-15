@@ -95,9 +95,9 @@ ol{list-style:none;margin:0;padding:0}
 .cimg b{font:900 40px var(--hf);color:var(--c,var(--ac))}
 .coll{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px;width:100%;height:100%}.coll>*{min-height:46px;background:#3A2C30;overflow:hidden}
 nav{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border-top:1px solid var(--ln);background:var(--deep);padding:8px 4px calc(8px + env(safe-area-inset-bottom,0px));z-index:5}
-nav button{background:none;border:0;min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--mu2);font-size:11px;font-weight:600}
+nav button{background:none;border:0;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--mu2);font-size:11px;font-weight:600}
 nav button i{width:22px;height:4px;border-radius:2px;background:transparent}
-nav button.on{color:var(--ac)}nav button.on i{background:var(--ac)}
+nav button.on{color:var(--ac)}nav button.on i{background:var(--ac)}nav button svg{flex:none}nav button.on svg{transform:scale(1.08)}
 #ov{position:fixed;inset:0;background:var(--bg);z-index:8;overflow-y:auto}
 #ov .top{padding:calc(14px + env(safe-area-inset-top,0px)) 16px 16px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--ln)}
 .back{width:44px;height:44px;border-radius:50%;border:1px solid var(--ln);background:var(--card);display:flex;align-items:center;justify-content:center;align-self:flex-start}
@@ -493,6 +493,10 @@ function after(p, msg) {
     return wartung().then(function (mt) { if (!mt) toast(errText(e)); render() });
   }).then(function (x) { if (fo) delete SENDEN[fo]; return x });
 }
+// Push-Warteschlange anstossen (neuer Anlass, Organisator, An- und Abmeldung). Fehler stören nicht: der tägliche Lauf holt nach.
+function pushAnstoss(p) {
+  return Promise.resolve(p).then(function (r) { if (!(r && r.error)) try { sb.functions.invoke("push/senden", { body: {} }).catch(function () {}) } catch (e) {} return r });
+}
 function wartung() {
   return sb.from("app_status").select("maintenance").eq("id", "main").maybeSingle().then(function (r) {
     if (r.data && r.data.maintenance) MAINT = true;
@@ -571,6 +575,7 @@ function fxStart() {
 }
 
 // ═════════════ Darstellung ═════════════
+var TAB_ICON = {"termine":"<svg width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" aria-hidden=\"true\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3.5\" y=\"5\" width=\"17\" height=\"15\" rx=\"2.5\"/><path d=\"M3.5 10h17M8 3v4M16 3v4\"/><circle cx=\"12\" cy=\"15\" r=\"1.6\" fill=\"currentColor\" stroke=\"none\"/></svg>","reisen":"<svg width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" aria-hidden=\"true\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3.5\" y=\"7.5\" width=\"17\" height=\"12\" rx=\"2.5\"/><path d=\"M9 7.5V5.5a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 5.5v2M3.5 12.5h17\"/></svg>","club":"<svg width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" aria-hidden=\"true\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5 3h5.5c.3 1.3.4 2.5.4 3.6a3.2 3.2 0 0 1-6.3 0c0-1.1.1-2.3.4-3.6zM7.8 9.8V19M5.5 20.5h4.6\"/><path d=\"M13.5 3H19c.3 1.3.4 2.5.4 3.6a3.2 3.2 0 0 1-6.3 0c0-1.1.1-2.3.4-3.6zM16.3 9.8V19M14 20.5h4.6\"/></svg>","karten":"<svg width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" aria-hidden=\"true\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"7\" y=\"4\" width=\"12\" height=\"16\" rx=\"2\"/><path d=\"M4.5 7.5v10A2.5 2.5 0 0 0 7 20\"/><path d=\"M13 9.5l1 2 2.2.3-1.6 1.5.4 2.2-2-1.1-2 1.1.4-2.2-1.6-1.5 2.2-.3z\"/></svg>","stats":"<svg width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" aria-hidden=\"true\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4 20h16\"/><rect x=\"5.5\" y=\"12\" width=\"3\" height=\"6\" rx=\"1\"/><rect x=\"10.5\" y=\"7\" width=\"3\" height=\"11\" rx=\"1\"/><rect x=\"15.5\" y=\"10\" width=\"3\" height=\"8\" rx=\"1\"/></svg>"};
 var TABS = [["termine", "Termine", "Anlässe & Abend"], ["reisen", "Reisen", "Unterwegs"], ["club", "Club", "Rangliste & Mitglieder"], ["karten", "Karten", "Sammlung"], ["stats", "Statistik", "Zahlen & Beizen"]];
 var GLASS = '<svg width="30" height="40" viewBox="0 0 34 44" aria-hidden="true" fill="none" stroke="#E8B95A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2h8v8c0 3 7 6 7 13v17a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V23c0-7 7-10 7-13z"/><path d="M6 26h22M6 34h22"/></svg>';
 // Flasche oben rechts: leer nach dem letzten Anlass, voll zum nächsten Termin
@@ -648,7 +653,7 @@ function shell() {
   var body = { termine: termine, reisen: reisen, club: club, karten: karten, stats: statistik }[t[0]]();
   return (ALS_MITGLIED && echterAdmin() ? '<div class="row sb sm" style="padding:8px 18px;background:var(--lila);color:#fff" data-test="sicht"><span>Ansicht als Mitglied</span><button class="pill sm" data-a="sicht">Zurück zur Admin-Ansicht</button></div>' : "") + '<header><div><div class="sub">' + esc(t[2]) + '</div><h1>Magnum</h1><div class="hello">' + esc(hello()) + '</div></div><span class="gl">' + flasche() + (isAdvent(today()) ? HAT : "") + "</span></header>" +
     "<main" + (WRICHT ? ' class="von' + WRICHT + '"' : "") + ">" + body + "</main>" +
-    '<nav aria-label="Bereiche">' + TABS.map(function (x) { return '<button type="button" data-a="tab" data-v="' + x[0] + '" class="' + (x[0] == TAB ? "on" : "") + '"' + (x[0] == TAB ? ' aria-current="page"' : "") + "><i></i><span>" + x[1] + "</span></button>" }).join("") + "</nav>" +
+    '<nav aria-label="Bereiche">' + TABS.map(function (x) { return '<button type="button" data-a="tab" data-v="' + x[0] + '" class="' + (x[0] == TAB ? "on" : "") + '"' + (x[0] == TAB ? ' aria-current="page"' : "") + "><i></i>" + (TAB_ICON[x[0]] || "") + "<span>" + x[1] + "</span></button>" }).join("") + "</nav>" +
     (OV ? overlay() : "") + (SH ? sheet() : "");
 }
 
@@ -937,7 +942,7 @@ function sacceri(tr, part) {
 // ═════════════ Tab: Club ═════════════
 // App installieren: Android/Chrome über den Installations-Dialog, iPhone mit Anleitung (Safari erlaubt keinen Dialog)
 var INST = null;
-window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); INST = e; if (document.querySelector(".inst")) render() });
+window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); INST = e; if (document.querySelector(".inst, [data-test=startbildschirm]")) render() });
 function isApp() { return (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true }
 function installCard() {
   if (isApp()) return "";
@@ -1156,7 +1161,51 @@ function statistik() {
     "</section>";
   h += karteHtml();
   h += '<section class="card row"><span class="grow sm">Dein Gerät: <b>' + (PRF.device == "android" ? "Android" : "iPhone") + "</b></span></section>";
+  h += pushPlan();
   return h;
+}
+// ═════════════ Wann Push-Nachrichten kommen ═════════════
+// Spiegel des täglichen Laufs (neon.ts: «0 9 * * *» UTC → /taeglich): Erinnerung 7 Tage vor dem Anlass, montags die Karte der Woche.
+var PUSH_UTC = 9, PUSH_ERINNERUNG = 7;
+function zTag(t) { var z = zuerich(t); return z.year + "-" + String(z.month).padStart(2, "0") + "-" + String(z.day).padStart(2, "0") }
+function tagPlus(tag, n) { var d = new Date(tag + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
+function pushZeitpunkt(tag) { return Date.parse(tag + "T" + String(PUSH_UTC).padStart(2, "0") + ":00:00Z") }
+function pushUhr(tag) { return zuerich(pushZeitpunkt(tag)).hour + " Uhr" }
+function pushTag(tag) { return new Intl.DateTimeFormat("de-CH", { weekday: "short", day: "numeric", month: "numeric", timeZone: "UTC" }).format(new Date(tag + "T12:00:00Z")) }
+function pushPlan() {
+  var t = now(), heute = zTag(t), L = [];
+  // Erinnerungen: Lauf am Tag 7 Tage vor dem Anlass (Zürcher Kalender), solange er noch bevorsteht
+  D.events.forEach(function (e) {
+    var tag = tagPlus(zTag(new Date(e.starts_at).getTime()), -PUSH_ERINNERUNG);
+    if (pushZeitpunkt(tag) > t) L.push({ tag: tag, was: "Erinnerung: «" + e.title + "» in 7 Tagen" });
+  });
+  // Karte der Woche: der erste Lauf der Woche, also montags
+  var mo = tagPlus(heute, (8 - new Date(heute + "T12:00:00Z").getUTCDay()) % 7);
+  if (pushZeitpunkt(mo) <= t) mo = tagPlus(mo, 7);
+  if (D.cards.length) L.push({ tag: mo, was: "Karte der Woche" });
+  L.sort(function (a, b) { return a.tag < b.tag ? -1 : a.tag > b.tag ? 1 : 0 });
+  return '<section class="card" aria-label="Benachrichtigungen"><span class="b" style="font-size:15px">Benachrichtigungen</span>' +
+    '<span class="sm mu">Push-Nachrichten kommen einmal am Tag um ' + pushUhr(heute) + ":</span>" +
+    '<ul class="sm" style="margin:0;padding-left:18px;line-height:1.6"><li><b>7 Tage vor jedem Anlass</b>: Erinnerung zum Anmelden</li><li><b>Montags</b>: die Karte der Woche</li></ul><span class="sm mu" style="margin-top:4px">Sofort:</span><ul class="sm" style="margin:0;padding-left:18px;line-height:1.6"><li><b>Neuer Anlass</b>: an alle</li><li><b>Jemand organisiert oder übernimmt einen Abend</b>: an alle</li><li><b>An- und Abmeldungen</b>: an den Organisator und alle, die schon dabei sind</li><li><b>Volles Glas für deine Karte</b>: an dich, pro Person einmal</li><li><b>Jederzeit</b>: die Test-Benachrichtigung, die du selbst auslöst (Knopf unten)</li></ul>' +
+    '<span class="lbl" style="margin-top:6px">Als Nächstes</span>' +
+    (L.length ? '<div class="lst" data-test="push-plan">' + L.slice(0, 4).map(function (x) {
+      return '<div class="row sb sm"><span class="grow">' + esc(x.was) + '</span><b style="white-space:nowrap">' + esc(pushTag(x.tag)) + " · " + pushUhr(x.tag) + "</b></div>";
+    }).join("") + "</div>" : '<span class="sm mu">Gerade ist nichts geplant.</span>') +
+    pushKnoepfe() + "</section>";
+}
+// Gleich hier: auf den Startbildschirm speichern, Benachrichtigungen ein- und ausschalten, Test an mich senden
+function pushKnoepfe() {
+  var h = '<div class="col" style="gap:8px;margin-top:6px">';
+  if (!isApp()) {
+    h += INST ? '<button class="btn" data-a="install" data-test="startbildschirm">Auf dem Startbildschirm speichern</button>'
+      : '<button class="btn ghost" data-a="ui" data-k="instHilfe" data-v="' + (UI.instHilfe ? "" : "1") + '" aria-expanded="' + !!UI.instHilfe + '" data-test="startbildschirm">Auf dem Startbildschirm speichern</button>' +
+        (UI.instHilfe ? '<span class="sm" data-test="start-hilfe">' + (PRF.device == "android" ? "In Chrome: Menü ⋮ → «App installieren» bzw. «Zum Startbildschirm hinzufügen»." : "In Safari: Teilen-Knopf → «Zum Home-Bildschirm». Danach Magnum vom Startbildschirm aus öffnen.") + "</span>" : "");
+  }
+  if (pushMoeglich()) {
+    h += '<button class="btn' + (PUSH ? " ghost" : "") + '" data-a="push" data-test="push-schalter">' + (PUSH ? "Benachrichtigungen ausschalten" : "Benachrichtigungen an mich senden") + "</button>";
+    if (PUSH) h += '<button class="btn ghost" data-a="pushtest" data-test="push-test">Test-Benachrichtigung an mich senden</button>';
+  } else h += '<span class="xs mu" data-test="push-hinweis">Benachrichtigungen gibt es in der App auf dem Startbildschirm. Zuerst dort speichern, dann hier einschalten.</span>';
+  return h + '<span class="xs mu" data-test="push-status">' + (PUSH ? "Auf diesem Gerät sind Benachrichtigungen eingeschaltet." : "Auf diesem Gerät sind Benachrichtigungen aus.") + "</span></div>";
 }
 // Karte der besuchten Beizen (OpenStreetMap, kein Schlüssel nötig). Das Neuzeichnen ersetzt das Element, darum jedes Mal neu aufbauen.
 function mitStandort() { return D.restaurants.filter(function (r) { return r.lat != null && r.lng != null }) }
@@ -1345,25 +1394,25 @@ var ACT = {
   logout: function () { sb.auth.signOut() },
   rsvp: function (d) {
     var was = rsvp(d.id, uid()); SH = null;
-    after(sb.from("rsvps").upsert({ event_id: d.id, member_id: uid(), status: d.v, updated_at: new Date().toISOString() }),
+    after(pushAnstoss(sb.from("rsvps").upsert({ event_id: d.id, member_id: uid(), status: d.v, updated_at: new Date().toISOString() })),
       d.v == "in" ? (was == "in" ? null : "Angemeldet · +50 Punkte nach dem Anlass")
         : stats(uid()).streak ? "Abgemeldet · Streak zurück auf 0" : pick(["Abgemeldet · Schade, das Glas bleibt leer", "Abgemeldet · Beim nächsten Mal wieder!", "Abgemeldet · Wir trinken einen auf dich"], today() + d.id));
   },
   abmelden: function (d) { SH = { t: "abmelden", id: d.id }; render() },
   virtual: function (d) {
     var e = D.events.find(function (x) { return x.id == d.id }); SH = null;
-    after(sb.from("rsvps").upsert({ event_id: d.id, member_id: uid(), status: "virtual", updated_at: new Date().toISOString() }).then(function (r) {
+    after(pushAnstoss(sb.from("rsvps").upsert({ event_id: d.id, member_id: uid(), status: "virtual", updated_at: new Date().toISOString() })).then(function (r) {
       if (r.error) return r; return post("kann nicht an «" + e.title + "», spendiert aber eine Magnum für die Kasse.");
     }), "Prost! Deine Magnum ist in der Kasse · +20 Punkte");
   },
   takeover: function (d) {
     var e = D.events.find(function (x) { return x.id == d.id }), alt = nm(e.organizer_id);
     if (!confirm("Abend von " + alt + " übernehmen?")) return;
-    after(sb.rpc("claim_organizer", { p_event: d.id, p_bisher: e.organizer_id }).then(function (r) { if (r.error) return r; return post("übernimmt «" + e.title + "» von " + alt + ". Danke!") }), "Du organisierst jetzt den Abend · +40 Punkte");
+    after(pushAnstoss(sb.rpc("claim_organizer", { p_event: d.id, p_bisher: e.organizer_id })).then(function (r) { if (r.error) return r; return post("übernimmt «" + e.title + "» von " + alt + ". Danke!") }), "Du organisierst jetzt den Abend · +40 Punkte");
   },
   organize: function (d) {
     var e = D.events.find(function (x) { return x.id == d.id });
-    after(sb.rpc("claim_organizer", { p_event: d.id }).then(function (r) { if (r.error) return r; return post("organisiert «" + e.title + "». Danke!") }), "Danke! Du organisierst den Abend · +40 Punkte");
+    after(pushAnstoss(sb.rpc("claim_organizer", { p_event: d.id })).then(function (r) { if (r.error) return r; return post("organisiert «" + e.title + "». Danke!") }), "Danke! Du organisierst den Abend · +40 Punkte");
   },
   party: function () { SH = { t: "party" }; render() },
   kasseauf: function () { after(sb.rpc("open_magnum_kasse"), "Kasse geöffnet. Prost!") },
@@ -1374,7 +1423,7 @@ var ACT = {
   spnext: function () { UI.spOff = (UI.spOff || 0) + 1; render() },
   glas: function (d) {
     var on = D.karten_glaeser.some(function (g) { return g.karte == d.id && g.member_id == uid() });
-    after(on ? sb.from("karten_glaeser").delete().eq("karte", d.id).eq("member_id", uid()) : sb.from("karten_glaeser").insert({ karte: d.id, member_id: uid() }), on ? null : "Prost! Ein volles Glas für diese Karte 🍷");
+    after(on ? sb.from("karten_glaeser").delete().eq("karte", d.id).eq("member_id", uid()) : pushAnstoss(sb.from("karten_glaeser").insert({ karte: d.id, member_id: uid() })), on ? null : "Prost! Ein volles Glas für diese Karte 🍷");
   },
   pprost: function (d) {
     var on = D.post_prosts.some(function (p) { return p.post_id == d.id && p.member_id == uid() });
@@ -1551,7 +1600,7 @@ var SUBMIT = {
     var org = v("edOrg", e.organizer_id || "");
     after(sb.from("events").update({ title: t, starts_at: at.toISOString(), location: v("edLoc", e.location || "").trim() || null, ortschaft: v("edOrt", e.ortschaft || "").trim() || null }).eq("id", id).then(function (r) {
       if (r.error || org == (e.organizer_id || "")) return r;
-      return sb.rpc("set_organizer", { p_event: id, p_member: org || null });
+      return pushAnstoss(sb.rpc("set_organizer", { p_event: id, p_member: org || null }));
     }), "Anlass angepasst").then(function () { UI.evEditOpen = UI.edTitle = UI.edDate = UI.edTime = UI.edLoc = UI.edOrt = UI.edOrg = null; render() });
   },
   event: function () {
@@ -1560,7 +1609,7 @@ var SUBMIT = {
     after(sb.from("events").insert({ title: v("evTitle").trim(), starts_at: at.toISOString(), location: v("evLoc").trim() || null, ortschaft: v("evOrt").trim() || null, created_by: uid() }).select().single().then(function (r) {
       if (r.error || !org) return r;
       return sb.rpc("claim_organizer", { p_event: r.data.id });
-    }), "Anlass erfasst" + (org ? " · du organisierst ihn" : "")).then(function () { UI.newEv = UI.evTitle = UI.evDate = UI.evTime = UI.evLoc = UI.evOrt = UI.evOrg = null; render() });
+    }).then(pushAnstoss), "Anlass erfasst" + (org ? " · du organisierst ihn" : "")).then(function () { UI.newEv = UI.evTitle = UI.evDate = UI.evTime = UI.evLoc = UI.evOrt = UI.evOrg = null; render() });
   },
   saying: function () { var t = v("spText").trim(); if (!t) return; after(sb.from("sayings").insert({ text: t, author_id: uid() }), "Spruch eingereicht · die meisten Prosts machen ihn zum Spruch des Tages").then(function () { UI.spText = null; UI.spForm = null; render() }) },
   post: function () { var t = v("postText").trim(); if (!t) return; after(post(t)).then(function () { UI.postText = null; render() }) },

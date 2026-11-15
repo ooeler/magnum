@@ -383,6 +383,8 @@
   function fnFail(m) { return Promise.resolve({ data: null, error: { message: "Edge Function returned a non-2xx status code", context: { json: function () { return Promise.resolve({ error: m }) } } } }) }
   function token() { var c = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_", s = ""; for (var i = 0; i < 43; i++) s += c[Math.random() * 64 | 0]; return s }
   var FN = {
+    // Push-Warteschlange anstossen: im Nachbau nur zählen
+    "push/senden": function () { if (!me()) return fnFail("Kein Mitglied"); window.__mg_anstoesse = (window.__mg_anstoesse || 0) + 1; return ok({ gesendet: 0 }) },
     invite: function (b) {
       var d = db(), now = new Date().toISOString(), INVALID = "Dieser Einladungslink ist ungültig, abgelaufen oder wurde schon verwendet.";
       if (b.action == "check" || b.action == "join") {

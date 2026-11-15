@@ -748,6 +748,75 @@ create table if not exists public.push_log (
   primary key (art, ref)
 );
 alter table public.push_log enable row level security;
+-- Warteschlange für sofortige Push-Nachrichten. Trigger legen ab, die Function verschickt (/push/senden, täglich als Rückfall).
+-- an: nur an diese Person (sonst an alle); ausser: diese Person nicht (wer es ausgelöst hat).
+create table if not exists public.push_queue (
+  id         bigint generated always as identity primary key,
+  titel      text not null,
+  text       text not null,
+  url        text not null default './',
+  an         uuid references public.profiles(id) on delete cascade,
+  ausser     uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  sent_at    timestamptz
+);
+alter table public.push_queue enable row level security;
+
+create or replace function public.push_name(p uuid) returns text
+language sql stable security definer set search_path = public as $$
+  select coalesce(nullif(display_name, ''), 'Jemand') from public.profiles where id = p
+$$;
+create or replace function public.push_datum(t timestamptz) returns text
+language sql immutable set search_path = public as $$
+  select (array['So','Mo','Di','Mi','Do','Fr','Sa'])[extract(dow from t at time zone 'Europe/Zurich')::int + 1] || ' '
+    || to_char(t at time zone 'Europe/Zurich', 'DD.MM. "um" HH24:MI')
+$$;
+
+-- Neuer Anlass (von einem Mitglied erfasst, nicht die automatische Magnum-Serie) und neuer Organisator: an alle ausser wer es war
+create or replace function public.push_event() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.starts_at < now() then return new; end if;
+  if tg_op = 'INSERT' and new.created_by is not null then
+    insert into public.push_queue (titel, text, ausser)
+    values ('Neuer Anlass: ' || new.title, public.push_datum(new.starts_at) || coalesce(' · ' || new.location, '') || '. Bist du dabei?', new.created_by);
+  elsif tg_op = 'UPDATE' and new.organizer_id is not null and new.organizer_id is distinct from old.organizer_id
+     -- Wer gerade einen Anlass erfasst und gleich selbst organisiert, bekommt keine zweite Meldung
+     and not (old.organizer_id is null and new.created_by = new.organizer_id and new.created_at > now() - interval '5 minutes') then
+    insert into public.push_queue (titel, text, ausser)
+    values (new.title || ': ' || public.push_name(new.organizer_id) || case when old.organizer_id is null then ' organisiert' else ' übernimmt' end,
+            case when old.organizer_id is null then public.push_name(new.organizer_id) || ' organisiert den Abend am ' || public.push_datum(new.starts_at) || '.'
+                 else public.push_name(new.organizer_id) || ' übernimmt den Abend von ' || public.push_name(old.organizer_id) || '.' end,
+            new.organizer_id);
+  end if;
+  return new;
+end $$;
+drop trigger if exists push_event on public.events;
+create trigger push_event after insert or update of organizer_id on public.events for each row execute function public.push_event();
+
+-- An- und Abmeldungen: an den Organisator und an alle, die schon dabei sind (auch virtuell), nie an sich selbst.
+-- Die Anmeldung des Organisators selbst (claim_organizer) meldet nichts, das erledigt push_event.
+create or replace function public.push_rsvp() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare e public.events; n int;
+begin
+  if tg_op = 'UPDATE' and new.status = old.status then return new; end if;
+  select * into e from public.events where id = new.event_id;
+  if e.starts_at < now() or new.member_id = e.organizer_id then return new; end if;
+  select count(*) into n from public.rsvps where event_id = new.event_id and status = 'in';
+  insert into public.push_queue (titel, text, an)
+  select case new.status when 'in' then 'Anmeldung: ' when 'out' then 'Abmeldung: ' else 'Virtuell dabei: ' end || e.title,
+         public.push_name(new.member_id) || case new.status when 'in' then ' ist dabei.' when 'out' then ' hat sich abgemeldet.' else ' ist virtuell dabei und spendiert eine Magnum.' end
+           || ' Angemeldet: ' || n || '.',
+         x.id
+    from (select e.organizer_id as id union
+          select member_id from public.rsvps where event_id = new.event_id and status in ('in', 'virtual')) x
+   where x.id is not null and x.id <> new.member_id;
+  return new;
+end $$;
+drop trigger if exists push_rsvp on public.rsvps;
+create trigger push_rsvp after insert or update of status on public.rsvps for each row execute function public.push_rsvp();
+
 -- Jede Woche wird eine Sammelkarte aufgedeckt
 create table if not exists public.karte_der_woche (
   woche   date primary key,
@@ -869,6 +938,33 @@ end $$;
 drop trigger if exists glas_check on public.karten_glaeser;
 create trigger glas_check before insert or update on public.karten_glaeser for each row execute function public.check_glas();
 
+-- Volles Glas: Wer die Karte erstellt oder hochgeladen hat, bekommt eine Push-Nachricht (nicht für eigene Gläser).
+-- Pro Person und Karte nur einmal, auch wenn jemand das Glas zurücknimmt und wieder gibt.
+create or replace function public.glas_menge(n int) returns text
+language sql immutable set search_path = public as $$
+  select concat_ws(' und ',
+    case when n / 4 = 1 then '1 Flasche' when n / 4 > 1 then (n / 4) || ' Flaschen' end,
+    case when n % 4 = 1 then '1 volles Glas' when n % 4 > 1 or n = 0 then (n % 4) || ' volle Gläser' end)
+$$;
+create or replace function public.push_glas() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare v_art text := split_part(new.karte, '-', 1); v_id uuid; v_von uuid; v_titel text; n int;
+begin
+  if new.karte !~ '^(karte|video)-[0-9a-f-]{36}$' then return new; end if;
+  v_id := substr(new.karte, length(v_art) + 2)::uuid;
+  if v_art = 'karte' then select created_by, title into v_von, v_titel from public.cards where id = v_id;
+  else select created_by, title into v_von, v_titel from public.video_karten where id = v_id; end if;
+  if v_von is null or v_von = new.member_id then return new; end if;
+  insert into public.push_log (art, ref) values ('glas', new.karte || '/' || new.member_id) on conflict do nothing;
+  if not found then return new; end if;
+  select count(*) into n from public.karten_glaeser where karte = new.karte;
+  insert into public.push_queue (titel, text, an)
+  values ('🍷 Volles Glas für «' || v_titel || '»', public.push_name(new.member_id) || ' hat deiner Karte ein volles Glas gegeben. Jetzt: ' || public.glas_menge(n) || '.', v_von);
+  return new;
+end $$;
+drop trigger if exists push_glas on public.karten_glaeser;
+create trigger push_glas after insert on public.karten_glaeser for each row execute function public.push_glas();
+
 -- Wird die Karte gelöscht, gehen die Gläser mit
 create or replace function public.glaeser_weg() returns trigger
 language plpgsql security definer set search_path = public as $$
@@ -947,7 +1043,7 @@ end $$;
 -- Die Data API läuft als Rolle "authenticated". Was sie darf, regeln danach Spalten-Rechte und Policies.
 grant usage on schema public to anonymous, authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
-revoke all on table public.invites, public.magnum_serie, public.push_config, public.push_abos, public.push_log from anonymous, authenticated;
+revoke all on table public.invites, public.magnum_serie, public.push_config, public.push_abos, public.push_log, public.push_queue from anonymous, authenticated;
 revoke insert, update, delete on public.karte_der_woche from authenticated;
 revoke insert, update, delete on public.video_ziehungen from authenticated;
 revoke update on public.video_karten from authenticated;
@@ -1101,6 +1197,12 @@ revoke execute on function public.check_ride_passenger() from public, anonymous,
 revoke execute on function public.heute() from public, anonymous, authenticated;
 revoke execute on function public.check_event() from public, anonymous, authenticated;
 revoke execute on function public.check_rsvp() from public, anonymous, authenticated;
+revoke execute on function public.push_event() from public, anonymous, authenticated;
+revoke execute on function public.push_rsvp() from public, anonymous, authenticated;
+revoke execute on function public.push_glas() from public, anonymous, authenticated;
+revoke execute on function public.push_name(uuid) from public, anonymous, authenticated;
+revoke execute on function public.push_datum(timestamptz) from public, anonymous, authenticated;
+revoke execute on function public.glas_menge(int) from public, anonymous, authenticated;
 revoke execute on function public.check_glas(), public.glaeser_weg() from public, anonymous, authenticated;
 revoke execute on function public.check_trip() from public, anonymous, authenticated;
 revoke execute on function public.check_trip_participant() from public, anonymous, authenticated;
@@ -1147,7 +1249,7 @@ language plpgsql stable set search_path = public as $$
 declare rest text[]; frei text[]; fertig text[] := '{}';
 begin
   select array_agg(c.relname::text) into rest from pg_class c join pg_namespace n on n.oid = c.relnamespace
-  where n.nspname = 'public' and c.relkind = 'r' and c.relname not in ('backups', 'schema_migrations', 'app_status', 'sync_stand', 'push_config', 'push_abos', 'push_log');
+  where n.nspname = 'public' and c.relkind = 'r' and c.relname not in ('backups', 'schema_migrations', 'app_status', 'sync_stand', 'push_config', 'push_abos', 'push_log', 'push_queue');
   while cardinality(rest) > 0 loop
     select array_agg(t) into frei from unnest(rest) t
     where not exists (

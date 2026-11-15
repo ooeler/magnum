@@ -8,6 +8,7 @@
 // Backup    /backup           täglicher Function Trigger (neon.ts), legt auch die nächsten Magnum-Abende an
 //                             und räumt Videodateien gelöschter Videokarten weg
 // Push      /push/*, /taeglich  Abo speichern, Test-Push, täglich: Erinnerung 7 Tage vor dem Anlass, montags die Karte der Woche
+//                             /push/senden: verschickt die Warteschlange (neuer Anlass, Organisator, An- und Abmeldungen)
 import { attachDatabasePool } from "@neon/functions";
 import { parseTriggerDelivery } from "@neon/functions/triggers";
 import { DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
@@ -272,13 +273,13 @@ const schluessel = async () => {
   await q("insert into public.push_config (id, public_key, private_key) values (1, $1, $2) on conflict (id) do nothing", [n.publicKey, n.privateKey]);
   return (await q("select public_key, private_key from public.push_config where id = 1"))[0];
 };
-// Ohne "nur" an alle Abos, sonst nur an die Geräte dieses Mitglieds
-const senden = async (titel: string, text: string, url = "./", nur: string | null = null) => {
+// Ohne "nur" an alle Abos, sonst nur an die Geräte dieses Mitglieds; "ausser" bekommt nichts (wer es ausgelöst hat)
+const senden = async (titel: string, text: string, url = "./", nur: string | null = null, ausser: string | null = null) => {
   const k = await schluessel();
   // Web-Push verlangt eine https-Adresse als Absender; Testbranches laufen mit http://localhost
   webpush.setVapidDetails(APP_URL.startsWith("https://") ? APP_URL : "https://github.com/ooeler/magnum", k.public_key, k.private_key);
   let n = 0;
-  const abos = nur ? await q("select endpoint, p256dh, auth from public.push_abos where member_id = $1", [nur]) : await q("select endpoint, p256dh, auth from public.push_abos");
+  const abos = await q("select endpoint, p256dh, auth from public.push_abos where ($1::uuid is null or member_id = $1) and ($2::uuid is null or member_id <> $2)", [nur, ausser]);
   for (const a of abos) {
     try {
       await webpush.sendNotification({ endpoint: a.endpoint, keys: { p256dh: a.p256dh, auth: a.auth } }, JSON.stringify({ title: titel, body: text, url }), { TTL: 86400 });
@@ -292,6 +293,23 @@ const senden = async (titel: string, text: string, url = "./", nur: string | nul
   return n;
 };
 const einmal = async (art: string, ref: string) => (await q("insert into public.push_log (art, ref) values ($1, $2) on conflict do nothing returning 1", [art, ref])).length == 1;
+
+// Warteschlange verschicken: Jede Meldung genau einmal (sent_at wird vor dem Senden gesetzt), alte nach 30 Tagen weg
+const warteschlange = async () => {
+  const L = await q(`update public.push_queue set sent_at = now() where id in (
+      select id from public.push_queue where sent_at is null order by id limit 50 for update skip locked)
+    returning titel, text, url, an, ausser`);
+  let n = 0;
+  for (const p of L) n += await senden(p.titel, p.text, p.url, p.an, p.ausser);
+  await q("delete from public.push_queue where sent_at < now() - interval '30 days'");
+  return n;
+};
+// Die App stösst nach Anlass, Übernahme oder Anmeldung an. Was gesendet wird, bestimmt allein die Datenbank.
+app.post("/push/senden", async (c) => {
+  const m = await member(c.req.raw);
+  if (!m) return c.json({ error: "Kein Mitglied" }, 403);
+  return c.json({ gesendet: await warteschlange() });
+});
 
 app.get("/push/key", async (c) => c.json({ key: (await schluessel()).public_key }));
 app.post("/push/abo", async (c) => {
@@ -325,6 +343,7 @@ app.post("/taeglich", async (c) => {
   const t = await parseTriggerDelivery(c.req.raw);
   if (!t.ok) return c.json({ error: t.error }, t.error === "invalid_body" ? 400 : 401);
   await q("select public.magnum_termine()");
+  await warteschlange().catch((e) => console.error("Warteschlange", e));
   const heute = tagZuerich(new Date()), erg = { erinnert: 0, karte: null as string | null };
   const E = await q("select id, title, starts_at from public.events where starts_at between now() + interval '5 days' and now() + interval '9 days'");
   for (const e of erinnerungen(E, heute)) {
