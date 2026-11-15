@@ -545,3 +545,22 @@ test.describe("Vorschläge", () => {
     await expect(page.locator("#toast")).toBeHidden();
   });
 });
+
+test.describe("Archiv aus dem Chat", () => {
+  test("Archiv-Abende stehen in der Liste, brechen aber weder Streak noch Duell", async ({ page }) => {
+    await page.goto("/");
+    const vorher = await page.evaluate(async () => { const d = window.__mg.db(); return d.events.length });
+    await login(page);
+    const streak = await page.locator("[data-test=streak]").textContent();
+    await page.evaluate(() => {
+      const d = window.__mg.db();
+      d.events.push({ id: "e-arch", title: "Oktober-Magnum", starts_at: new Date(Date.now() - 2 * 864e5).toISOString(), location: "Quellenhof", ortschaft: "Gossau", organizer_id: null, created_by: null, created_at: new Date().toISOString(), archiv: true });
+      localStorage.setItem("__mg_db", JSON.stringify(d));
+    });
+    await page.reload();
+    await expect(page.locator("[data-test=streak]")).toHaveText(streak);
+    await page.locator("summary", { hasText: "Vergangene Anlässe" }).click();
+    await expect(page.locator('[data-a=ov][data-id="e-arch"]')).toContainText("Quellenhof");
+    expect(vorher).toBeGreaterThan(0);
+  });
+});

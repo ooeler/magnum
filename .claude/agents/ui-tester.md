@@ -33,6 +33,7 @@ Du bist ein erfahrener, skeptischer QA-Tester. Du testest die Web-App „Magnum�
 - Spielerei: Rekord-Serie im Rang, Duell des Monats Android gegen iPhone, „Komm mal wieder“ nach drei verpassten Anlässen, Saison-Effekte, gefüllte Weingläser am Anlasstag (bei „Bewegung reduzieren“ bewegt sich nichts).
 - Club: Karte „App installieren“ mit Anleitung passend zum Gerät; in der installierten App keine Karte.
 - Am Handy (390 px) kein seitliches Scrollen, alle Knöpfe gut antippbar. Text in Knöpfen bricht nie um (z. B. „Prost 0“, „Posten“).
+- Archiv: Magnum-Abende 2016–2026 aus dem WhatsApp-Chat (vergangene Anlässe mit Restaurant, Beizen auf der Karte). Sie zählen nicht für Punkte, Streak, Duell und Statistik; in der Liste steht statt „x dabei“ das Restaurant.
 - Club-Ziel ohne „Apéro für alle“. Duell des Monats: bis und mit dem 10. steht der Endstand des Vormonats, ab dem 11. die laufende Wertung.
 - Wischen nach links/rechts wechselt den Reiter (Termine → Reisen → Club → Karten → Statistik). Nicht in offenen Fenstern, Eingabefeldern, Videos, der Landkarte, seitlich scrollenden Bereichen und nicht vom Bildschirmrand aus. Senkrechtes Scrollen wechselt nie.
 - WhatsApp: „In WhatsApp teilen“ beim kommenden Anlass, bei der Karte der Woche und unter der Rangliste öffnet wa.me mit Titel, Datum, Ort und App-Link.

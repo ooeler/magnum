@@ -231,7 +231,9 @@ var LEVELS = ["Apfelschorle", "Ein-Glas-Typ", "Solide", "Standfest", "Magnum-Leg
 var UNITS = { wein: 1, bier: 1, schnaps: 1, magnum: 1.5, wasser: 0 };
 var KINDS = [["wein", "Wein"], ["magnum", "Magnum-Glas"], ["bier", "Bier"], ["schnaps", "Schnaps"], ["wasser", "Wasser"]];
 function rankOf(p) { var r = RANKS[0]; RANKS.forEach(function (x) { if (p >= x.min) r = x }); return r }
-function pastEvents() { var t = now(); return D.events.filter(function (e) { return new Date(e.starts_at).getTime() < t }).sort(byDate).reverse() }
+// Für Punkte, Streak, Duell und Statistik zählen nur Anlässe aus der App, nicht das Archiv (nachgetragen ohne Anwesenheiten)
+function pastEvents() { return pastEventsAlle().filter(function (e) { return !e.archiv }) }
+function pastEventsAlle() { var t = now(); return D.events.filter(function (e) { return new Date(e.starts_at).getTime() < t }).sort(byDate).reverse() }
 function upcoming() { var t = now() - 6 * 3600e3; return D.events.filter(function (e) { return new Date(e.starts_at).getTime() >= t }).sort(byDate) }
 function rsvp(eid, mid) { var e = D.events.find(function (x) { return x.id == eid }); if (e && mid && e.organizer_id == mid) return "in"; var r = D.rsvps.find(function (x) { return x.event_id == eid && x.member_id == mid }); return r ? r.status : null }
 
@@ -791,10 +793,10 @@ function termine() {
   h += up.length ? up.map(eventCard).join("") : '<div class="card empty">Noch kein Anlass geplant. Organisiere den nächsten!</div>';
   h += UI.newEv ? eventForm() : '<button class="btn dash" data-a="ui" data-k="newEv" data-v="1">+ Anlass erfassen</button>';
   h += kasse() + meinAbend() + wand();
-  var past = pastEvents().filter(function (e) { return new Date(e.starts_at).getTime() < now() - 6 * 3600e3 }).slice(0, 24);
-  if (past.length || isAdmin()) h += '<details class="card" data-offen="pastOpen"' + (UI.newPast || UI.pastOpen ? " open" : "") + '><summary>Vergangene Anlässe (' + past.length + ")</summary><div class=\"lst\" style=\"margin-top:10px\">" + past.map(function (e) {
-    return '<button type="button" class="row sb" style="background:none;border:0;border-top:1px solid var(--ln);text-align:left;width:100%;color:var(--tx)" data-a="ov" data-t="event" data-id="' + e.id + '"><span class="grow"><b>' + esc(e.title) + '</b><br><span class="sm mu">' + esc(fDate(e.starts_at)) + '</span></span><span class="sm mu">' + D.rsvps.filter(function (r) { return r.event_id == e.id && r.status == "in" }).length + " dabei</span></button>";
-  }).join("") + "</div>" + (isAdmin() ? (UI.newPast ? pastForm() : '<button class="btn dash" data-a="ui" data-k="newPast" data-v="1">+ Vergangenen Anlass erfassen</button>') : "") + "</details>";
+  var pastAll = pastEventsAlle().filter(function (e) { return new Date(e.starts_at).getTime() < now() - 6 * 3600e3 }), past = UI.pastAlle ? pastAll : pastAll.slice(0, 24);
+  if (past.length || isAdmin()) h += '<details class="card" data-offen="pastOpen"' + (UI.newPast || UI.pastOpen ? " open" : "") + '><summary>Vergangene Anlässe (' + pastAll.length + ")</summary><div class=\"lst\" style=\"margin-top:10px\">" + past.map(function (e) {
+    return '<button type="button" class="row sb" style="background:none;border:0;border-top:1px solid var(--ln);text-align:left;width:100%;color:var(--tx)" data-a="ov" data-t="event" data-id="' + e.id + '"><span class="grow"><b>' + esc(e.title) + '</b><br><span class="sm mu">' + esc(fDate(e.starts_at)) + '</span></span><span class="sm mu">' + (e.archiv ? esc(e.location || "Archiv") : D.rsvps.filter(function (r) { return r.event_id == e.id && r.status == "in" }).length + " dabei") + "</span></button>";
+  }).join("") + "</div>" + (pastAll.length > past.length ? '<button class="btn link" data-a="ui" data-k="pastAlle" data-v="1">Alle ' + pastAll.length + " anzeigen</button>" : "") + (isAdmin() ? (UI.newPast ? pastForm() : '<button class="btn dash" data-a="ui" data-k="newPast" data-v="1">+ Vergangenen Anlass erfassen</button>') : "") + "</details>";
   return h;
 }
 // Jede Woche wird eine Sammelkarte aufgedeckt (Function "api", Route /taeglich)
@@ -1304,7 +1306,7 @@ function statistik() {
   var yr = String(new Date().getFullYear()), past = pastEvents(), py = past.filter(function (e) { return localDay(e.starts_at).slice(0, 4) == yr });
   var att = py.map(function (e) { return D.rsvps.filter(function (r) { return r.event_id == e.id && r.status == "in" }).length });
   var avg = att.length ? att.reduce(function (a, b) { return a + b }, 0) / att.length : 0;
-  var tot = 0, ppl = 0; D.restaurant_visits.forEach(function (x) { tot += Number(x.total_chf); ppl += x.people });
+  var tot = 0, ppl = 0; D.restaurant_visits.forEach(function (x) { if (Number(x.total_chf) > 0) { tot += Number(x.total_chf); ppl += x.people } });   // nur Besuche mit Rechnung
   var h = "<h2>Club-Statistik " + yr + '</h2><div class="g2">' + [[py.length, "Anlässe " + yr], [avg.toFixed(1).replace(".", ","), "Ø Teilnehmende"], [D.magnums.length, "Magnums erfasst"], [ppl ? chf(Math.round(tot / ppl * 20) / 20) : "–", "Ø pro Kopf im Restaurant"]]
     .map(function (k) { return '<div class="card" style="padding:12px;gap:2px"><span class="big" style="font-size:24px">' + esc(k[0]) + '</span><span class="sm mu">' + esc(k[1]) + "</span></div>" }).join("") + "</div>";
   h += duellBilanzHtml();
@@ -1442,7 +1444,8 @@ function restoView(r) {
   h += '<a class="btn" style="display:flex;align-items:center;justify-content:center;text-decoration:none" href="' + esc(mapsUrl(r)) + '" target="_blank" rel="noopener">In Google Maps öffnen</a>';
   h += '<section class="card"><span class="b" style="font-size:15px">Besuche</span>' + (V.length ? '<div class="lst">' + V.map(function (x) {
     return '<div class="row"><span style="width:52px;height:64px;flex:0 0 52px;border-radius:8px;overflow:hidden;background:var(--bg);border:1px dashed var(--ln2);display:flex;align-items:center;justify-content:center">' + (x.receipt_path ? img(x.receipt_path, "Quittung") : '<span class="xs mu">–</span>') + "</span>" +
-      '<span class="grow col" style="gap:2px"><b class="sm">' + esc(fDay(x.visited_on)) + '</b><span class="xs mu">' + x.people + " Personen · " + esc(nm(x.created_by)) + '</span></span><span class="col" style="gap:0;align-items:flex-end"><b class="sm">' + chf(x.total_chf) + '</b><span class="xs mu">' + chf(Math.round(x.total_chf / x.people * 20) / 20) + " p.P.</span></span></div>";
+      '<span class="grow col" style="gap:2px"><b class="sm">' + esc(fDay(x.visited_on)) + '</b><span class="xs mu">' + (Number(x.total_chf) > 0 ? x.people + " Personen · " + esc(nm(x.created_by)) : "Magnum-Abend" + (x.created_by ? " · " + esc(nm(x.created_by)) : "")) + '</span></span>' +
+      (Number(x.total_chf) > 0 ? '<span class="col" style="gap:0;align-items:flex-end"><b class="sm">' + chf(x.total_chf) + '</b><span class="xs mu">' + chf(Math.round(x.total_chf / x.people * 20) / 20) + " p.P.</span></span>" : "") + "</div>";
   }).join("") + "</div>" : '<span class="empty">Noch kein Besuch erfasst.</span>') + "</section>";
   if (isAdmin()) h += '<button class="btn ghost" data-a="delresto" data-id="' + r.id + '">Beiz löschen</button>';
   return h + "</main>";

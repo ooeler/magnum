@@ -234,6 +234,9 @@ create table if not exists public.events (
 );
 alter table public.events enable row level security;
 alter table public.events add column if not exists ortschaft text check (length(ortschaft) <= 80);
+-- Archiv: nachgetragene Abende ohne Anwesenheiten (z. B. aus dem alten WhatsApp-Chat). Sie stehen in der Liste und auf der
+-- Karte, zählen aber nicht für Punkte, Streak, Duell und Statistik.
+alter table public.events add column if not exists archiv boolean not null default false;
 
 -- Keine erfundenen Anlässe in der Vergangenheit, der Organisator kommt nur über claim_organizer.
 -- Vergangenes trägt der Admin nach.
