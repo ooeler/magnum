@@ -164,6 +164,8 @@
     }
     if (t == "trip_photos" && !old && !reiseDabei(d, r.trip_id)) return "Fotos laden nur Mitreisende hoch";
     if (t == "design_umfrage" && !(r.wert >= 0 && r.wert <= 10)) return "new row violates check constraint";
+    if (t == "gaeste" && !old && r.event_id && tag(eventOf(d, r.event_id).starts_at) < day(0)) return "Gäste bei vergangenen Anlässen trägt nur der Administrator ein";
+    if (t == "rides" && !old && tag(eventOf(d, r.event_id).starts_at) < day(0)) return "Fahrten anbieten geht nur bis und mit dem Anlasstag";
     if (t == "trip_absagen" && !old) {
       var ta = d.trips.find(function (x) { return x.id == r.trip_id });
       if (ta && ta.starts_on < day(0)) return "Die Reise hat schon begonnen";

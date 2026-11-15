@@ -68,3 +68,5 @@ Pro Fund: Schritte, erwartet, tatsächlich, Schwere. Am Schluss, was du geprüft
 - Beiz ohne Standort: „Hier bin ich“ oder „Suchen“ (wer sie erfasst hat oder Admin), danach erscheint sie auf der Karte.
 - Mitglied-Ansicht (Admin): nur dann schwebt auf jeder Seite „👁 Mitglied-Ansicht · zurück“ mit ✕ zum Ausblenden; in der Admin-Ansicht kein Overlay.
 - Statistik „Unsere Beizen“: zuerst die 5 zuletzt besuchten, „Mehr anzeigen (n weitere)“ zeigt den Rest, „Weniger anzeigen“ klappt zu.
+- Vergangene Anlässe: Gäste trägt nur der Admin nach (Hinweis statt Formular). „Ich fahre · Plätze anbieten“ nur bis und mit dem Anlasstag. Quittungen können alle hochladen.
+- Umgesetzter Vorschlag: Danke-Banner oben unter Termine, bleibt bis ✕.
