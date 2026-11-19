@@ -99,3 +99,23 @@ test.describe("Volle Gläser für Karten", () => {
     await expect(page.locator("[aria-label=Videokarten] .kc [data-test=glaeser]")).toHaveText("1");
   });
 });
+
+test.describe("Karte: Wink zum Umdrehen", () => {
+  test("beim Öffnen kippt die Karte kurz an, nach dem Drehen nicht mehr; bei «Bewegung reduzieren» ohne Animation", async ({ page }) => {
+    await login(page);
+    await tab(page, "Karten");
+    await page.locator(".kc", { hasText: "Die 6-Liter-Nacht" }).click();
+    const flip = page.locator("#ov .flip");
+    await expect(flip).toHaveClass(/wink/);
+    expect(await flip.locator(".innen").evaluate((el) => getComputedStyle(el).animationName)).toBe("wink");
+    await flip.click();
+    await expect(flip).not.toHaveClass(/wink/);
+    await expect(flip).toHaveClass(/gedreht/);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.locator("#ov .back").click();
+    await page.locator(".kc", { hasText: "Die 6-Liter-Nacht" }).click();
+    await expect(page.locator("#ov .flip")).not.toHaveClass(/gedreht/);       // wieder geöffnet: Vorderseite
+    await expect(page.locator("#ov .flip")).toHaveClass(/wink/);
+    expect(await page.locator("#ov .flip .innen").evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
+  });
+});

@@ -75,6 +75,11 @@ label.f{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:60
 .flip .seite{grid-area:1/1;backface-visibility:hidden;-webkit-backface-visibility:hidden;display:flex;flex-direction:column;gap:8px}
 .flip .hinten{transform:rotateY(180deg)}
 @media (prefers-reduced-motion:reduce){.flip .innen{transition:none}}
+.flip.wink .innen{animation:wink 1.3s cubic-bezier(.4,.1,.3,1) .6s 1}
+@keyframes wink{0%{transform:rotateY(0)}35%{transform:rotateY(-28deg)}60%{transform:rotateY(8deg)}80%{transform:rotateY(-4deg)}100%{transform:rotateY(0)}}
+.flip.wink .dreh{display:inline-block;animation:dreh .8s ease-in-out 1.9s 2}
+@keyframes dreh{50%{transform:rotate(180deg) scale(1.4)}100%{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.flip.wink .innen,.flip.wink .dreh{animation:none}}
 .bildtipp{display:block;width:100%;padding:0;border:0;background:none;color:inherit;text-align:left;cursor:pointer}
 .av.kopf{border:2px solid var(--ac);cursor:pointer;padding:0}
 .av.s{width:36px;height:36px;flex-basis:36px;font-size:14px}.av.l{width:64px;height:64px;flex-basis:64px;font-size:26px}.av.drv{background:#2C4A5A}
@@ -1288,15 +1293,19 @@ function cardForm() {
     '<label class="btn ghost file">' + CAM + (UI.cdFile ? "Foto gewählt ✓" : "Foto dazu") + '<input type="file" accept="image/*" data-c="cardphoto" aria-label="Foto zur Karte"></label>' +
     '<div class="row"><button class="btn grow"' + (BUSY ? " disabled" : "") + '>Karte erstellen</button><button type="button" class="btn ghost" data-a="ui" data-k="newCard" data-v="">Abbrechen</button></div></form>';
 }
+// Wink: Beim Öffnen kippt die Karte kurz an und das ↻ pulsiert, damit man sieht, dass sie sich drehen lässt.
+// Nur einmal pro Öffnen (nicht bei jedem Neuladen), nicht bei «Bewegung reduzieren».
+var KWINK = null, KWINK_T = null;
+function karteWinken(id) { KWINK = id; clearTimeout(KWINK_T); KWINK_T = setTimeout(function () { KWINK = null }, 3000) }
 function cardView(c) {
   var col = RAR[c.r][1];
   var pic = c.collage ? '<div class="ph">' + c.collage.map(function (p) { return "<span>" + img(p, "Reisefoto") + "</span>" }).join("") + "</div>"
     : '<div class="cimg" style="height:190px;flex:none;border:1px dashed var(--ln2)">' + (c.photo ? img(c.photo, c.title) : '<span class="sm mu">Kein Foto</span>') + "</div>";
   var rahmen = 'style="--c:' + col + ';min-height:0;box-shadow:0 0 0 6px var(--bg),0 0 0 7px ' + col + '"', hinten = UI.kText == c.id;
   return '<div class="top"><button class="back" data-a="close" aria-label="Zurück">' + BACK + '</button></div><main>' +
-    '<button type="button" class="flip' + (hinten ? " gedreht" : "") + '" data-a="drehen" data-id="' + esc(c.id) + '" aria-pressed="' + hinten + '" aria-label="Karte umdrehen"><span class="innen">' +
+    '<button type="button" class="flip' + (hinten ? " gedreht" : "") + (KWINK == c.id && !hinten ? " wink" : "") + '" data-a="drehen" data-id="' + esc(c.id) + '" aria-pressed="' + hinten + '" aria-label="Karte umdrehen"><span class="innen">' +
     '<span class="seite kc vorne" ' + rahmen + ' aria-hidden="' + hinten + '"><span class="r">' + esc(c.tag || RAR[c.r][0]) + "</span>" + pic +
-      '<span style="font:900 24px/1.15 var(--hf)">' + esc(c.title) + '</span><span class="xs mu">Tippe, um die Karte umzudrehen ↻</span></span>' +
+      '<span style="font:900 24px/1.15 var(--hf)">' + esc(c.title) + '</span><span class="xs mu">Tippe, um die Karte umzudrehen <span class="dreh">↻</span></span></span>' +
     '<span class="seite kc hinten" ' + rahmen + ' data-test="karten-text" aria-hidden="' + !hinten + '"><span class="r">' + esc(c.tag || RAR[c.r][0]) + " · Rückseite</span>" +
       '<span style="font:900 20px/1.15 var(--hf)">' + esc(c.title) + '</span><span class="sm mu">' + esc([c.sub, c.place].filter(Boolean).join(" · ")) + "</span>" +
       (c.story ? '<span style="display:block;line-height:1.5">' + esc(c.story) + "</span>" : '<span class="sm mu">Noch keine Geschichte.</span>') +
@@ -1598,12 +1607,14 @@ var ACT = {
   setui: function (d) { UI[d.k] = d.v; render() },
   ov: function (d) {
     if (!OV) ZURUECK = '[data-a="ov"][data-t="' + d.t + '"][data-id="' + d.id + '"]';
+    if (d.t == "card") { UI.kText = null; karteWinken(d.id) }   // Karten öffnen immer mit der Vorderseite
     FOKUS = "#ov .back"; OV = { t: d.t, id: d.id }; UI.gOpen = null; UI.rideForm = null; render(); var o = document.getElementById("ov"); if (o) o.scrollTop = 0;
     if (!(history.state && history.state.mgOv)) try { history.pushState({ mgOv: 1 }, "") } catch (e) {}
   },
   close: function () { if (!SH && OV && history.state && history.state.mgOv) { history.back(); return } zu() },
   authmode: function (d) { AUTH = { mode: d.v }; render() },
   drehen: function (d, el) {
+    KWINK = null; el.classList.remove("wink");
     var hinten = !el.classList.contains("gedreht");
     UI.kText = hinten ? d.id : null;
     el.classList.toggle("gedreht", hinten); el.setAttribute("aria-pressed", hinten);
@@ -1984,7 +1995,7 @@ function ovListe() {
 function ovBlaettern(r) {
   var L = ovListe(), i = L.indexOf(OV.id) + r;
   if (i < 0 || i >= L.length) return;
-  DRUCK = 0; UI.kText = null; OV = { t: OV.t, id: L[i] }; WRICHT = r > 0 ? "r" : "l"; render(); WRICHT = null;
+  DRUCK = 0; UI.kText = null; if (OV.t == "card") karteWinken(L[i]); OV = { t: OV.t, id: L[i] }; WRICHT = r > 0 ? "r" : "l"; render(); WRICHT = null;
   var o = document.getElementById("ov"); if (o) o.scrollTop = 0;
 }
 document.addEventListener("touchstart", function (e) {
