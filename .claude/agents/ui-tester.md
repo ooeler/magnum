@@ -70,3 +70,4 @@ Pro Fund: Schritte, erwartet, tatsächlich, Schwere. Am Schluss, was du geprüft
 - Statistik „Unsere Beizen“: zuerst die 5 zuletzt besuchten, „Mehr anzeigen (n weitere)“ zeigt den Rest, „Weniger anzeigen“ klappt zu.
 - Vergangene Anlässe: Gäste trägt nur der Admin nach (Hinweis statt Formular). „Ich fahre · Plätze anbieten“ nur bis und mit dem Anlasstag. Quittungen können alle hochladen.
 - Umgesetzter Vorschlag: Danke-Banner oben unter Termine, bleibt bis ✕.
+- Karte öffnen: immer Vorderseite; nach ca. 0,6 s kippt sie kurz an (Wink) und das ↻ dreht sich zweimal, damit man sieht, dass sie sich drehen lässt. Nur beim Öffnen/Weiterwischen, nicht bei «Bewegung reduzieren».
