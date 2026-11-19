@@ -28,7 +28,7 @@ header h1{margin:2px 0 0;font:900 30px/1 var(--hf);letter-spacing:-.5px}
 .hello{font-size:13px;color:var(--mu);margin-top:4px}
 main,.top{overflow-wrap:anywhere}
 /* Knöpfe brechen nie mitten im Wort um und werden in einer Zeile nicht zusammengedrückt; umbrechen darf der Text daneben */
-.row>.btn,.row>.pill,.sb>.btn,.sb>.pill{flex:none;white-space:nowrap;overflow-wrap:normal}.row>.grow{min-width:0}main{padding:16px 14px 24px;display:flex;flex-direction:column;gap:14px;max-width:640px;margin:0 auto}
+.row>.btn,.row>.pill,.row>.status,.sb>.btn,.sb>.pill{flex:none;white-space:nowrap;overflow-wrap:normal}.row>.grow{min-width:0}main{padding:16px 14px 24px;display:flex;flex-direction:column;gap:14px;max-width:640px;margin:0 auto}
 h2{margin:6px 2px 0;font:700 22px var(--hf)}
 .card{background:var(--card);border:1px solid var(--ln);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px}
 .card.gold{border-color:var(--ac);background:#2B1F23}
@@ -1157,7 +1157,7 @@ function feedback() {
   var h = '<section class="card" aria-label="Verbesserungsvorschläge"><div class="col" style="gap:1px"><span class="b" style="font-size:15px">Verbesserungsvorschläge</span><span class="sm mu">Jeder Vorschlag wird als öffentliches GitHub-Issue erfasst, ohne deinen Namen · +2 Punkte, +8 wenn er angenommen wird</span></div>';
   if (L.length) h += '<div class="lst">' + L.map(function (f) {
     return '<div class="row"><span class="mono xs mu" style="min-width:34px">' + (f.issue_number ? "#" + f.issue_number : "…") + '</span><span class="grow col" style="gap:2px"><b class="sm">' + esc(f.title) + '</b><span class="xs mu">von ' + esc(nm(f.user_id)) + "</span></span>" +
-      (f.issue_url && /^https:\/\/github\.com\//.test(f.issue_url) ? '<a class="chip" href="' + esc(f.issue_url) + '" target="_blank" rel="noopener">' + esc(FSTATE[f.status] || f.status) + "</a>" : '<span class="chip">' + esc(FSTATE[f.status] || f.status) + "</span>") + "</div>";
+      (f.issue_url && /^https:\/\/github\.com\//.test(f.issue_url) ? '<a class="chip status" href="' + esc(f.issue_url) + '" target="_blank" rel="noopener">' + esc(FSTATE[f.status] || f.status) + "</a>" : '<span class="chip status">' + esc(FSTATE[f.status] || f.status) + "</span>") + "</div>";
   }).join("") + "</div>";
   if (!UI.fbOpen) return h + '<button class="btn line" data-a="ui" data-k="fbOpen" data-v="1">+ Vorschlag machen</button></section>';
   return h + '<form class="col tile" data-s="feedback" style="gap:10px;padding:12px"><div class="chips">' + FKINDS.map(function (k) { return '<button type="button" class="pill sm ' + (v("fbKind", "idee") == k[0] ? "on" : "") + '" data-a="setui" data-k="fbKind" data-v="' + k[0] + '">' + k[1] + "</button>" }).join("") + "</div>" +
