@@ -549,6 +549,18 @@ test.describe("Vorschläge", () => {
     await expect(banner).toHaveCount(0);
   });
 
+  test("Status «umgesetzt» bricht auch bei langem Titel nicht um", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 700 });
+    await page.goto("/");
+    await page.evaluate(() => { const d = window.__mg.db(); d.feedback.push({ id: 98, user_id: "u-ot", kind: "fehler", title: "Karte von Restaurant geht nicht richtig auf", body: "x", labels: [], status: "umgesetzt", issue_number: 22, issue_url: "https://github.com/ooeler/magnum/issues/22", created_at: new Date().toISOString() }); localStorage.setItem("__mg_db", JSON.stringify(d)) });
+    await login(page);
+    await tab(page, "Club");
+    const chip = page.locator("[aria-label=Verbesserungsvorschläge] .status", { hasText: "umgesetzt" }).first();
+    await expect(chip).toBeVisible();
+    const h = await chip.evaluate((el) => ({ hoehe: el.getBoundingClientRect().height, zeile: parseFloat(getComputedStyle(el).lineHeight) || 20 }));
+    expect(h.hoehe).toBeLessThan(h.zeile * 2);                           // eine Zeile
+  });
+
   test("Vergangener Anlass: Gäste nur der Admin, Fahrten nur bis zum Anlasstag", async ({ page }) => {
     await login(page, BEAT);
     await page.locator("summary", { hasText: "Vergangene Anlässe" }).click();
