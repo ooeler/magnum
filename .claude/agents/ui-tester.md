@@ -70,3 +70,4 @@ Pro Fund: Schritte, erwartet, tatsächlich, Schwere. Am Schluss, was du geprüft
 - Statistik „Unsere Beizen“: zuerst die 5 zuletzt besuchten, „Mehr anzeigen (n weitere)“ zeigt den Rest, „Weniger anzeigen“ klappt zu.
 - Vergangene Anlässe: Gäste trägt nur der Admin nach (Hinweis statt Formular). „Ich fahre · Plätze anbieten“ nur bis und mit dem Anlasstag. Quittungen können alle hochladen.
 - Umgesetzter Vorschlag: Danke-Banner oben unter Termine, bleibt bis ✕.
+- Oben unter Termine (nur im Browser, nicht in der installierten App): „📲 Magnum als App“ mit Knopf „Als App speichern“ (Dialog, sonst Anleitung je Gerät); ✕ blendet ihn auf dem Gerät aus.

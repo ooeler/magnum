@@ -85,3 +85,27 @@ test.describe("Benachrichtigungen in der Statistik", () => {
     await expect(plan(page)).toContainText("einmal am Tag um 11 Uhr");
   });
 });
+
+test.describe("Als App speichern", () => {
+  test("Knopf oben unter Termine: Anleitung je Gerät, Dialog wenn möglich, ✕ blendet aus", async ({ page }) => {
+    await login(page);                                                      // Ot: iPhone, Browser
+    const b = page.locator("[data-test=als-app]");
+    await expect(b).toContainText("Magnum als App");
+    await b.getByRole("button", { name: "Als App speichern" }).click();
+    await expect(b.locator("[data-test=als-app-hilfe]")).toContainText("Zum Home-Bildschirm");
+    await page.evaluate(() => { const e = new Event("beforeinstallprompt"); e.prompt = () => { window.__gefragt = 1 }; window.dispatchEvent(e) });
+    await b.getByRole("button", { name: "Als App speichern" }).click();
+    expect(await page.evaluate(() => window.__gefragt)).toBe(1);
+    await page.reload();
+    await b.getByRole("button", { name: "Hinweis ausblenden" }).click();
+    await expect(b).toHaveCount(0);
+    await page.reload();
+    await expect(page.locator("header h1")).toHaveText("Magnum");
+    await expect(b).toHaveCount(0);
+  });
+  test("In der installierten App kein Knopf", async ({ page }) => {
+    await page.addInitScript(() => { Object.defineProperty(navigator, "standalone", { value: true, configurable: true }) });
+    await login(page);
+    await expect(page.locator("[data-test=als-app]")).toHaveCount(0);
+  });
+});
