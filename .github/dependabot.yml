@@ -1,14 +1,26 @@
 version: 2
 updates:
-  # npm: nur Sicherheitsupdates (Limit 0 schaltet normale Versions-Updates ab).
-  # Jeder Sicherheits-PR wird nach grünen Tests gemergt und automatisch deployt (siehe ci.yml).
+  # npm: Sicherheitsupdates sofort, normale Updates jeden Montag gesammelt in einem PR.
+  # Kleine Updates (Minor/Patch) werden nach grünen Tests gemergt und automatisch deployt (auto-merge.yml).
+  # Grosse Versionssprünge (Major) kommen als eigener PR und bleiben offen, bis jemand sie prüft.
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: daily
-    open-pull-requests-limit: 0
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Zurich
+    open-pull-requests-limit: 5
+    versioning-strategy: increase
+    groups:
+      npm-klein:
+        applies-to: version-updates
+        update-types: [minor, patch]
+      npm-sicherheit:
+        applies-to: security-updates
+        patterns: ["*"]
     commit-message:
-      prefix: security
+      prefix: deps
 
   - package-ecosystem: github-actions
     directory: /
