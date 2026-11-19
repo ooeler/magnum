@@ -789,7 +789,7 @@ function duell() {
 }
 function termine() {
   var me = uid(), s = stats(me), b = board(), place = (b.find(function (x) { return x.id == me }) || {}).place;
-  var h = dankBanner() + ziehBox() + spruch() + karteDerWoche();
+  var h = dankBanner() + alsAppBanner() + ziehBox() + spruch() + karteDerWoche();
   h += '<section class="card gold" aria-label="Dein Rang"><div class="row sb"><div class="col" style="gap:2px"><span class="lbl">Dein Rang</span><span class="big" style="font-size:22px;color:var(--ac)">' + esc(s.rank.name) + '</span></div>' +
     '<div class="col" style="gap:0;align-items:flex-end"><span class="big" data-test="punkte">' + s.points + '</span><span class="xs mu">Punkte</span></div></div>' +
     '<div class="col"><div class="bar"><i style="width:' + s.pct + '%"></i></div><span class="sm mu">' + (s.next ? "Noch " + (s.next.min - s.points) + " Punkte bis «" + esc(s.next.name) + "»" : "Höchster Rang erreicht") + "</span></div>" +
@@ -1089,8 +1089,19 @@ function sacceri(tr, part) {
 // ═════════════ Tab: Club ═════════════
 // App installieren: Android/Chrome über den Installations-Dialog, iPhone mit Anleitung (Safari erlaubt keinen Dialog)
 var INST = null;
-window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); INST = e; if (document.querySelector(".inst, [data-test=startbildschirm]")) render() });
+window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); INST = e; if (document.querySelector(".inst, [data-test=startbildschirm], [data-test=als-app]")) render() });
 function isApp() { return (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true }
+// Oben unter Termine: «Als App speichern», solange Magnum im Browser läuft. ✕ blendet ihn auf diesem Gerät aus.
+function alsAppBanner() {
+  if (isApp() || OV || lsGet("mg_als_app_zu") == "1") return "";   // hinter einem offenen Fenster nicht nötig
+  var hilfe = PRF && PRF.device == "android" ? "In Chrome: Menü ⋮ → «App installieren» bzw. «Zum Startbildschirm hinzufügen»." : "In Safari: Teilen-Knopf ⬆︎ → «Zum Home-Bildschirm» → «Hinzufügen». Danach Magnum vom Startbildschirm aus öffnen.";
+  return '<section class="card" aria-label="Als App speichern" data-test="als-app"><div class="row sb"><span class="b" style="font-size:15px">📲 Magnum als App</span>' +
+    '<button class="pill sm" data-a="alsappzu" aria-label="Hinweis ausblenden">✕</button></div>' +
+    '<span class="sm mu">Auf dem Startbildschirm startet Magnum wie eine richtige App, im Vollbild und mit Push-Nachrichten.</span>' +
+    (INST ? '<button class="btn" data-a="install">Als App speichern</button>'
+      : '<button class="btn" data-a="ui" data-k="alsAppHilfe" data-v="' + (UI.alsAppHilfe ? "" : "1") + '" aria-expanded="' + !!UI.alsAppHilfe + '">Als App speichern</button>' +
+        (UI.alsAppHilfe ? '<span class="sm" data-test="als-app-hilfe">' + hilfe + "</span>" : "")) + "</section>";
+}
 function installCard() {
   if (isApp()) return "";
   return '<section class="card col inst" style="gap:8px" aria-label="App installieren"><span class="b" style="font-size:15px">App installieren</span><span class="sm mu">Auf dem Startbildschirm startet Magnum wie eine richtige App: schneller und im Vollbild.</span>' +
@@ -1598,6 +1609,7 @@ var ACT = {
     el.classList.toggle("gedreht", hinten); el.setAttribute("aria-pressed", hinten);
     el.querySelector(".vorne").setAttribute("aria-hidden", hinten); el.querySelector(".hinten").setAttribute("aria-hidden", !hinten);
   },
+  alsappzu: function () { lsSet("mg_als_app_zu", "1"); render() },
   dankzu: function () {
     var gesehen = (lsGet("mg_fb_dank") || "").split(",");
     D.feedback.forEach(function (x) { if (x.user_id == uid() && x.status == "umgesetzt") gesehen.push(String(x.id)) });
