@@ -14,12 +14,15 @@ on:
         description: "Branch, auf den die Bilder kommen (nicht main)"
         required: true
         type: string
+  # Nur für den ersten Lauf: workflow_dispatch geht erst, wenn die Datei auf main liegt (wird wieder entfernt)
+  push:
+    branches: [ci/visuelle-tests]
 
 permissions:
   contents: read
 
 concurrency:
-  group: visuell-referenz-${{ inputs.branch }}
+  group: visuell-referenz-${{ inputs.branch || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -29,7 +32,7 @@ jobs:
     permissions:
       contents: write
     env:
-      BRANCH: ${{ inputs.branch }}
+      BRANCH: ${{ inputs.branch || github.ref_name }}
     steps:
       - name: Branch prüfen
         run: |
@@ -39,7 +42,7 @@ jobs:
           if ! printf '%s' "$BRANCH" | grep -Eq '^[A-Za-z0-9._/-]+$'; then echo "::error::Ungültiger Branch-Name"; exit 1; fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ inputs.branch }}
+          ref: ${{ inputs.branch || github.ref_name }}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
