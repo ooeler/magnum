@@ -1,0 +1,63 @@
+# Referenzbilder für die visuellen Tests (tests/visuell.spec.js) neu erzeugen und auf den Branch committen.
+# Läuft auf ubuntu-latest mit derselben Playwright-Version wie die CI (npm ci aus package-lock.json),
+# damit die Bilder zur CI passen. Unter Windows/macOS erzeugte Bilder würden dort nie übereinstimmen.
+# Starten nach einer gewollten Design-Änderung: Actions → «Visuelle Referenzbilder» → Branch angeben,
+# oder: gh workflow run visuell-referenz.yml --ref <branch> -f branch=<branch>
+# Hinweis: Ein Commit mit dem GITHUB_TOKEN startet keine weiteren Workflows. Den Pull Request danach
+# erst eröffnen oder die Tests darin neu starten.
+name: Visuelle Referenzbilder
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch, auf den die Bilder kommen (nicht main)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: visuell-referenz-${{ inputs.branch || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  referenz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      BRANCH: ${{ inputs.branch || github.ref_name }}
+    steps:
+      - name: Branch prüfen
+        run: |
+          case "$BRANCH" in
+            main|"") echo "::error::Referenzbilder nur auf einen eigenen Branch, nie auf main"; exit 1 ;;
+          esac
+          if ! printf '%s' "$BRANCH" | grep -Eq '^[A-Za-z0-9._/-]+$'; then echo "::error::Ungültiger Branch-Name"; exit 1; fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.branch || github.ref_name }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium webkit
+      - name: Bilder erzeugen (nur fehlende und abweichende)
+        run: npx playwright test tests/visuell.spec.js --update-snapshots=changed
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: failure()
+        with:
+          name: playwright-report-visuell
+          path: playwright-report
+          retention-days: 14
+      - name: Bilder committen
+        run: |
+          git add tests/visuell.spec.js-snapshots
+          if git diff --cached --quiet; then echo "Referenzbilder unverändert"; exit 0; fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "Visuelle Referenzbilder aktualisiert (Linux)"
+          git push origin "HEAD:refs/heads/$BRANCH"
+          git diff --stat HEAD~1 HEAD | tail -1
