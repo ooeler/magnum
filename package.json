@@ -12,7 +12,8 @@
     "build": "node scripts/build.mjs",
     "test:neon": "playwright test -c playwright.neon.config.js",
     "test:schnell": "playwright test --project=android --project=desktop",
-    "test:desktop": "playwright test --project=desktop"
+    "test:desktop": "playwright test --project=desktop",
+    "test:visuell": "bash scripts/visuell.sh"
   },
   "dependencies": {
     "@neon/config": "1.14.4",

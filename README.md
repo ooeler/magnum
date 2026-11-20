@@ -105,11 +105,14 @@ npx playwright install
 npm run demo      # App mit Demo-Daten ohne Backend: http://localhost:4174 (ot@magnum.test / magnum123)
 npm test          # alle Tests (nachgebaute Datenbank, Android/iPhone/Desktop)
 npm run test:db   # Regeltests gegen Postgres (DB_URL=postgres://… setzen)
+npm run test:visuell -- origin/main --project=android --project=desktop  # Screenshot-Vergleich gegen main
 npm run test:neon # Durchlauf gegen ein echtes Neon-Backend, siehe Kopf von tests-e2e/neon.spec.js (nie gegen main)
 npm start         # App unter http://localhost:4183 (config.js mit den Neon-Adressen füllen)
 ```
 
 Demo-Konten: `ot@magnum.test` (Admin, iPhone), `beat@magnum.test` (Android), `chris@magnum.test`, Passwort jeweils `magnum123`.
+
+**Visuelle Tests:** `scripts/visuell.sh` baut den Basis-Stand (Standard `origin/main`), fotografiert damit die wichtigsten Ansichten (Anmeldung, alle Reiter als Mitglied und Admin, Anlass, Karte vorne/hinten, Profil, Abstimmungen, Umfrage) und vergleicht den aktuellen Stand damit. Referenzbilder entstehen jedes Mal neu, im Repo liegen keine. In der CI läuft der Vergleich bei jedem Pull Request; Dependabot-Updates werden nur gemergt, wenn er grün ist.
 
 ## Nächste Schritte
 

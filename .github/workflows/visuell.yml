@@ -1,0 +1,60 @@
+# Visuelle Regressionstests (tests/visuell.spec.js): Basis-Stand des Pull Requests gegen den neuen Stand.
+# Keine Referenzbilder im Repo: scripts/visuell.sh baut zuerst den Basis-Stand, erzeugt daraus die
+# Referenzbilder in einem temporären Ordner und vergleicht dann den neuen Stand damit (gleicher Runner,
+# gleiche Playwright-Version, Spec und Nachbau aus dem neuen Stand; nur die gebaute App wechselt).
+# Aufgerufen aus auto-merge.yml für jeden Pull Request. Blockiert dort nur Abhängigkeits-Updates
+# (dependabot/*, fix/abhaengigkeiten-*), bei allen anderen ist das Ergebnis nur ein Hinweis.
+name: Visuell
+
+on:
+  workflow_call:
+    inputs:
+      basis:
+        description: "Commit des Basis-Stands (Base des Pull Requests)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  visuell:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Basis-Stand holen
+        env:
+          BASIS: ${{ inputs.basis }}
+        run: |
+          if ! printf '%s' "$BASIS" | grep -Eq '^[0-9a-f]{40}$'; then echo "::error::Basis ist kein Commit-Hash"; exit 1; fi
+          git fetch --no-tags --depth=1 origin "$BASIS"
+      - name: Vergleich Basis-Stand gegen neuen Stand (android, desktop)
+        env:
+          BASIS: ${{ inputs.basis }}
+          VISUELL_BILDER: ${{ runner.temp }}/visuell-referenz
+        run: bash scripts/visuell.sh "$BASIS" --project=android --project=desktop
+      - name: Zusammenfassung
+        if: always()
+        run: |
+          n=$(find test-results -name '*-diff.png' 2>/dev/null | wc -l)
+          if [ "$n" -gt 0 ]; then
+            echo "### Visuell: $n Bild(er) weichen vom Basis-Stand ab" >> "$GITHUB_STEP_SUMMARY"
+            find test-results -name '*-diff.png' | sed 's|^|- |' >> "$GITHUB_STEP_SUMMARY"
+            echo "Bilder (erwartet, aktuell, Unterschied) im Artefakt «visuell-unterschiede»." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Visuell: keine Unterschiede zum Basis-Stand" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: failure()
+        with:
+          name: visuell-unterschiede
+          path: |
+            test-results
+            playwright-report
+          retention-days: 14
