@@ -19,6 +19,7 @@ Gebaut wie InterChampionship (Herren Inter). Sprache in App, Code-Kommentaren, C
 
 ## Tests (vor jedem Commit)
 - `npm test`: Playwright gegen die nachgebaute Datenbank (`tests/mock-neon.js`). Neue Funktionen dort nachbilden und einen Test ergänzen: Ablauf in `tests/app.spec.js`, Konto in `konto.spec.js`, Abstimmungen in `abstimmung.spec.js`, Inhalte in `inhalte.spec.js`, Deployment in `betrieb.spec.js`.
+- Visuelle Tests (`tests/visuell.spec.js`): Screenshot-Vergleich je Gerät, Referenzbilder nur für Linux (CI), lokal übersprungen (mit `VISUELL=1` nur zum Anschauen). Nach einer gewollten Design-Änderung: `gh workflow run visuell-referenz.yml --ref <branch> -f branch=<branch>`, danach `git pull`; der Workflow committet die neuen Bilder (startet selbst keine Tests, also PR erst danach eröffnen oder Tests neu starten).
 - `npm run test:db`: Regeltests gegen Postgres (`tests-db/regeln.sql`). Neue Regeln dort testen.
 - `npm run test:neon`: Durchlauf gegen einen Neon-Testbranch (`tests-e2e/neon.spec.js`), nie gegen `main`.
 - `npm run demo`: App mit Demo-Daten auf http://localhost:4174.
