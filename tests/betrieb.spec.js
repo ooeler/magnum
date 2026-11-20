@@ -92,6 +92,49 @@ test.describe("Deployment", () => {
   });
 });
 
+test.describe("Visuelle Tests", () => {
+  const auto = read(".github/workflows/auto-merge.yml"), vis = read(".github/workflows/visuell.yml"), sh = read("scripts/visuell.sh");
+
+  test("Keine Referenzbilder im Repo, nicht Teil der normalen Läufe", () => {
+    expect(fs.existsSync(path.join(root, "tests/visuell.spec.js-snapshots"))).toBe(false);
+    expect(read(".gitignore")).toMatch(/^visuell-referenz\/$/m);
+    const cfg = read("playwright.config.js");
+    expect(cfg).toContain('testIgnore: VISUELL ? [] : ["visuell.spec.js"]');
+    expect(cfg).toContain("VISUELL_BILDER");
+  });
+
+  test("Vergleich: Basis-Stand erzeugt die Referenz, neuer Stand wird verglichen", () => {
+    // Referenz aus dem gebauten Basis-Stand, Spec und Nachbau aus dem neuen Stand
+    const ref = sh.indexOf("tests/visuell.spec.js --update-snapshots=all"), vgl = sh.lastIndexOf("npx playwright test tests/visuell.spec.js");
+    expect(sh).toContain('git worktree add --detach "$wt" "$basis"');
+    expect(sh.indexOf("&& node scripts/build.mjs")).toBeGreaterThan(-1);
+    expect(sh.indexOf("&& node scripts/build.mjs")).toBeLessThan(ref);
+    expect(sh.slice(0, ref)).toContain('VISUELL_DIST="$wt/dist"');
+    expect(vgl).toBeGreaterThan(ref);
+    expect(sh.slice(vgl)).not.toContain("update-snapshots");
+    expect(sh).toContain("set -euo pipefail");
+    // CI: Base des Pull Requests, mobil und Desktop, Unterschiede als Artefakt
+    expect(vis).toContain("npm ci");
+    expect(vis).not.toMatch(/npm install/);
+    expect(vis).toContain('bash scripts/visuell.sh "$BASIS" --project=android --project=desktop');
+    expect(vis).toMatch(/if: failure\(\)\n\s+with:\n\s+name: visuell-unterschiede/);
+    expect(auto).toContain("basis: ${{ github.event.pull_request.base.sha }}");
+  });
+
+  test("Blockiert nur Abhängigkeits-Updates, bei allen anderen nur ein Hinweis", () => {
+    expect(auto).toMatch(/  visuell:\n\s+if: github\.event\.pull_request\.draft == false/);
+    const m = auto.slice(auto.indexOf("  merge:"));
+    expect(m).toContain("needs: [test, codeql, visuell]");
+    // Merge-Job läuft auch bei rotem Vergleich, aber nur mit grünen Tests und CodeQL
+    expect(m).toContain("if: ${{ !cancelled() && needs.test.result == 'success' && needs.codeql.result == 'success' }}");
+    const k = m.slice(m.indexOf("Art der Änderung bestimmen"), m.indexOf("- name: Mergen"));
+    expect(k).toContain("VISUELL: ${{ needs.visuell.result }}");
+    expect(k).toMatch(/dependabot\/\*\|fix\/abhaengigkeiten-\*\)\n\s+if \[ "\$VISUELL" != "success" \]; then[\s\S]*merge=false/);
+    // Major-Updates bleiben offen wie bisher
+    expect(k).toContain('if [ "$UPD" = "version-update:semver-major" ]; then merge=false');
+  });
+});
+
 test("Function bindet web-push als Namensraum ein (web-push 4 hat keinen Default-Export)", async () => {
   const src = read("functions/index.ts");
   expect(src).toMatch(/import \* as webpushNs from "web-push";/);

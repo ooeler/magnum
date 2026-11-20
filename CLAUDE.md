@@ -19,7 +19,7 @@ Gebaut wie InterChampionship (Herren Inter). Sprache in App, Code-Kommentaren, C
 
 ## Tests (vor jedem Commit)
 - `npm test`: Playwright gegen die nachgebaute Datenbank (`tests/mock-neon.js`). Neue Funktionen dort nachbilden und einen Test ergänzen: Ablauf in `tests/app.spec.js`, Konto in `konto.spec.js`, Abstimmungen in `abstimmung.spec.js`, Inhalte in `inhalte.spec.js`, Deployment in `betrieb.spec.js`.
-- Visuelle Tests (`tests/visuell.spec.js`): Screenshot-Vergleich je Gerät, Referenzbilder nur für Linux (CI), lokal übersprungen (mit `VISUELL=1` nur zum Anschauen). Nach einer gewollten Design-Änderung: `gh workflow run visuell-referenz.yml --ref <branch> -f branch=<branch>`, danach `git pull`; der Workflow committet die neuen Bilder (startet selbst keine Tests, also PR erst danach eröffnen oder Tests neu starten).
+- Visuelle Tests (`tests/visuell.spec.js`, `npm run test:visuell`): Screenshot-Vergleich Basis-Stand gegen neuen Stand (`scripts/visuell.sh`), keine Referenzbilder im Repo, nicht Teil von `npm test`. Läuft in jedem PR (`visuell.yml`), blockiert aber nur Abhängigkeits-Updates (`dependabot/*`, `fix/abhaengigkeiten-*`). Bei gewollten Design-Änderungen ist ein roter Vergleich nur ein Hinweis. Neue Ansichten in der Spec ergänzen; Unterschiede liegen in `test-results/` bzw. im Artefakt `visuell-unterschiede`.
 - `npm run test:db`: Regeltests gegen Postgres (`tests-db/regeln.sql`). Neue Regeln dort testen.
 - `npm run test:neon`: Durchlauf gegen einen Neon-Testbranch (`tests-e2e/neon.spec.js`), nie gegen `main`.
 - `npm run demo`: App mit Demo-Daten auf http://localhost:4174.

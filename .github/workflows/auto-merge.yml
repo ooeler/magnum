@@ -3,6 +3,8 @@
 #   feature/…                  → Minor-Release (z. B. v1.1.0)
 #   fix/…, Dependabot npm       → Patch-Release (z. B. v1.0.2)  (Sicherheits-, Minor- und Patch-Updates; Major bleibt offen)
 #   ci/…, docs/…, Dependabot Actions → nur mergen, kein Release (Major-Actions-Updates bleiben offen)
+# Visueller Vergleich (visuell.yml) läuft bei jedem Pull Request. Er blockiert nur Abhängigkeits-Updates
+# (dependabot/*, fix/abhaengigkeiten-*): Weichen dort Bilder ab, wird nicht gemergt. Sonst nur ein Hinweis.
 # Entwürfe (Draft) und Pull Requests aus Forks werden nie automatisch gemergt.
 name: Auto-Merge & Release
 
@@ -31,8 +33,17 @@ jobs:
       contents: read
       actions: read
 
+  visuell:
+    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
+    uses: ./.github/workflows/visuell.yml
+    with:
+      basis: ${{ github.event.pull_request.base.sha }}
+
   merge:
-    needs: [test, codeql] # Tests, Semgrep, npm audit und CodeQL müssen grün sein
+    # Tests, Semgrep, npm audit und CodeQL müssen grün sein. Visuell zählt nur bei Abhängigkeits-Updates
+    # (Schritt «Art der Änderung bestimmen»), darum läuft der Job auch, wenn visuell rot ist.
+    needs: [test, codeql, visuell]
+    if: ${{ !cancelled() && needs.test.result == 'success' && needs.codeql.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -53,6 +64,7 @@ jobs:
         env:
           ECO: ${{ steps.meta.outputs.package-ecosystem }}
           UPD: ${{ steps.meta.outputs.update-type }}
+          VISUELL: ${{ needs.visuell.result }}
         run: |
           bump=none; merge=true
           case "$BRANCH" in
@@ -62,8 +74,18 @@ jobs:
               if [ "$UPD" = "version-update:semver-major" ]; then merge=false
               elif [ "$ECO" = "npm_and_yarn" ]; then bump=patch; fi ;;
           esac
+          # Abhängigkeits-Updates nur mergen, wenn der visuelle Vergleich grün ist (Major bleibt ohnehin offen)
+          case "$BRANCH" in
+            dependabot/*|fix/abhaengigkeiten-*)
+              if [ "$VISUELL" != "success" ]; then
+                echo "::error::Visueller Vergleich: $VISUELL. Abhängigkeits-Update wird nicht gemergt, Unterschiede im Artefakt «visuell-unterschiede»."
+                merge=false; blockiert=1
+              fi ;;
+          esac
           echo "bump=$bump" >> "$GITHUB_OUTPUT"; echo "merge=$merge" >> "$GITHUB_OUTPUT"
-          echo "Branch $BRANCH → merge=$merge, release=$bump"
+          echo "Branch $BRANCH → merge=$merge, release=$bump, visuell=$VISUELL"
+          # Rot statt still offen: so ist im Pull Request sichtbar, dass das Update blockiert ist
+          if [ -n "${blockiert:-}" ]; then exit 1; fi
 
       - name: Mergen
         if: steps.kind.outputs.merge == 'true'

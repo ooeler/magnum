@@ -7,6 +7,5 @@ playwright-report-e2e/
 .env
 .env.*
 .neon
-# Visuelle Tests: lokal (VISUELL=1) erzeugte Bilder, Referenz gibt es nur für Linux
-tests/visuell.spec.js-snapshots/*-win32.png
-tests/visuell.spec.js-snapshots/*-darwin.png
+# Visuelle Tests: Referenzbilder entstehen bei jedem Vergleich neu aus dem Basis-Stand (scripts/visuell.sh)
+visuell-referenz/
