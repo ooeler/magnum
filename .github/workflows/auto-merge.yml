@@ -1,7 +1,7 @@
 # Jede Änderung kommt über einen eigenen Branch + Pull Request.
 # Sind alle Tests und Sicherheitsprüfungen grün, wird automatisch gemergt und – je nach Branch – ein Release erstellt und deployt:
 #   feature/…                  → Minor-Release (z. B. v1.1.0)
-#   fix/…, Dependabot npm       → Patch-Release (z. B. v1.0.2)  (npm-Updates sind nur Sicherheitspatches)
+#   fix/…, Dependabot npm       → Patch-Release (z. B. v1.0.2)  (Sicherheits-, Minor- und Patch-Updates; Major bleibt offen)
 #   ci/…, docs/…, Dependabot Actions → nur mergen, kein Release (Major-Actions-Updates bleiben offen)
 # Entwürfe (Draft) und Pull Requests aus Forks werden nie automatisch gemergt.
 name: Auto-Merge & Release
@@ -59,8 +59,8 @@ jobs:
             feature/*) bump=minor ;;
             fix/*)     bump=patch ;;
             dependabot/*)
-              if [ "$ECO" = "npm_and_yarn" ]; then bump=patch
-              elif [ "$UPD" = "version-update:semver-major" ]; then merge=false; fi ;;
+              if [ "$UPD" = "version-update:semver-major" ]; then merge=false
+              elif [ "$ECO" = "npm_and_yarn" ]; then bump=patch; fi ;;
           esac
           echo "bump=$bump" >> "$GITHUB_OUTPUT"; echo "merge=$merge" >> "$GITHUB_OUTPUT"
           echo "Branch $BRANCH → merge=$merge, release=$bump"
