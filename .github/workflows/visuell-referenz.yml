@@ -14,9 +14,6 @@ on:
         description: "Branch, auf den die Bilder kommen (nicht main)"
         required: true
         type: string
-  # Nur für den ersten Lauf: workflow_dispatch geht erst, wenn die Datei auf main liegt (wird wieder entfernt)
-  push:
-    branches: [ci/visuelle-tests]
 
 permissions:
   contents: read
