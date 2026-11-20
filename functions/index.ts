@@ -19,9 +19,11 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { Pool } from "pg";
 import { checkFoto, checkPfad, checkVideo, istVideo, MAX_FOTO, MAX_VIDEO, verwaisteVideos, videoTyp } from "./fotos.mjs";
 import { checkJoin, checkToken, hashToken, INVITE_DAYS, joinError, newToken } from "./invite.mjs";
-import webpush from "web-push";
+// web-push 4 hat keinen Default-Export mehr, 3.x liefert ihn nur über die CommonJS-Hülle: so klappt beides
+import * as webpushNs from "web-push";
 import { checkAbo, dreiWaehlen, monatsNachricht, stundeZuerich, erinnerungen, karteWaehlen, tagZuerich, wochenStart } from "./push.mjs";
 import { safeEqual } from "./sicherheit.mjs";
+const webpush = ((webpushNs as { default?: typeof webpushNs }).default ?? webpushNs) as typeof webpushNs;
 import { buildIssue, DAILY_LIMIT } from "./vorschlag.mjs";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 5 });
