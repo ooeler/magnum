@@ -532,6 +532,21 @@ test.describe("Gäste, Beizen und Sichtweise", () => {
   });
 });
 
+test.describe("Nächste Anlässe", () => {
+  test("Tipp auf die Karte öffnet die Details, Knöpfe darin bleiben eigene Aktionen", async ({ page }) => {
+    await login(page, BEAT);
+    const karte = page.locator("article.ev").first();
+    const titel = (await karte.locator(".b").first().textContent()).trim();
+    await karte.locator("[data-test=anzahl]").click();
+    await expect(page.locator("#ov")).toContainText(titel);
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#ov")).toHaveCount(0);
+    await karte.getByRole("button", { name: "Bin dabei" }).click();
+    await expect(karte.getByRole("button", { name: "Bin dabei" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("#ov")).toHaveCount(0);
+  });
+});
+
 test.describe("Vorschläge", () => {
   test("Umgesetzter Vorschlag: Danke-Banner bleibt, bis man ihn schliesst", async ({ page }) => {
     await page.goto("/");
