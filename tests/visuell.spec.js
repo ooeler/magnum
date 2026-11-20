@@ -92,6 +92,8 @@ test("Anlass geöffnet", async ({ page }) => {
   await bild(page, "anlass", OFFEN);
 });
 
+// Hinweis iphone: Das WebKit von Playwright beachtet backface-visibility im Screenshot nicht, «karte-vorne» zeigt
+// dort die gespiegelte Rückseite. Das Bild bleibt trotzdem stabil und fängt Layoutänderungen der Karte ab.
 test("Karte geöffnet: Vorder- und Rückseite", async ({ page }) => {
   await login(page);
   await tab(page, "Karten");
