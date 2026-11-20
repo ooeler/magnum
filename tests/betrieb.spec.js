@@ -91,3 +91,13 @@ test.describe("Deployment", () => {
     for (const n of f) expect(n).toMatch(/^\d{8}_\d{2}_[a-z0-9_]+\.sql$/);
   });
 });
+
+test("Function bindet web-push als Namensraum ein (web-push 4 hat keinen Default-Export)", async () => {
+  const src = read("functions/index.ts");
+  expect(src).toMatch(/import \* as webpushNs from "web-push";/);
+  expect(src).not.toMatch(/import webpush from "web-push"/);
+  // dieselbe Auflösung wie in der Function, mit der installierten Version
+  const ns = await import("web-push");
+  const webpush = ns.default ?? ns;
+  for (const f of ["setVapidDetails", "sendNotification", "generateVAPIDKeys"]) expect(typeof webpush[f]).toBe("function");
+});

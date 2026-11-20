@@ -83,7 +83,7 @@ label.f{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:60
 .bildtipp{display:block;width:100%;padding:0;border:0;background:none;color:inherit;text-align:left;cursor:pointer}
 .av.kopf{border:2px solid var(--ac);cursor:pointer;padding:0}
 .av.s{width:36px;height:36px;flex-basis:36px;font-size:14px}.av.l{width:64px;height:64px;flex-basis:64px;font-size:26px}.av.drv{background:#2C4A5A}
-.ev{display:flex;gap:14px}
+.ev{display:flex;gap:14px}.ev[data-a]{cursor:pointer}
 .dt{width:58px;flex:0 0 58px;border-radius:12px;background:var(--wine);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 0;align-self:flex-start}
 .dt b{font:900 24px/1 var(--hf)}.dt span{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#F6D9DE}
 .lst{display:flex;flex-direction:column}.lst>*{border-top:1px solid var(--ln);padding:10px 0}.lst>*:first-child{border-top:0;padding-top:0}
@@ -668,7 +668,8 @@ function render() {
   var app = document.getElementById("app"), ov = document.getElementById("ov"), sh = document.querySelector("#sh section");
   var keep = { main: window.scrollY, ov: ov ? ov.scrollTop : 0, sh: sh ? sh.scrollTop : 0 };
   var f = document.activeElement, fk = f && f.getAttribute && f.getAttribute("data-k"), fs = f && f.selectionStart;
-  var fa = !fk && f && f.getAttribute && f.getAttribute("data-a") ? ["data-a", "data-t", "data-id", "data-v"].map(function (x) { var w = f.getAttribute(x); return w ? "[" + x + '="' + w.replace(/["\\]/g, "") + '"]' : "" }).join("") : null;
+  // mit Tag-Name: die Anlass-Karte trägt dieselbe Aktion wie ihr Knopf «Details»
+  var fa = !fk && f && f.getAttribute && f.getAttribute("data-a") ? f.tagName.toLowerCase() + ["data-a", "data-t", "data-id", "data-v"].map(function (x) { var w = f.getAttribute(x); return w ? "[" + x + '="' + w.replace(/["\\]/g, "") + '"]' : "" }).join("") : null;
   var html;
   if (!sb) html = authShell('<div class="card"><b>Noch nicht eingerichtet</b><span class="mu sm">In <code>config.js</code> fehlen die Neon-Adressen (siehe README).</span></div>');
   else if (MAINT) html = authShell('<div class="card">' + laden("Update wird eingespielt", "update") + '<span class="mu" style="text-align:center">Gleich geht es weiter. Die App lädt danach von selbst neu.</span></div>');
@@ -864,7 +865,8 @@ function eventCard(e) {
   var nV = D.rsvps.filter(function (r) { return r.event_id == e.id && r.status == "virtual" }).length;
   var mIds = D.magnums.filter(function (m) { return m.event_id == e.id }).map(function (m) { return m.id });
   var g = D.magnum_guests.filter(function (x) { return mIds.indexOf(x.magnum_id) >= 0 }).length;
-  return '<article class="card ev" data-ev="' + e.id + '"><div class="dt"><b>' + d.getDate() + "</b><span>" + MON[d.getMonth()] + '</span></div><div class="col grow">' +
+  // Tipp irgendwo auf die Karte öffnet die Details; Knöpfe darin behalten ihre eigene Aktion
+  return '<article class="card ev" data-ev="' + e.id + '" data-a="ov" data-t="event" data-id="' + e.id + '"><div class="dt"><b>' + d.getDate() + "</b><span>" + MON[d.getMonth()] + '</span></div><div class="col grow">' +
     '<span class="b" style="font-size:16px">' + esc(e.title) + '</span><span class="sm mu">' + esc(fDate(e.starts_at, true)) + (ortText(e) ? " · " + esc(ortText(e)) : "") + "</span>" +
     '<span class="sm mu" data-test="anzahl">' + nIn + " von " + D.profiles.length + " dabei" + (nV ? " · " + nV + " virtuell" : "") + (g ? " · " + g + " Gasttrinker" : "") + (gaesteVon("event", e.id).length ? " · " + gaesteVon("event", e.id).length + " Gäste" : "") + (s == "in" ? " · du bist dabei" : s == "out" ? " · du bist abgemeldet" : s ? "" : " · noch offen") + "</span>" +
     (e.organizer_id ? '<span class="sm b">Organisation: ' + esc(nm(e.organizer_id)) + (e.organizer_id == me ? " (du)" : "") + "</span>"
@@ -1606,7 +1608,8 @@ var ACT = {
   ui: function (d) { UI[d.k] = d.v || null; render() },
   setui: function (d) { UI[d.k] = d.v; render() },
   ov: function (d) {
-    if (!OV) ZURUECK = '[data-a="ov"][data-t="' + d.t + '"][data-id="' + d.id + '"]';
+    // Zurück zum Knopf (nicht zur ganzen Anlass-Karte, die dieselbe Aktion trägt)
+    if (!OV) { ZURUECK = '[data-a="ov"][data-t="' + d.t + '"][data-id="' + d.id + '"]'; if (document.querySelector("button" + ZURUECK)) ZURUECK = "button" + ZURUECK }
     if (d.t == "card") { UI.kText = null; karteWinken(d.id) }   // Karten öffnen immer mit der Vorderseite
     FOKUS = "#ov .back"; OV = { t: d.t, id: d.id }; UI.gOpen = null; UI.rideForm = null; render(); var o = document.getElementById("ov"); if (o) o.scrollTop = 0;
     if (!(history.state && history.state.mgOv)) try { history.pushState({ mgOv: 1 }, "") } catch (e) {}

@@ -72,3 +72,4 @@ Pro Fund: Schritte, erwartet, tatsächlich, Schwere. Am Schluss, was du geprüft
 - Umgesetzter Vorschlag: Danke-Banner oben unter Termine, bleibt bis ✕.
 - Karte öffnen: immer Vorderseite; nach ca. 0,6 s kippt sie kurz an (Wink) und das ↻ dreht sich zweimal, damit man sieht, dass sie sich drehen lässt. Nur beim Öffnen/Weiterwischen, nicht bei «Bewegung reduzieren».
 - Oben unter Termine (nur im Browser, nicht in der installierten App): „📲 Magnum als App“ mit Knopf „Als App speichern“ (Dialog, sonst Anleitung je Gerät); ✕ blendet ihn auf dem Gerät aus.
+- Termine → Nächste Anlässe: Tipp irgendwo auf die Karte öffnet die Details; «Bin dabei», «Abmelden», «Ich organisiere» und «Details» behalten ihre Aktion. Nach Escape kehrt der Fokus zum Knopf «Details» zurück.
