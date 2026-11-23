@@ -16,8 +16,8 @@
     "test:visuell": "bash scripts/visuell.sh"
   },
   "dependencies": {
-    "@neon/config": "1.14.4",
-    "@neon/env": "2.1.4",
+    "@neon/config": "1.14.5",
+    "@neon/env": "2.1.8",
     "@tesseract.js-data/deu": "1.0.0",
     "tesseract.js": "7.0.0",
     "tesseract.js-core": "7.0.0"
