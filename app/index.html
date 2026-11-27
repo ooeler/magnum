@@ -1581,7 +1581,47 @@ function umfrageErgebnis() {
   return '<div class="col" data-test="umfrage-ergebnis" style="gap:6px"><span class="sm b">Design-Umfrage: Ø ' + (s / L.length).toFixed(1).replace(".", ",") + " von 10 · " + L.length + (L.length == 1 ? " Antwort" : " Antworten") + "</span>" +
     L.filter(function (x) { return x.text }).map(function (x) { return '<span class="xs"><b>' + esc(nm(x.member_id)) + " (" + x.wert + "):</b> " + esc(x.text) + "</span>" }).join("") + "</div>";
 }
+// Neue Anlässe und Reisen seit dem letzten Besuch: beim Öffnen als Popup, bis man zusagt, die Details öffnet oder «Später» wählt
+var BEISPIEL = "mg_bsp_baden";                                   // einmalig je Gerät: die Badener Fahrt als Beispiel für alle
+function neueAnlaesse() {
+  var me = uid(), seit = PREV ? new Date(PREV).getTime() : null, heute = today(), L = [];
+  var neu = function (x) { return seit != null && x.created_by != me && new Date(x.created_at).getTime() > seit };   // erster Besuch: kein Popup
+  upcoming().forEach(function (e) { if (!e.archiv && neu(e) && !rsvp(e.id, me)) L.push({ t: "event", id: e.id }) });
+  var beispiel = lsGet(BEISPIEL) != "1";
+  D.trips.slice().sort(function (x, y) { return x.starts_on < y.starts_on ? -1 : 1 }).forEach(function (tr) {
+    if ((tr.ends_on || tr.starts_on) < heute) return;
+    var dabei = D.trip_participants.some(function (p) { return p.trip_id == tr.id && p.member_id == me }), ab = D.trip_absagen.some(function (p) { return p.trip_id == tr.id && p.member_id == me });
+    if ((neu(tr) && !dabei && !ab) || (beispiel && /bade/i.test(tr.title))) L.push({ t: "trip", id: tr.id });
+  });
+  return L;
+}
+function umfrageFaellig() { return !D.design_umfrage.some(function (x) { return x.member_id == uid() }) }
+function neuWeiter(rest) { SH = rest && rest.length ? { t: "neu", items: rest } : umfrageFaellig() ? { t: "umfrage" } : null }
+function neuSheet() {
+  var me = uid(), L = SH.items.map(function (it) { var x = (it.t == "trip" ? D.trips : D.events).find(function (y) { return y.id == it.id }); return x && { t: it.t, x: x } }).filter(Boolean);
+  if (!L.length) { neuWeiter(); return SH ? sheet() : "" }
+  var nE = L.filter(function (i) { return i.t == "event" }).length, nT = L.length - nE;
+  var titel = L.length == 1 ? (nT ? "Neue Reise" : "Neuer Anlass") : L.length + (nT && nE ? " Neuigkeiten" : nT ? " neue Reisen" : " neue Anlässe");
+  return '<div id="sh"><section role="dialog" aria-modal="true" aria-label="Neu im Kalender" data-test="neu-popup"><span class="lbl">Neu im Kalender</span><span class="big">' + titel + "</span>" +
+    L.map(function (i) {
+      var x = i.x, kopf, wer, dabei;
+      if (i.t == "trip") {
+        kopf = "Reise · " + fMonYear(x.starts_on) + (x.program ? " · " + x.program : "");
+        wer = x.ok_id ? "OK: " + esc(nm(x.ok_id)) : "";
+        dabei = D.trip_participants.some(function (p) { return p.trip_id == x.id && p.member_id == me });
+      } else {
+        kopf = fDate(x.starts_at, true) + (ortText(x) ? " · " + ortText(x) : "");
+        wer = x.organizer_id ? "Organisation: " + esc(nm(x.organizer_id)) : '<span style="color:var(--orange)">Organisator gesucht</span>';
+        dabei = !!rsvp(x.id, me);
+      }
+      return '<div class="col" style="gap:6px;padding:12px 0;border-top:1px solid var(--ln)"><b>' + esc(x.title) + '</b><span class="sm mu">' + esc(kopf) + "</span>" + (wer ? '<span class="sm">' + wer + "</span>" : "") +
+        '<div class="row wrap">' + (dabei ? '<span class="chip">Du bist dabei</span>' : '<button class="btn" data-a="neudabei" data-t="' + i.t + '" data-id="' + x.id + '">' + (i.t == "trip" ? "Ich reise mit" : "Bin dabei") + "</button>") +
+        '<button class="btn ghost" data-a="neudetails" data-t="' + i.t + '" data-id="' + x.id + '">Details</button></div></div>';
+    }).join("") +
+    '<button class="btn link" data-a="neuspaeter">Später</button></section></div>';
+}
 function sheet() {
+  if (SH.t == "neu") return neuSheet();
   if (SH.t == "umfrage") return umfrageSheet();
   if (SH.t == "party") {
     var g = "";
@@ -1630,6 +1670,13 @@ var ACT = {
     lsSet("mg_fb_dank", gesehen.filter(Boolean).join(",")); render();
   },
   umspaeter: function () { SH = null; render() },
+  neuspaeter: function () { neuWeiter(); render() },
+  neudabei: function (d) {
+    var rest = SH && SH.items ? SH.items.filter(function (x) { return !(x.t == d.t && x.id == d.id) }) : [];
+    if (d.t == "trip") ACT.tripzu({ id: d.id }); else ACT.rsvp({ id: d.id, v: "in" });   // rsvp setzt SH zurück
+    neuWeiter(rest); render();
+  },
+  neudetails: function (d) { SH = null; ACT.ov({ t: d.t, id: d.id }) },
   noinvite: function () { INVITE = null; history.replaceState(null, "", location.pathname + location.search); render() },
   logout: function () { sb.auth.signOut() },
   rsvp: function (d) {
@@ -2108,7 +2155,7 @@ function start() {
     if (INVITE && INVITE.state != "bad") { INVITE = null; history.replaceState(null, "", location.pathname + location.search) }
     READY = false; render();
     setTimeout(function () {
-      sb.rpc("me").then(function (r) { PREV = r.data && r.data.prev_seen; return sb.rpc("magnum_termine") }).then(function () { return loadAll() }).then(function () { READY = true; if (!D.design_umfrage.some(function (x) { return x.member_id == uid() })) SH = { t: "umfrage" }; render(); pushAbgleich(); dankHinweis(); loadInvites() });
+      sb.rpc("me").then(function (r) { PREV = r.data && r.data.prev_seen; return sb.rpc("magnum_termine") }).then(function () { return loadAll() }).then(function () { READY = true; var neu = neueAnlaesse(); if (neu.length) { SH = { t: "neu", items: neu }; lsSet(BEISPIEL, "1") } else if (umfrageFaellig()) SH = { t: "umfrage" }; render(); pushAbgleich(); dankHinweis(); loadInvites() });
     }, 0);
   });
   render();
