@@ -717,4 +717,58 @@ select pg_temp.check((select count(*) from public.design_umfrage) = 2, 'Admin si
 reset role;
 select pg_temp.als('');
 
+-- Strafen: Anwesende beantragen bis 7 Tage nach dem Anlass, ⅔ der übrigen Anwesenden entscheiden, nach 7 Tagen abgelaufen
+insert into public.events (id, title, starts_at) values
+  ('20000000-0000-0000-0000-0000000000a1', 'Strafabend', now() - interval '2 days'),
+  ('20000000-0000-0000-0000-0000000000a2', 'Alter Abend', now() - interval '9 days'),
+  ('20000000-0000-0000-0000-0000000000a3', 'Kommender Abend', now() + interval '3 days');
+insert into public.rsvps (event_id, member_id, status) values
+  ('20000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000000a', 'in'),
+  ('20000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000000b', 'in'),
+  ('20000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000000c', 'in'),
+  ('20000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000000d', 'virtual'),
+  ('20000000-0000-0000-0000-0000000000a2', '00000000-0000-0000-0000-00000000000a', 'in'),
+  ('20000000-0000-0000-0000-0000000000a2', '00000000-0000-0000-0000-00000000000b', 'in');
+delete from public.push_queue;
+set role authenticated;
+select pg_temp.als('D');
+select pg_temp.verboten($q$select public.propose_strafe('20000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000000b', 20, 'Bescheissen')$q$, 'Strafe: nur Anwesende beantragen (virtuell zählt nicht)');
+select pg_temp.als('A');
+select pg_temp.verboten($q$select public.propose_strafe('20000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000000d', 20, 'Nicht da')$q$, 'Strafe: nur gegen Anwesende');
+select pg_temp.verboten($q$select public.propose_strafe('20000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000000a', 20, 'Ich')$q$, 'Strafe: nicht gegen sich selbst');
+select pg_temp.verboten($q$select public.propose_strafe('20000000-0000-0000-0000-0000000000a2', '00000000-0000-0000-0000-00000000000b', 20, 'Zu spät')$q$, 'Strafe: nur bis 7 Tage nach dem Anlass');
+select pg_temp.verboten($q$select public.propose_strafe('20000000-0000-0000-0000-0000000000a3', '00000000-0000-0000-0000-00000000000b', 20, 'Zu früh')$q$, 'Strafe: nicht vor dem Anlass');
+select pg_temp.verboten($q$insert into public.proposals (kind, target_id, event_id, punkte, grund, proposed_by) values ('strafe', '00000000-0000-0000-0000-00000000000b', '20000000-0000-0000-0000-0000000000a1', 20, 'x', public.uid())$q$, 'Strafe: kein direktes Einfügen an der Funktion vorbei');
+select public.propose_strafe('20000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000000b', 20, 'Hat beim Blinddegustieren bescheissen');
+select pg_temp.check((select status from public.proposals where kind = 'strafe') = 'open', 'Strafe: offen nach dem Ja des Antragstellers (1 von 2)');
+select pg_temp.check((select count(*) from public.eligible_voters((select id from public.proposals where kind = 'strafe'))) = 2, 'Strafe: stimmberechtigt sind die übrigen Anwesenden (A, C)');
+select pg_temp.verboten($q$select public.propose_strafe('20000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000000b', 10, 'Nochmals')$q$, 'Strafe: nur ein offener Antrag je Person und Anlass');
+select pg_temp.als('B');
+select pg_temp.verboten($q$select public.cast_ballot((select id from public.proposals where kind = 'strafe'), false)$q$, 'Strafe: die bestrafte Person stimmt nicht ab');
+reset role;
+select pg_temp.check((select count(*) from public.push_queue where titel like 'Strafantrag%' and an = '00000000-0000-0000-0000-00000000000c') = 1, 'Strafe: Push an die Stimmberechtigten');
+select pg_temp.check((select count(*) from public.push_queue where titel like 'Strafantrag%' and an in ('00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-00000000000b')) = 0, 'Strafe: kein Push an Antragsteller und Bestraften');
+set role authenticated;
+select pg_temp.als('C');
+select pg_temp.check(public.cast_ballot((select id from public.proposals where kind = 'strafe'), true) = 'passed', 'Strafe: 2 von 2 → ausgesprochen');
+reset role;
+select pg_temp.check((select count(*) from public.push_queue where titel = 'Strafe ausgesprochen' and an = '00000000-0000-0000-0000-00000000000b') = 1, 'Strafe: das Mitglied wird per Push informiert');
+select pg_temp.check((select count(*) from public.posts where text like 'kassiert eine Strafe%') = 1, 'Strafe: Eintrag auf der Prost-Wand');
+-- Ablauf nach 7 Tagen ohne Entscheid
+set role authenticated;
+select pg_temp.als('C');
+select public.propose_strafe('20000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000000a', 10, 'Glas umgeworfen');
+reset role;
+update public.proposals set created_at = now() - interval '8 days' where kind = 'strafe' and status = 'open';
+set role authenticated;
+select pg_temp.als('B');
+select pg_temp.check(public.cast_ballot((select id from public.proposals where kind = 'strafe' and target_id = '00000000-0000-0000-0000-00000000000a'), true) = 'abgelaufen', 'Strafe: nach 7 Tagen abgelaufen, keine Stimme mehr');
+select pg_temp.check((select status from public.proposals where kind = 'strafe' and target_id = '00000000-0000-0000-0000-00000000000a') = 'abgelaufen', 'Strafe: Status abgelaufen gespeichert');
+-- Die Magnum der Strafe geht in die Kasse
+select pg_temp.als('A');
+select pg_temp.check(public.open_magnum_kasse() >= 1, 'Kasse öffnen zählt die Magnum der Strafe');
+select pg_temp.check((select eingeloest from public.proposals where kind = 'strafe' and status = 'passed'), 'Strafe: Magnum eingelöst');
+reset role;
+select pg_temp.als('');
+
 select 'ALLE DB-TESTS GRÜN' as ergebnis;

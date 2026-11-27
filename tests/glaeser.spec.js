@@ -107,7 +107,8 @@ test.describe("Karte: Wink zum Umdrehen", () => {
     await page.locator(".kc", { hasText: "Die 6-Liter-Nacht" }).click();
     const flip = page.locator("#ov .flip");
     await expect(flip).toHaveClass(/wink/);
-    expect(await flip.locator(".innen").evaluate((el) => getComputedStyle(el).animationName)).toBe("wink");
+    // unter Last kann das Neuzeichnen kurz dazwischenkommen: abwarten statt einmal messen
+    await expect.poll(() => flip.locator(".innen").evaluate((el) => getComputedStyle(el).animationName), { timeout: 2000 }).toBe("wink");
     await flip.click();
     await expect(flip).not.toHaveClass(/wink/);
     await expect(flip).toHaveClass(/gedreht/);

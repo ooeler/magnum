@@ -273,6 +273,7 @@ function stats(id) {
   D.card_members.forEach(function (m) { if (m.member_id == id) add("Auf einer Karte dabei", 10) });
   // 2 Punkte fürs Einreichen, die restlichen 8, sobald das Issue als umgesetzt geschlossen ist
   D.feedback.forEach(function (f) { if (f.user_id == id && f.status != "fehler") add("Vorschläge", f.status == "umgesetzt" ? 10 : 2) });
+  D.proposals.forEach(function (p) { if (p.kind == "strafe" && p.status == "passed" && p.target_id == id) add("Strafen", -p.punkte) });
   var virtAll = D.rsvps.filter(function (r) { return r.member_id == id && r.status == "virtual" }).length;
   var rank = rankOf(pts), next = RANKS.filter(function (r) { return r.min > pts })[0];
   var res = { points: pts, parts: parts, streak: streak, rekord: rekord, attended: attended, virt: virtAll, trips: trips, rank: rank, next: next,
@@ -324,6 +325,7 @@ function segs(n, h) { var s = ""; for (var i = 1; i <= 5; i++) s += '<i class="'
 
 // ═════════════ Abstimmungen (Spiegel der Datenbank-Regel, nur zur Anzeige) ═════════════
 function eligible(p) {
+  if (p.kind == "strafe") return (p.voters || []).filter(function (v) { return v != p.target_id });
   if (p.kind == "sacceri") return (p.voters || D.trip_participants.filter(function (t) { return t.trip_id == p.trip_id }).map(function (t) { return t.member_id })).filter(function (v) { return v != p.target_id });
   return D.profiles.filter(function (x) { return x.id != p.target_id }).map(function (x) { return x.id });
 }
@@ -963,10 +965,10 @@ function eventForm() {
     '<div class="row"><button class="btn grow">Anlass erfassen</button><button type="button" class="btn ghost" data-a="ui" data-k="newEv" data-v="">Abbrechen</button></div></form>';
 }
 function kasse() {
-  var n = D.rsvps.filter(function (r) { return r.status == "virtual" && !r.redeemed }).length, b = "";
+  var n = D.rsvps.filter(function (r) { return r.status == "virtual" && !r.redeemed }).length + strafMagnums(), b = "";
   for (var i = 0; i < Math.min(n, 40); i++) b += "<i></i>";
   return '<section class="card" aria-label="Magnum-Kasse"><div class="row"><div class="tile" style="width:56px;height:56px;align-items:center;justify-content:center;padding:0">' + GLASS.replace('stroke="#E8B95A"', 'stroke="#7FC4B8"') + '</div>' +
-    '<div class="col grow" style="gap:2px"><span class="lbl">Magnum-Kasse</span><span class="mid" data-test="kasse">' + n + " Magnum" + (n == 1 ? "" : "s") + '</span><span class="sm mu">von Abwesenden spendiert, warten aufs gemeinsame Öffnen</span></div></div>' +
+    '<div class="col grow" style="gap:2px"><span class="lbl">Magnum-Kasse</span><span class="mid" data-test="kasse">' + n + " Magnum" + (n == 1 ? "" : "s") + '</span><span class="sm mu">von Abwesenden spendiert und aus Strafen, warten aufs gemeinsame Öffnen</span></div></div>' +
     (n ? '<div class="kasse">' + b + "</div>" : "") +
     '<button class="btn" data-a="party">Magnum-Abend starten</button>' + (isAdmin() && n ? '<button class="btn ghost" data-a="kasseauf">Kasse öffnen (Admin)</button>' : "") + "</section>";
 }
@@ -1067,6 +1069,47 @@ function reiseFotos(tr, photos, dabei) {
     }).join("") + "</div>" : "") +
     '<span class="xs mu">Die Fotos sehen nur die Mitreisenden. Mit «Als Karte» kommt ein Foto auf die Collage-Karte unter «Legendär», die alle sehen.</span>' +
     (dabei ? '<label class="btn line file">Bilder hochladen<input type="file" accept="image/*" multiple data-c="tripphotos" data-id="' + tr.id + '" aria-label="Bilder hochladen"></label>' : "") + "</section>";
+}
+// ═════════════ Strafen (Regeln in der Datenbank: propose_strafe, resolve_proposal) ═════════════
+var STRAF_PUNKTE = [10, 20, 50];
+function strafMagnums() { return D.proposals.filter(function (p) { return p.kind == "strafe" && p.status == "passed" && !p.eingeloest }).length }
+function anwesende(e) {
+  var L = D.rsvps.filter(function (r) { return r.event_id == e.id && r.status == "in" }).map(function (r) { return r.member_id });
+  if (e.organizer_id && L.indexOf(e.organizer_id) < 0) L.push(e.organizer_id);
+  return L;
+}
+function strafeAbgelaufen(p) { return p.status == "abgelaufen" || (p.status == "open" && now() - new Date(p.created_at).getTime() > 7 * 864e5) }
+function strafen(e) {
+  var tag = localDay(e.starts_at), heute = today(), me = uid();
+  if (tag > heute) return "";                                    // erst am Anlass selbst
+  var dabei = anwesende(e), offenFrist = new Date(heute + "T12:00:00").getTime() - new Date(tag + "T12:00:00").getTime() <= 7 * 864e5;
+  var P = D.proposals.filter(function (p) { return p.kind == "strafe" && p.event_id == e.id }).sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1 });
+  if (!P.length && !(offenFrist && dabei.indexOf(me) >= 0)) return "";
+  var h = '<section class="card" aria-label="Strafen"><div class="col" style="gap:1px"><span class="b" style="font-size:15px">Strafen</span><span class="sm mu">Wer bescheisst, zahlt: Punkteabzug und eine Magnum für die Kasse. Antrag durch Anwesende bis 7 Tage nach dem Anlass, ⅔ der übrigen Anwesenden entscheiden innert 7 Tagen.</span></div>';
+  P.forEach(function (p) {
+    var t = tally(p), mine = t.by[me], ab = strafeAbgelaufen(p);
+    var zustand = p.status == "passed" ? '<span class="chip nein" data-test="strafe-status">Ausgesprochen</span>' : p.status == "rejected" ? '<span class="chip" data-test="strafe-status">Abgelehnt</span>'
+      : ab ? '<span class="chip" data-test="strafe-status">Abgelaufen</span>' : '<span class="chip ja" data-test="strafe-status">Abstimmung läuft</span>';
+    h += '<div class="tile" style="padding:12px;gap:6px" data-test="strafe"><div class="row sb"><b style="font-size:18px">' + esc(nm(p.target_id)) + " · −" + p.punkte + " Punkte + 1 Magnum</b>" + zustand + "</div>" +
+      '<span class="sm">' + esc(p.grund) + '</span><span class="xs mu">beantragt von ' + esc(nm(p.proposed_by)) + "</span>";
+    if (p.status == "open" && !ab) {
+      h += '<span class="sm b" data-test="tally">Ja ' + t.yes + " · Nein " + t.no + " · offen " + t.open + " · nötig " + t.need + "</span>" + voteChips(t);
+      if (t.voters.indexOf(me) >= 0 && mine == null) h += '<div class="g2"><button class="btn teal" data-a="vote" data-id="' + p.id + '" data-v="1">Ja, Strafe</button><button class="btn ghost" data-a="vote" data-id="' + p.id + '" data-v="0">Nein</button></div>';
+      else h += '<span class="sm mu">' + (p.target_id == me ? "Über dich stimmen die anderen Anwesenden ab." : t.voters.indexOf(me) < 0 ? "Nur Anwesende stimmen ab." : "Deine Stimme ist abgegeben. Warten auf die anderen.") + "</span>";
+    } else if (p.status != "open") h += '<span class="xs mu">' + (p.yes_weight != null ? p.yes_weight + " von " + p.total_weight + " Stimmen" : "") + "</span>";
+    h += "</div>";
+  });
+  var cand = dabei.filter(function (x) { return x != me && !P.some(function (p) { return p.target_id == x && p.status == "open" && !strafeAbgelaufen(p) }) });
+  if (offenFrist && dabei.indexOf(me) >= 0) {
+    if (!UI.strafeOffen) h += '<button class="btn ghost" data-a="ui" data-k="strafeOffen" data-v="1">Strafe beantragen</button>';
+    else if (!cand.length) h += '<span class="sm mu">Niemand sonst war anwesend, oder für alle läuft schon ein Antrag.</span>';
+    else h += '<form class="col" data-s="strafe" data-id="' + e.id + '" style="gap:10px"><label class="f">Wer hat bescheissen?<select class="t" data-k="stWer">' + memberOptions(v("stWer"), function (x) { return cand.indexOf(x.id) >= 0 }, "– Anwesende wählen –") + "</select></label>" +
+      '<div class="f"><span>Punkteabzug</span><div class="chips">' + STRAF_PUNKTE.map(function (n) { return '<button type="button" class="pill ' + (+v("stPunkte", "20") == n ? "on" : "") + '" data-a="ui" data-k="stPunkte" data-v="' + n + '" aria-pressed="' + (+v("stPunkte", "20") == n) + '">−' + n + "</button>" }).join("") + "</div></div>" +
+      '<label class="f">Was ist passiert?<textarea class="t" data-k="stGrund" maxlength="200" required placeholder="z. B. beim Blinddegustieren auf die Etikette geschaut">' + esc(v("stGrund")) + "</textarea></label>" +
+      '<span class="xs mu">Dazu kommt immer eine Magnum für die Kasse. Die anderen Anwesenden bekommen eine Push-Nachricht und stimmen ab.</span>' +
+      '<div class="row"><button class="btn grow">Antrag stellen</button><button type="button" class="btn ghost" data-a="ui" data-k="strafeOffen" data-v="">Abbrechen</button></div></form>';
+  }
+  return h + "</section>";
 }
 function sacceri(tr, part) {
   var me = uid(), p = D.proposals.filter(function (x) { return x.kind == "sacceri" && x.trip_id == tr.id }).sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1 });
@@ -1504,7 +1547,7 @@ function eventView(e) {
   var grp = [["in", "Dabei"], ["virtual", "Virtuell dabei"], ["out", "Abgemeldet"]];
   h += '<section class="card">' + grp.map(function (g) { var L = R.filter(function (r) { return r.status == g[0] }); return L.length ? '<div class="col"><span class="lbl">' + g[1] + " (" + L.length + ')</span><div class="chips">' + L.map(function (r) { return '<span class="chip' + (g[0] == "virtual" ? " v" : "") + '">' + esc(nm(r.member_id)) + "</span>" }).join("") + "</div></div>" : "" }).join("") +
     (R.length ? "" : '<span class="empty">Noch niemand angemeldet.</span>') + "</section>";
-  h += gaesteBox("event", e.id);
+  h += gaesteBox("event", e.id) + strafen(e);
   // Magnums des Abends mit Gasttrinkern pro Magnum
   var M = D.magnums.filter(function (m) { return m.event_id == e.id }).sort(function (a, b) { return a.created_at < b.created_at ? -1 : 1 });
   var gAll = D.magnum_guests.filter(function (g) { return M.some(function (m) { return m.id == g.magnum_id }) });
@@ -1737,7 +1780,7 @@ var ACT = {
   delcard: function (d) { if (!confirm("Karte wirklich löschen?")) return; OV = null; after(sb.from("cards").delete().eq("id", d.id), "Karte gelöscht") },
   vote: function (d) {
     after(sb.rpc("cast_ballot", { p_proposal: d.id, p_yes: d.v == "1" }).then(function (r) {
-      if (!r.error) toast(r.data == "passed" ? "Angenommen mit Zweidrittelmehrheit!" : r.data == "rejected" ? "Abgelehnt · ⅔-Mehrheit nicht erreicht" : "Stimme abgegeben"); return r;
+      if (!r.error) toast(r.data == "passed" ? "Angenommen mit Zweidrittelmehrheit!" : r.data == "rejected" ? "Abgelehnt · ⅔-Mehrheit nicht erreicht" : r.data == "abgelaufen" ? "Die Abstimmung ist abgelaufen" : "Stimme abgegeben"); return r;
     }));
   },
   second: function (d) { after(pushAnstoss(sb.rpc("second_proposal", { p_proposal: d.id })).then(function (r) { if (!r.error) toast(r.data == "passed" ? "Bestätigt!" : "Unterstützt · Abstimmung offen"); return r })) },
@@ -1897,6 +1940,14 @@ var SUBMIT = {
     var title = v("trTitle").trim();
     after(sb.from("trips").insert({ title: title, starts_on: v("trFrom"), ends_on: v("trTo") || null, program: v("trProg").trim() || null, color: v("trColor", COLORS[0]), created_by: uid() })
       .then(function (r) { if (r.error) return r; return post("hat die Reise nach " + title + " eröffnet. Wer kommt mit?") }), "Reise erfasst").then(function () { ["newTrip", "trTitle", "trFrom", "trTo", "trProg", "trSeats", "trColor"].forEach(function (k) { UI[k] = null }); render() });
+  },
+  strafe: function (f) {
+    var t = v("stWer"), g = (v("stGrund") || "").trim(), n = +v("stPunkte", "20");
+    if (!t) return toast("Wähle, wer bestraft werden soll");
+    if (!g) return toast("Schreib kurz, was passiert ist");
+    after(pushAnstoss(sb.rpc("propose_strafe", { p_event: f.getAttribute("data-id"), p_target: t, p_punkte: n, p_grund: g })), "Strafantrag gestellt · die anderen stimmen ab").then(function (r) {
+      if (r && r.error) return; UI.stWer = UI.stGrund = UI.stPunkte = UI.strafeOffen = null; render();
+    });
   },
   sacceri: function (f) { var t = v("sacPick"); if (!t) return; after(pushAnstoss(sb.rpc("propose_sacceri", { p_trip: f.getAttribute("data-id"), p_target: t })), "Antrag gestellt: " + nm(t) + " als De Sacceri").then(function () { UI.sacPick = null; render() }) },
   nick: function (f) {

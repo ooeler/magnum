@@ -283,6 +283,7 @@
 
   // ───────────── Datenbank-Funktionen ─────────────
   function eligible(d, p) {
+    if (p.kind == "strafe") return (p.voters || []).filter(function (v) { return v != p.target_id });
     if (p.kind == "sacceri") return (p.voters || []).filter(function (v) { return v != p.target_id });
     return d.profiles.filter(function (x) { return x.id != p.target_id }).map(function (x) { return x.id });
   }
@@ -293,9 +294,11 @@
     d.ballots.filter(function (b) { return b.proposal_id == p.id }).forEach(function (b) { by[b.voter_id] = b.vote });
     V.forEach(function (v) { tot++; if (by[v] === true) yes++; else if (by[v] === false) no++ });
     var need = Math.ceil(tot * 2 / 3);
+    if (p.kind == "strafe" && Date.now() - new Date(p.created_at).getTime() > 7 * 864e5 && !(tot > 0 && yes >= need)) { Object.assign(p, { status: "abgelaufen", yes_weight: yes, total_weight: tot, decided_at: new Date().toISOString() }); return "abgelaufen" }
     if (tot > 0 && yes >= need) {
       Object.assign(p, { status: "passed", yes_weight: yes, total_weight: tot, decided_at: new Date().toISOString() });
-      if (p.kind == "nickname") { d.profiles.find(function (x) { return x.id == p.target_id }).nickname = p.value; d.posts.push({ id: uuid(), author_id: p.target_id, text: "heisst ab jetzt «" + p.value + "».", created_at: new Date().toISOString() }) }
+      if (p.kind == "strafe") { var ev = d.events.find(function (x) { return x.id == p.event_id }); d.posts.push({ id: uuid(), author_id: p.target_id, text: "kassiert eine Strafe (" + ev.title + "): −" + p.punkte + " Punkte und eine Magnum für die Kasse.", created_at: new Date().toISOString() }); (d.push_queue = d.push_queue || []).push({ titel: "Strafe ausgesprochen", text: ev.title + ": " + p.grund, an: p.target_id }) }
+      else if (p.kind == "nickname") { d.profiles.find(function (x) { return x.id == p.target_id }).nickname = p.value; d.posts.push({ id: uuid(), author_id: p.target_id, text: "heisst ab jetzt «" + p.value + "».", created_at: new Date().toISOString() }) }
       else { var tr = d.trips.find(function (x) { return x.id == p.trip_id }); tr.sacceri_id = p.target_id; d.posts.push({ id: uuid(), author_id: p.target_id, text: "ist De Sacceri der Reise " + tr.title + "!", created_at: new Date().toISOString() }) }
       return "passed";
     }
@@ -342,7 +345,23 @@
       e.organizer_id = u; var r = d.rsvps.find(function (x) { return x.event_id == e.id && x.member_id == u });
       if (r) r.status = "in"; else d.rsvps.push({ event_id: e.id, member_id: u, status: "in", redeemed: false, updated_at: new Date().toISOString() });
     },
-    open_magnum_kasse: function (d, u) { if (!admin(d)) throw "Nur der Administrator öffnet die Kasse"; var n = 0; d.rsvps.forEach(function (r) { if (r.status == "virtual" && !r.redeemed) { r.redeemed = true; n++ } }); return n },
+    open_magnum_kasse: function (d, u) { if (!admin(d)) throw "Nur der Administrator öffnet die Kasse"; var n = 0; d.rsvps.forEach(function (r) { if (r.status == "virtual" && !r.redeemed) { r.redeemed = true; n++ } }); d.proposals.forEach(function (p) { if (p.kind == "strafe" && p.status == "passed" && !p.eingeloest) { p.eingeloest = true; n++ } }); return n },
+    propose_strafe: function (d, u, a) {
+      var e = d.events.find(function (x) { return x.id == a.p_event }); if (!e) throw "Anlass nicht gefunden";
+      var t = tag(e.starts_at);
+      if (t > day(0)) throw "Strafen gibt es erst am Anlass selbst";
+      if (t < day(-7)) throw "Strafen können nur bis 7 Tage nach dem Anlass erfasst werden";
+      var dabei = d.rsvps.filter(function (r) { return r.event_id == e.id && r.status == "in" }).map(function (r) { return r.member_id });
+      if (e.organizer_id && dabei.indexOf(e.organizer_id) < 0) dabei.push(e.organizer_id);
+      if (dabei.indexOf(u) < 0) throw "Nur Anwesende können eine Strafe beantragen";
+      if (a.p_target == u) throw "Du kannst dich nicht selbst bestrafen";
+      if (dabei.indexOf(a.p_target) < 0) throw "Bestraft werden können nur Anwesende";
+      if (!(a.p_punkte >= 5 && a.p_punkte <= 100) || !String(a.p_grund || "").trim()) throw "new row violates check constraint";
+      if (d.proposals.some(function (p) { return p.kind == "strafe" && p.status == "open" && p.event_id == e.id && p.target_id == a.p_target })) throw "Für diese Person läuft schon ein Strafantrag";
+      var p = { id: uuid(), kind: "strafe", target_id: a.p_target, trip_id: null, event_id: e.id, punkte: a.p_punkte, grund: String(a.p_grund).trim().slice(0, 200), value: null, proposed_by: u, seconded_by: null, voters: dabei, status: "open", yes_weight: null, total_weight: null, eingeloest: false, created_at: new Date().toISOString(), decided_at: null };
+      d.proposals.push(p); ballot(d, p.id, u, true); resolve(d, p);
+      return p.id;
+    },
     admin_set_device: function (d, u, a) {
       if (!admin(d)) throw "Nur der Administrator darf den Gerätetyp ändern";
       var p = d.profiles.find(function (x) { return x.id == a.p_member }); if (!p) throw "Mitglied nicht gefunden"; if (p.device == a.p_device) return;
@@ -386,6 +405,7 @@
       var p = d.proposals.find(function (x) { return x.id == a.p_proposal });
       if (!p || p.status != "open") throw "Die Abstimmung ist abgeschlossen";
       if (p.kind == "nickname" && !p.seconded_by) throw "Erst braucht es eine zweite Unterstützung";
+      if (p.kind == "strafe" && Date.now() - new Date(p.created_at).getTime() > 7 * 864e5) return resolve(d, p);   // abgelaufen
       if (eligible(d, p).indexOf(u) < 0) throw "Du bist für diese Abstimmung nicht stimmberechtigt";
       ballot(d, p.id, u, !!a.p_yes); return resolve(d, p);
     }
