@@ -493,7 +493,7 @@ test.describe("Gäste, Beizen und Sichtweise", () => {
     await g.getByRole("button", { name: "Eintragen" }).click();
     await expect(g).toContainText("Gäste (1)");
     await page.keyboard.press("Escape");
-    await expect(page.locator(".trip", { hasText: "Wallis" })).toContainText("1 Gäste");
+    await expect(page.locator(".trip", { hasText: "Wallis" })).toContainText("1 Gast");
   });
 
   test("Beiz vom Termin ist schon gewählt, Felder wie beim Anlass", async ({ page }) => {
@@ -577,7 +577,7 @@ test.describe("Vorschläge", () => {
     expect(h.hoehe).toBeLessThan(h.zeile * 2);                           // eine Zeile
   });
 
-  test("Vergangener Anlass: Gäste nur der Admin, Fahrten nur bis zum Anlasstag", async ({ page }) => {
+  test("Vergangener Anlass: Gäste nur der Admin, Fahrten nur bis zum Folgetag", async ({ page }) => {
     await login(page, BEAT);
     await page.locator("summary", { hasText: "Vergangene Anlässe" }).click();
     await page.locator('[data-a=ov][data-t=event][data-id="e-past2"]').click();
@@ -588,7 +588,7 @@ test.describe("Vorschläge", () => {
     const g = await page.evaluate(() => window.__mg.asId("u-beat", (sb) => sb.from("gaeste").insert({ event_id: "e-past2", name: "Hans", added_by: "u-beat" })));
     expect(g.error.message).toContain("nur der Administrator");
     const r = await page.evaluate(() => window.__mg.asId("u-beat", (sb) => sb.from("rides").insert({ event_id: "e-past2", driver_id: "u-beat", direction: "Gossau", seats: 3 })));
-    expect(r.error.message).toContain("bis und mit dem Anlasstag");
+    expect(r.error.message).toContain("bis und mit dem Tag nach dem Anlass");
   });
 });
 
@@ -654,6 +654,25 @@ test.describe("Unsicher und abgemeldet", () => {
     await expect(k).toHaveText("abgemeldet");
     await expect(k).toHaveClass(/nein/);
   });
+});
+
+test("Fahrten anbieten geht auch noch am Tag nach dem Anlass (Heimfahrt nach Mitternacht)", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    const d = window.__mg.db(), g = new Date(); g.setDate(g.getDate() - 1); g.setHours(19, 0, 0, 0);
+    d.events.push({ id: "e-gestern", title: "Langer Abend", starts_at: g.toISOString(), location: "Keller", organizer_id: null, created_by: "u-ot", created_at: g.toISOString() });
+    localStorage.setItem("__mg_db", JSON.stringify(d));
+  });
+  await login(page, BEAT);
+  await page.locator("summary", { hasText: "Vergangene Anlässe" }).click();
+  await page.locator('[data-a=ov][data-t=event][data-id="e-gestern"]').click();
+  await expect(page.locator("#ov [data-test=fahrt-vorbei]")).toHaveCount(0);
+  await page.locator("#ov").getByRole("button", { name: /Ich fahre/ }).click();
+  await page.locator("#ov [data-k=rdDir]").fill("Wil");
+  await page.locator("#ov").getByRole("button", { name: "Plätze anbieten" }).click();
+  await expect(page.locator("#toast")).toContainText("als Fahrer eingetragen");
+  const r = await page.evaluate(() => window.__mg.asId("u-chris", (sb) => sb.from("ride_passengers").insert({ ride_id: D.rides.find((x) => x.event_id == "e-gestern").id, passenger_id: "u-chris" })));
+  expect(r.error).toBeFalsy();                                           // Mitfahren auch noch am Folgetag
 });
 
 test.describe("Archiv aus dem Chat", () => {

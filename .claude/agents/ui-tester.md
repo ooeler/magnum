@@ -68,7 +68,7 @@ Pro Fund: Schritte, erwartet, tatsächlich, Schwere. Am Schluss, was du geprüft
 - Beiz ohne Standort: „Hier bin ich“ oder „Suchen“ (wer sie erfasst hat oder Admin), danach erscheint sie auf der Karte.
 - Admin-Schalter: schwebt in Admin- und Mitglied-Ansicht auf jeder Seite (auch über Detailfenstern, unter Dialogen), bis ✕; bleibt ausgeblendet auch nach Neuladen, Wechsel der Ansicht im Profil holt ihn zurück.
 - Statistik „Unsere Beizen“: zuerst die 5 zuletzt besuchten, „Mehr anzeigen (n weitere)“ zeigt den Rest, „Weniger anzeigen“ klappt zu.
-- Vergangene Anlässe: Gäste trägt nur der Admin nach (Hinweis statt Formular). „Ich fahre · Plätze anbieten“ nur bis und mit dem Anlasstag. Quittungen können alle hochladen.
+- Vergangene Anlässe: Gäste trägt nur der Admin nach (Hinweis statt Formular). „Ich fahre · Plätze anbieten“ nur bis und mit dem Tag nach dem Anlass. Quittungen können alle hochladen.
 - Umgesetzter Vorschlag: Danke-Banner oben unter Termine, bleibt bis ✕.
 - Karte öffnen: immer Vorderseite; nach ca. 0,6 s kippt sie kurz an (Wink) und das ↻ dreht sich zweimal, damit man sieht, dass sie sich drehen lässt. Nur beim Öffnen/Weiterwischen, nicht bei «Bewegung reduzieren».
 - Oben unter Termine (nur im Browser, nicht in der installierten App): „📲 Magnum als App“ mit Knopf „Als App speichern“ (Dialog, sonst Anleitung je Gerät); ✕ blendet ihn auf dem Gerät aus.

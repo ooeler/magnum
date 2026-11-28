@@ -761,9 +761,11 @@ function duellMonat(m) {
   };
   return { android: quote("android"), iphone: quote("iphone") };
 }
+// Ein Monat ist entschieden, sobald in ihm kein Anlass mehr geplant ist (kommt noch einer dazu, zählt er wieder mit)
+function monatFertig(m) { return !D.events.some(function (e) { return localDay(e.starts_at).slice(0, 7) == m && new Date(e.starts_at).getTime() > now() }) }
 function duellBilanz() {
   var m = today().slice(0, 7), mon = {}, b = { android: 0, iphone: 0, gleich: 0, L: [] };
-  pastEvents().forEach(function (e) { var x = localDay(e.starts_at).slice(0, 7); if (x < m) mon[x] = 1 });
+  pastEvents().forEach(function (e) { var x = localDay(e.starts_at).slice(0, 7); if (x < m || (x == m && monatFertig(m))) mon[x] = 1 });
   Object.keys(mon).sort().forEach(function (x) {
     var r = duellMonat(x); if (!r) return;
     var w = r.android == r.iphone ? "gleich" : r.android > r.iphone ? "android" : "iphone"; b[w]++; b.L.push({ m: x, w: w, r: r });
@@ -791,6 +793,9 @@ function duell() {
   if (vor) return h + '<span class="sm b" data-test="duell-endstand">Endstand ' + mn(vm) + "</span>" + zeile("Android", vor.android) + zeile("iPhone", vor.iphone) +
     '<span class="sm b" data-test="duell-vormonat">' + (vor.android == vor.iphone ? "Unentschieden." : (vor.android > vor.iphone ? "Android" : "iPhone") + " gewinnt den " + mn(vm) + ".") + "</span>" +
     '<span class="xs mu">Das Duell im ' + mn(m) + " zählt schon. Die Zwischenwertung erscheint ab dem 11. " + mn(m) + ".</span></section>";
+  if (jetzt && monatFertig(m)) return h + zeile("Android", jetzt.android) + zeile("iPhone", jetzt.iphone) +
+    '<span class="sm b" data-test="duell-entschieden">' + (jetzt.android == jetzt.iphone ? "Unentschieden." : (jetzt.android > jetzt.iphone ? "Android" : "iPhone") + " gewinnt den " + mn(m) + ".") + "</span>" +
+    '<span class="xs mu">Im ' + mn(m) + " ist kein Anlass mehr geplant, der Monat zählt schon in der Bilanz.</span></section>";
   h += jetzt ? zeile("Android", jetzt.android) + zeile("iPhone", jetzt.iphone) + '<span class="sm mu">' + (jetzt.android == jetzt.iphone ? "Unentschieden." : (jetzt.android > jetzt.iphone ? "Android" : "iPhone") + " führt.") + "</span>"
     : '<span class="sm mu">Diesen Monat gab es noch keinen Anlass. Das nächste Treffen eröffnet das Duell.</span>';
   return h + "</section>";
@@ -875,7 +880,7 @@ function eventCard(e) {
   // Tipp irgendwo auf die Karte öffnet die Details; Knöpfe darin behalten ihre eigene Aktion
   return '<article class="card ev" data-ev="' + e.id + '" data-a="ov" data-t="event" data-id="' + e.id + '"><div class="dt"><b>' + d.getDate() + "</b><span>" + MON[d.getMonth()] + '</span></div><div class="col grow">' +
     '<span class="b" style="font-size:16px">' + esc(e.title) + '</span><span class="sm mu">' + esc(fDate(e.starts_at, true)) + (ortText(e) ? " · " + esc(ortText(e)) : "") + "</span>" +
-    '<span class="sm mu" data-test="anzahl">' + nIn + " von " + D.profiles.length + " dabei" + (nV ? " · " + nV + " virtuell" : "") + (nU ? " · " + nU + " unsicher" : "") + (g ? " · " + g + " Gasttrinker" : "") + (gaesteVon("event", e.id).length ? " · " + gaesteVon("event", e.id).length + " Gäste" : "") + (s == "in" ? " · du bist dabei" : s == "out" ? " · du bist abgemeldet" : s ? "" : " · noch offen") + "</span>" +
+    '<span class="sm mu" data-test="anzahl">' + nIn + " von " + D.profiles.length + " dabei" + (nV ? " · " + nV + " virtuell" : "") + (nU ? " · " + nU + " unsicher" : "") + (g ? " · " + g + " Gasttrinker" : "") + (gaesteVon("event", e.id).length ? " · " + gaesteVon("event", e.id).length + (gaesteVon("event", e.id).length == 1 ? " Gast" : " Gäste") : "") + (s == "in" ? " · du bist dabei" : s == "out" ? " · du bist abgemeldet" : s ? "" : " · noch offen") + "</span>" +
     (e.organizer_id ? '<span class="sm b">Organisation: ' + esc(nm(e.organizer_id)) + (e.organizer_id == me ? " (du)" : "") + "</span>"
       : '<span class="sm b" style="color:var(--orange)">Organisator gesucht</span><button class="btn dash" style="align-self:flex-start;min-height:40px" data-a="organize" data-id="' + e.id + '">Ich organisiere den Abend · +40</button>') +
     (s == "virtual" ? '<span class="chip v" style="align-self:flex-start">Virtuell dabei · 1 Magnum spendiert</span>' : "") +
@@ -1592,7 +1597,8 @@ function rides(e) {
       (P.length ? '<div class="chips">' + P.map(function (p) { return '<span class="chip' + (p.rated_at ? " ja" : "") + '">' + esc(first(p.passenger_id)) + (p.rated_at ? " · " + ((p.stars_safe + p.stars_punctual + p.stars_mood) / 3).toFixed(1).replace(".", ",") + " ★" : "") + "</span>" }).join("") + "</div>" : "") +
       (mine ? rideRate(myRide, r, e) : "") + "</div>";
   }).join("") + "</div>" : '<span class="empty">Noch niemand fährt. Biete Plätze an!</span>';
-  if (localDay(e.starts_at) < today()) h += '<span class="xs mu" data-test="fahrt-vorbei">Fahrten anbieten geht nur bis und mit dem Anlasstag.</span>';
+  var folgetag = new Date(localDay(e.starts_at) + "T12:00:00"); folgetag.setDate(folgetag.getDate() + 1);
+  if (localDay(folgetag.toISOString()) < today()) h += '<span class="xs mu" data-test="fahrt-vorbei">Fahrten anbieten geht nur bis und mit dem Tag nach dem Anlass.</span>';
   else if (!mineDrive && !myRide) h += UI.rideForm ? '<form class="col tile" data-s="ride" data-id="' + e.id + '" style="gap:8px;padding:12px"><div class="g2"><label class="f">Richtung<input class="t" data-k="rdDir" value="' + esc(v("rdDir")) + '" maxlength="60" placeholder="z.B. Wil"></label><label class="f">Plätze<input class="t" type="number" min="1" max="8" data-k="rdSeats" value="' + esc(v("rdSeats", "3")) + '"></label></div><div class="row"><button class="btn grow">Plätze anbieten</button><button type="button" class="btn ghost" data-a="ui" data-k="rideForm" data-v="">Abbrechen</button></div></form>'
     : '<button class="btn dash" data-a="ui" data-k="rideForm" data-v="1">Ich fahre · Plätze anbieten</button>';
   return h + "</section>";

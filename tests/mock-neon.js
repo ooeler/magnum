@@ -143,7 +143,7 @@
     var r = d.rides.find(function (x) { return x.id == row.ride_id }); if (!r) return "Fahrt nicht gefunden";
     if (r.driver_id == row.passenger_id) return "Du kannst nicht bei dir selbst mitfahren";
     if (isNew && d.ride_passengers.filter(function (x) { return x.ride_id == row.ride_id }).length >= r.seats) return "Das Auto ist voll";
-    if (isNew && tag(eventOf(d, r.event_id).starts_at) < day(0)) return "Der Anlass ist vorbei";
+    if (isNew && tag(eventOf(d, r.event_id).starts_at) < day(-1)) return "Der Anlass ist vorbei";
     if (isNew && (row.stars_safe != null || row.stars_punctual != null || row.stars_mood != null || row.points_given != null || row.rated_at != null)) return "Bewerten geht erst nach dem Anlass";
     if (!isNew && new Date(eventOf(d, r.event_id).starts_at) > new Date()) return "Bewerten geht erst nach dem Anlass";
     return null;
@@ -165,7 +165,7 @@
     if (t == "trip_photos" && !old && !reiseDabei(d, r.trip_id)) return "Fotos laden nur Mitreisende hoch";
     if (t == "design_umfrage" && !(r.wert >= 0 && r.wert <= 10)) return "new row violates check constraint";
     if (t == "gaeste" && !old && r.event_id && tag(eventOf(d, r.event_id).starts_at) < day(0)) return "Gäste bei vergangenen Anlässen trägt nur der Administrator ein";
-    if (t == "rides" && !old && tag(eventOf(d, r.event_id).starts_at) < day(0)) return "Fahrten anbieten geht nur bis und mit dem Anlasstag";
+    if (t == "rides" && !old && tag(eventOf(d, r.event_id).starts_at) < day(-1)) return "Fahrten anbieten geht nur bis und mit dem Tag nach dem Anlass";
     if (t == "trip_absagen" && !old) {
       var ta = d.trips.find(function (x) { return x.id == r.trip_id });
       if (ta && ta.starts_on < day(0)) return "Die Reise hat schon begonnen";

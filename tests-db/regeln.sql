@@ -488,7 +488,14 @@ insert into public.events (id, title, starts_at) values ('20000000-0000-0000-000
 select pg_temp.als('C');
 insert into public.gaeste (event_id, name) values ('20000000-0000-0000-0000-000000000008', 'Peter');
 select pg_temp.verboten($q$insert into public.gaeste (event_id, name) values ('20000000-0000-0000-0000-000000000001', 'Nachzügler')$q$, 'Gäste bei vergangenen Anlässen nur der Admin');
-select pg_temp.verboten($q$insert into public.rides (event_id, direction, seats) values ('20000000-0000-0000-0000-000000000001', 'Wil', 2)$q$, 'Fahrten anbieten nur bis und mit dem Anlasstag');
+select pg_temp.verboten($q$insert into public.rides (event_id, direction, seats) values ('20000000-0000-0000-0000-000000000001', 'Wil', 2)$q$, 'Fahrten anbieten nur bis und mit dem Tag nach dem Anlass');
+reset role;
+select pg_temp.als('');
+insert into public.events (id, title, starts_at) values ('20000000-0000-0000-0000-0000000000f1', 'Gestern', (date_trunc('day', now() at time zone 'Europe/Zurich') - interval '1 day' + interval '19 hours') at time zone 'Europe/Zurich');
+set role authenticated;
+select pg_temp.als('C');
+insert into public.rides (event_id, direction, seats) values ('20000000-0000-0000-0000-0000000000f1', 'Wil', 2);
+select pg_temp.check((select count(*) from public.rides where event_id = '20000000-0000-0000-0000-0000000000f1') = 1, 'Fahrten anbieten auch am Tag nach dem Anlass');
 insert into public.gaeste (trip_id, name) values ('10000000-0000-0000-0000-000000000001', 'Maria');
 select pg_temp.check((select count(*) from public.gaeste) = 2, 'Gäste bei Anlass und Reise');
 do $$ begin
