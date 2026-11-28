@@ -650,3 +650,73 @@ test.describe("Statistik mit Archiv", () => {
     await expect(page.locator(".card", { hasText: "Ø Teilnehmende" })).toContainText("in der App erfasst");
   });
 });
+
+test.describe("Neue Anlässe als Popup", () => {
+  async function seitVorTagen(page, id, tage) {
+    await page.goto("/");
+    await page.evaluate(([id, tage]) => { const d = window.__mg.db(); d.profiles.find((p) => p.id == id).last_seen = new Date(Date.now() - tage * 864e5).toISOString(); localStorage.setItem("__mg_db", JSON.stringify(d)) }, [id, tage]);
+  }
+
+  test("seit dem letzten Besuch erfasste Anlässe erscheinen beim Öffnen; anmelden, dann «Später»; danach nicht mehr", async ({ page }) => {
+    await seitVorTagen(page, "u-beat", 10);
+    await login(page, BEAT);
+    const pop = page.locator("[data-test=neu-popup]");
+    await expect(pop).toContainText("2 neue Anlässe");               // Herbst-Stamm hat Beat schon zugesagt
+    await expect(pop).not.toContainText("Herbst-Stamm");
+    await expect(pop).toContainText("Chlaus-Magnum");
+    await pop.getByRole("button", { name: "Bin dabei" }).first().click();
+    await expect(page.locator("#toast")).toContainText("Angemeldet");
+    await expect(pop).toContainText("Neuer Anlass");
+    expect(await page.evaluate(() => D.rsvps.some((r) => r.event_id == "e-2" && r.member_id == "u-beat" && r.status == "in"))).toBe(true);
+    await pop.getByRole("button", { name: "Später" }).click();
+    await expect(page.locator("#sh")).toHaveCount(0);
+    await page.reload();
+    await expect(page.locator("header h1")).toHaveText("Magnum");
+    await expect(page.locator("#sh")).toHaveCount(0);                       // letzter Besuch ist jetzt
+  });
+
+  test("eigene Anlässe und solche, bei denen man schon zugesagt hat, erscheinen nicht; «Details» öffnet den Anlass", async ({ page }) => {
+    await seitVorTagen(page, "u-ot", 10);
+    await login(page);
+    const pop = page.locator("[data-test=neu-popup]");
+    await expect(pop).toContainText("Neuer Anlass");                         // e-2 und e-3 hat Ot selbst erfasst
+    await expect(pop).toContainText("Herbst-Stamm");
+    await expect(pop).not.toContainText("Chlaus-Magnum");
+    await pop.getByRole("button", { name: "Details" }).click();
+    await expect(page.locator("#sh")).toHaveCount(0);
+    await expect(page.locator("#ov")).toContainText("Herbst-Stamm");
+  });
+
+  test("neue Reise: «Ich reise mit» meldet an", async ({ page }) => {
+    await seitVorTagen(page, "u-beat", 30);                                  // Wallis wurde vor 20 Tagen erfasst
+    await page.evaluate(() => { const d = window.__mg.db(); d.rsvps.push(...["e-2", "e-3"].map((e) => ({ event_id: e, member_id: "u-beat", status: "in", redeemed: false, updated_at: new Date().toISOString() }))); d.trip_participants = d.trip_participants.filter((p) => !(p.trip_id == "t-wallis" && p.member_id == "u-beat")); localStorage.setItem("__mg_db", JSON.stringify(d)) });
+    await login(page, BEAT);
+    const pop = page.locator("[data-test=neu-popup]");
+    await expect(pop).toContainText("Neue Reise");
+    await expect(pop).toContainText("Wallis");
+    await pop.getByRole("button", { name: "Ich reise mit" }).click();
+    await expect(page.locator("#toast")).toContainText("Dabei in Wallis");
+    await expect(page.locator("#sh")).toHaveCount(0);
+    expect(await page.evaluate(() => D.trip_participants.some((p) => p.trip_id == "t-wallis" && p.member_id == "u-beat"))).toBe(true);
+  });
+
+  test("Badener Fahrt: einmalig für alle als Beispiel, auch beim ersten Besuch und wenn man schon dabei ist", async ({ page }) => {
+    await page.goto("/");
+    await page.evaluate(() => { const d = window.__mg.db(); d.trips.push({ id: "t-baden", title: "Badener Fahrt", starts_on: new Date(Date.now() + 40 * 864e5).toISOString().slice(0, 10), ends_on: null, program: "Badenfahrt mit dem Zug", seats: 12, color: "#6E2433", ok_id: "u-chris", kassier_id: null, sacceri_id: null, created_by: "u-chris", created_at: new Date(Date.now() - 90 * 864e5).toISOString() }); d.trip_participants.push({ trip_id: "t-baden", member_id: "u-beat" }); localStorage.setItem("__mg_db", JSON.stringify(d)) });
+    await login(page, BEAT);
+    const pop = page.locator("[data-test=neu-popup]");
+    await expect(pop).toContainText("Badener Fahrt");
+    await expect(pop).toContainText("Du bist dabei");
+    await pop.getByRole("button", { name: "Details" }).click();
+    await expect(page.locator("#ov")).toContainText("Badener Fahrt");
+    await page.reload();
+    await expect(page.locator("header h1")).toHaveText("Magnum");
+    await expect(page.locator("[data-test=neu-popup]")).toHaveCount(0);           // nur einmal
+  });
+
+  test("ohne frühere Anmeldung (erster Besuch) kein Popup", async ({ page }) => {
+    await login(page, BEAT);
+    await expect(page.locator("header h1")).toHaveText("Magnum");
+    await expect(page.locator("[data-test=neu-popup]")).toHaveCount(0);
+  });
+});
