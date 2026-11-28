@@ -314,6 +314,9 @@ language plpgsql security definer set search_path = public as $$
 declare v_monat date := date_trunc('month', public.heute())::date; v_tag date; v_neu int := 0; v_gefunden int := 0;
 begin
   if public.uid() is not null and not public.is_member() then raise exception 'Nur Mitglieder'; end if;
+  -- Strafanträge ohne Entscheid nach 7 Tagen schliessen (läuft bei jedem Öffnen der App)
+  update public.proposals set status = 'abgelaufen', decided_at = now()
+   where kind = 'strafe' and status = 'open' and created_at < now() - interval '7 days';
   while v_gefunden < 3 loop
     v_tag := public.letzter_freitag(v_monat);
     if v_tag >= public.heute() then
@@ -386,12 +389,14 @@ alter table public.magnum_guests enable row level security;
 -- Magnum-Kasse: Admin öffnet alle gespendeten Magnums
 create or replace function public.open_magnum_kasse() returns int
 language plpgsql security definer set search_path = public as $$
-declare n int;
+declare n int; m int;
 begin
   if not public.is_admin() then raise exception 'Nur der Administrator öffnet die Kasse'; end if;
   update public.rsvps set redeemed = true where status = 'virtual' and not redeemed;
   get diagnostics n = row_count;
-  return n;
+  update public.proposals set eingeloest = true where kind = 'strafe' and status = 'passed' and not eingeloest;
+  get diagnostics m = row_count;
+  return n + m;
 end $$;
 
 -- Beiz und Quittung gehören zum Termin
@@ -669,6 +674,28 @@ alter table public.proposals enable row level security;
 create unique index if not exists one_open_sacceri  on public.proposals (trip_id)   where status = 'open' and kind = 'sacceri';
 create unique index if not exists one_open_nickname on public.proposals (target_id) where status = 'open' and kind = 'nickname';
 
+-- Strafen: Anwesende beantragen bis 7 Tage nach dem Anlass Punkteabzug und eine Magnum für die Kasse.
+-- Es entscheiden ⅔ der übrigen Anwesenden; nach 7 Tagen ohne Entscheid ist der Antrag abgelaufen.
+alter table public.proposals add column if not exists event_id   uuid references public.events(id) on delete cascade;
+alter table public.proposals add column if not exists punkte     int;
+alter table public.proposals add column if not exists grund      text;
+alter table public.proposals add column if not exists eingeloest boolean not null default false;   -- Magnum der Strafe ist aus der Kasse getrunken
+alter table public.proposals drop constraint if exists proposals_kind_check;
+alter table public.proposals add constraint proposals_kind_check check (kind in ('sacceri', 'nickname', 'strafe'));
+alter table public.proposals drop constraint if exists proposals_status_check;
+alter table public.proposals add constraint proposals_status_check check (status in ('open', 'passed', 'rejected', 'abgelaufen'));
+alter table public.proposals drop constraint if exists strafe_angaben;
+alter table public.proposals add constraint strafe_angaben check (kind <> 'strafe' or (event_id is not null and punkte between 5 and 100 and length(trim(coalesce(grund, ''))) between 1 and 200));
+create unique index if not exists one_open_strafe on public.proposals (event_id, target_id) where status = 'open' and kind = 'strafe';
+
+-- Anwesend: zugesagt (nicht virtuell) oder Organisator
+create or replace function public.anwesende(p_event uuid) returns uuid[]
+language sql stable security definer set search_path = public as $$
+  select coalesce(array_agg(distinct x), '{}') from (
+    select member_id x from public.rsvps where event_id = p_event and status = 'in'
+    union select organizer_id from public.events where id = p_event and organizer_id is not null) a
+$$;
+
 create table if not exists public.ballots (
   proposal_id uuid not null references public.proposals(id) on delete cascade,
   voter_id    uuid not null references public.profiles(id) on delete cascade,
@@ -686,6 +713,9 @@ language sql stable security definer set search_path = public as $$
   union
   select pr.id from public.proposals p join public.profiles pr on pr.id <> p.target_id
    where p.id = p_proposal and p.kind = 'nickname'
+  union
+  select v from public.proposals p, unnest(p.voters) v
+   where p.id = p_proposal and p.kind = 'strafe' and v <> p.target_id
 $$;
 
 create or replace function public.resolve_proposal(p_proposal uuid) returns text
@@ -706,11 +736,22 @@ begin
    where b.proposal_id = p.id and b.voter_id in (select public.eligible_voters(p.id));
   v_need := ceil(v_total * 2.0 / 3.0);
 
+  if p.kind = 'strafe' and p.created_at < now() - interval '7 days' and not (v_total > 0 and v_yes >= v_need) then
+    update public.proposals set status = 'abgelaufen', yes_weight = v_yes, total_weight = v_total, decided_at = now() where id = p.id;
+    return 'abgelaufen';
+  end if;
+
   if v_total > 0 and v_yes >= v_need then
     update public.proposals set status = 'passed', yes_weight = v_yes, total_weight = v_total, decided_at = now() where id = p.id;
     if p.kind = 'nickname' then
       update public.profiles set nickname = p.value where id = p.target_id;
       insert into public.posts (author_id, text) values (p.target_id, 'heisst ab jetzt «' || p.value || '».');
+    elsif p.kind = 'strafe' then
+      select title into v_trip from public.events where id = p.event_id;
+      insert into public.posts (author_id, text)
+      values (p.target_id, 'kassiert eine Strafe (' || v_trip || '): −' || p.punkte || ' Punkte und eine Magnum für die Kasse.');
+      insert into public.push_queue (titel, text, an)
+      values ('Strafe ausgesprochen', v_trip || ': ' || p.grund || ' · −' || p.punkte || ' Punkte und eine Magnum für die Kasse. Prost!', p.target_id);
     else
       update public.trips set sacceri_id = p.target_id where id = p.trip_id;
       select title into v_trip from public.trips where id = p.trip_id;
@@ -743,6 +784,32 @@ begin
   if exists (select 1 from public.trip_participants where trip_id = p_trip and member_id = public.uid()) then
     insert into public.ballots (proposal_id, voter_id, vote) values (v_id, public.uid(), true);
   end if;
+  perform public.resolve_proposal(v_id);
+  return v_id;
+end $$;
+
+-- Strafe beantragen: nur Anwesende, nur gegen andere Anwesende, vom Anlasstag bis 7 Tage danach. Wer beantragt, stimmt mit Ja.
+create or replace function public.propose_strafe(p_event uuid, p_target uuid, p_punkte int, p_grund text) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare v_id uuid; v_tag date; v_dabei uuid[];
+begin
+  if not public.is_member() then raise exception 'Nur Mitglieder'; end if;
+  select (starts_at at time zone 'Europe/Zurich')::date into v_tag from public.events where id = p_event;
+  if v_tag is null then raise exception 'Anlass nicht gefunden'; end if;
+  if v_tag > public.heute() then raise exception 'Strafen gibt es erst am Anlass selbst'; end if;
+  if v_tag < public.heute() - 7 then raise exception 'Strafen können nur bis 7 Tage nach dem Anlass erfasst werden'; end if;
+  v_dabei := public.anwesende(p_event);
+  if not (public.uid() = any(v_dabei)) then raise exception 'Nur Anwesende können eine Strafe beantragen'; end if;
+  if p_target = public.uid() then raise exception 'Du kannst dich nicht selbst bestrafen'; end if;
+  if not (p_target = any(v_dabei)) then raise exception 'Bestraft werden können nur Anwesende'; end if;
+  begin
+    insert into public.proposals (kind, target_id, event_id, punkte, grund, proposed_by, voters)
+    values ('strafe', p_target, p_event, p_punkte, left(trim(coalesce(p_grund, '')), 200), public.uid(), v_dabei)
+    returning id into v_id;
+  exception when unique_violation then
+    raise exception 'Für diese Person läuft schon ein Strafantrag';
+  end;
+  insert into public.ballots (proposal_id, voter_id, vote) values (v_id, public.uid(), true);
   perform public.resolve_proposal(v_id);
   return v_id;
 end $$;
@@ -783,6 +850,7 @@ declare p public.proposals;
 begin
   select * into p from public.proposals where id = p_proposal;
   if not found or p.status <> 'open' then raise exception 'Die Abstimmung ist abgeschlossen'; end if;
+  if p.kind = 'strafe' and p.created_at < now() - interval '7 days' then return public.resolve_proposal(p.id); end if;   -- abgelaufen
   if p.kind = 'nickname' and p.seconded_by is null then raise exception 'Erst braucht es eine zweite Unterstützung'; end if;
   if not exists (select 1 from public.eligible_voters(p.id) v where v = public.uid()) then
     raise exception 'Du bist für diese Abstimmung nicht stimmberechtigt';
@@ -917,6 +985,10 @@ begin
   if new.kind = 'sacceri' and tg_op = 'INSERT' then
     v_titel := 'Neue Abstimmung: De Sacceri';
     v_text := public.push_name(new.proposed_by) || ' schlägt ' || public.push_name(new.target_id) || ' vor (Reise ' || coalesce((select title from public.trips where id = new.trip_id), '') || '). Stimm ab!';
+    v_von := new.proposed_by;
+  elsif new.kind = 'strafe' and tg_op = 'INSERT' then
+    v_titel := 'Strafantrag: ' || public.push_name(new.target_id);
+    v_text := public.push_name(new.proposed_by) || ' beantragt −' || new.punkte || ' Punkte und eine Magnum (' || coalesce((select title from public.events where id = new.event_id), '') || '): ' || new.grund || '. Stimm ab!';
     v_von := new.proposed_by;
   elsif new.kind = 'nickname' and tg_op = 'UPDATE' and old.seconded_by is null and new.seconded_by is not null then
     v_titel := 'Neue Abstimmung: Spitzname';
@@ -1348,6 +1420,8 @@ revoke execute on function public.open_magnum_kasse() from public, anonymous;
 revoke execute on function public.eligible_voters(uuid) from public, anonymous;
 revoke execute on function public.resolve_proposal(uuid) from public, anonymous, authenticated;
 revoke execute on function public.propose_sacceri(uuid, uuid) from public, anonymous;
+revoke execute on function public.propose_strafe(uuid, uuid, int, text) from public, anonymous;
+revoke execute on function public.anwesende(uuid) from public, anonymous, authenticated;
 revoke execute on function public.propose_nickname(uuid, text) from public, anonymous;
 revoke execute on function public.second_proposal(uuid) from public, anonymous;
 revoke execute on function public.cast_ballot(uuid, boolean) from public, anonymous;
@@ -1386,7 +1460,7 @@ revoke execute on function public.video_ziehbar() from public, anonymous;
 revoke execute on function public.karte_ziehen(uuid) from public, anonymous;
 grant execute on function public.is_member(), public.is_admin(), public.me(), public.magnum_termine(), public.admin_set_rsvp(uuid, uuid, text),
   public.admin_set_device(uuid, text), public.admin_set_role(uuid, text), public.admin_set_admin(uuid, boolean), public.claim_organizer(uuid, uuid), public.set_organizer(uuid, uuid),
-  public.open_magnum_kasse(), public.eligible_voters(uuid), public.propose_sacceri(uuid, uuid),
+  public.open_magnum_kasse(), public.eligible_voters(uuid), public.propose_sacceri(uuid, uuid), public.propose_strafe(uuid, uuid, int, text),
   public.propose_nickname(uuid, text), public.second_proposal(uuid), public.cast_ballot(uuid, boolean),
   public.video_bestand(), public.video_ziehbar(), public.karte_ziehen(uuid)
   to authenticated;
