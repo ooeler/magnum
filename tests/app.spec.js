@@ -49,7 +49,7 @@ test.describe("Termine", () => {
     await page.locator("#sh").getByRole("button", { name: "Nur abmelden" }).click();
     await expect(ev).toContainText("du bist abgemeldet");
     await ev.getByRole("button", { name: "Bin dabei" }).click();
-    await expect(ev).toContainText("7 von 11 dabei · 1 Gasttrinker · du bist dabei");
+    await expect(ev).toContainText("7 von 11 dabei · 4 unsicher · 1 Gasttrinker · du bist dabei");
   });
 
   test("Organisieren: offener Abend", async ({ page }) => {
