@@ -447,7 +447,7 @@ create table if not exists public.ride_passengers (
 alter table public.ride_passengers enable row level security;
 
 -- Niemand fährt bei sich selbst mit, volle Autos nehmen niemanden mehr.
--- Einsteigen bis und mit Anlasstag, bewerten erst, wenn der Anlass begonnen hat.
+-- Einsteigen bis und mit dem Tag nach dem Anlass, bewerten erst, wenn der Anlass begonnen hat.
 create or replace function public.check_ride_passenger() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare v_driver uuid; v_seats int; v_start timestamptz;
@@ -458,7 +458,7 @@ begin
   if v_driver = new.passenger_id then raise exception 'Du kannst nicht bei dir selbst mitfahren'; end if;
   if tg_op = 'INSERT' then
     if (select count(*) from public.ride_passengers where ride_id = new.ride_id) >= v_seats then raise exception 'Das Auto ist voll'; end if;
-    if (v_start at time zone 'Europe/Zurich')::date < public.heute() then raise exception 'Der Anlass ist vorbei'; end if;
+    if (v_start at time zone 'Europe/Zurich')::date < public.heute() - 1 then raise exception 'Der Anlass ist vorbei'; end if;   -- auch noch am Folgetag
     if num_nonnulls(new.stars_safe, new.stars_punctual, new.stars_mood, new.points_given, new.rated_at) > 0 then
       raise exception 'Bewerten geht erst nach dem Anlass';
     end if;
@@ -619,16 +619,17 @@ create table if not exists public.gaeste (
 );
 alter table public.gaeste enable row level security;
 
--- Vergangene Anlässe: Gäste trägt nur der Administrator nach. Fahrten anbieten geht bis und mit dem Anlasstag.
+-- Vergangene Anlässe: Gäste trägt nur der Administrator nach. Fahrten anbieten geht bis und mit dem Tag nach dem Anlass.
 create or replace function public.check_nachtrag() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare v_tag date;
 begin
   if public.uid() is null or public.is_admin() or new.event_id is null then return new; end if;
   select (starts_at at time zone 'Europe/Zurich')::date into v_tag from public.events where id = new.event_id;
+  if tg_table_name = 'rides' then v_tag := v_tag + 1; end if;   -- Heimfahrt auch noch am Folgetag
   if v_tag < public.heute() then
     raise exception '%', case tg_table_name when 'gaeste' then 'Gäste bei vergangenen Anlässen trägt nur der Administrator ein'
-                                             else 'Fahrten anbieten geht nur bis und mit dem Anlasstag' end;
+                                             else 'Fahrten anbieten geht nur bis und mit dem Tag nach dem Anlass' end;
   end if;
   return new;
 end $$;

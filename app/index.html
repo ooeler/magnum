@@ -1581,7 +1581,8 @@ function rides(e) {
       (P.length ? '<div class="chips">' + P.map(function (p) { return '<span class="chip' + (p.rated_at ? " ja" : "") + '">' + esc(first(p.passenger_id)) + (p.rated_at ? " · " + ((p.stars_safe + p.stars_punctual + p.stars_mood) / 3).toFixed(1).replace(".", ",") + " ★" : "") + "</span>" }).join("") + "</div>" : "") +
       (mine ? rideRate(myRide, r, e) : "") + "</div>";
   }).join("") + "</div>" : '<span class="empty">Noch niemand fährt. Biete Plätze an!</span>';
-  if (localDay(e.starts_at) < today()) h += '<span class="xs mu" data-test="fahrt-vorbei">Fahrten anbieten geht nur bis und mit dem Anlasstag.</span>';
+  var folgetag = new Date(localDay(e.starts_at) + "T12:00:00"); folgetag.setDate(folgetag.getDate() + 1);
+  if (localDay(folgetag.toISOString()) < today()) h += '<span class="xs mu" data-test="fahrt-vorbei">Fahrten anbieten geht nur bis und mit dem Tag nach dem Anlass.</span>';
   else if (!mineDrive && !myRide) h += UI.rideForm ? '<form class="col tile" data-s="ride" data-id="' + e.id + '" style="gap:8px;padding:12px"><div class="g2"><label class="f">Richtung<input class="t" data-k="rdDir" value="' + esc(v("rdDir")) + '" maxlength="60" placeholder="z.B. Wil"></label><label class="f">Plätze<input class="t" type="number" min="1" max="8" data-k="rdSeats" value="' + esc(v("rdSeats", "3")) + '"></label></div><div class="row"><button class="btn grow">Plätze anbieten</button><button type="button" class="btn ghost" data-a="ui" data-k="rideForm" data-v="">Abbrechen</button></div></form>'
     : '<button class="btn dash" data-a="ui" data-k="rideForm" data-v="1">Ich fahre · Plätze anbieten</button>';
   return h + "</section>";
