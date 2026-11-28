@@ -40,7 +40,7 @@ h2{margin:6px 2px 0;font:700 22px var(--hf)}
 .row{display:flex;align-items:center;gap:10px}.sb{justify-content:space-between}.wrap{flex-wrap:wrap}.grow{flex:1 1 auto;min-width:0}
 .col{display:flex;flex-direction:column;gap:6px}
 .g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.g3 .tile span{overflow-wrap:normal}
 .tile{background:var(--bg);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:2px}
 .tile b{font:900 20px var(--hf)}.tile span{font-size:11px;color:var(--mu)}
 .bar{height:8px;border-radius:4px;background:var(--ln);overflow:hidden}.bar>i{display:block;height:100%;background:var(--ac);border-radius:4px}
@@ -54,7 +54,7 @@ h2{margin:6px 2px 0;font:700 22px var(--hf)}
 .btn.link{background:transparent;color:var(--ac);min-height:40px;padding:0 6px}
 .pill{min-height:40px;padding:0 14px;border-radius:999px;font-size:13px;font-weight:700;background:transparent;color:var(--tx);border:1px solid var(--ln2)}
 .pill.on{background:var(--ac);color:#1B1416;border-color:var(--ac)}
-.pill.out{background:var(--wine);color:#fff;border-color:var(--wine)}
+.pill.out{background:var(--wine);color:#fff;border-color:var(--wine)}.pill.v{background:var(--teal);color:#1B1416;border-color:var(--teal)}.pill.offen{border-style:dashed;color:var(--mu)}
 .pill.sm{min-height:36px;padding:0 12px;font-size:12px}
 .wa{display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;color:var(--tx)}
 .wa svg{color:#25D366;flex:0 0 auto}
@@ -775,7 +775,7 @@ function duellBilanzHtml() {
   var b = duellBilanz(); if (!b.L.length) return "";
   var fuehrt = b.android == b.iphone ? "Gleichstand" : (b.android > b.iphone ? "Android" : "iPhone") + " führt";
   return '<section class="card" aria-label="Duell-Bilanz"><span class="b" style="font-size:15px">Duell-Bilanz · Android gegen iPhone</span>' +
-    '<div class="g3"><div class="tile"><b data-test="bilanz-android">' + b.android + '</b><span>Android</span></div><div class="tile"><b data-test="bilanz-iphone">' + b.iphone + '</b><span>iPhone</span></div><div class="tile"><b>' + b.gleich + "</b><span>Unentschieden</span></div></div>" +
+    '<div class="g3"><div class="tile"><b data-test="bilanz-android">' + b.android + '</b><span>Android</span></div><div class="tile"><b data-test="bilanz-iphone">' + b.iphone + '</b><span>iPhone</span></div><div class="tile"><b>' + b.gleich + "</b><span>Unent&shy;schieden</span></div></div>" +
     '<span class="sm b" data-test="bilanz-fuehrt">' + fuehrt + "</span>" +
     '<div class="lst">' + b.L.slice(-6).reverse().map(function (x) {
       return '<div class="row sb sm"><span>' + MONATE[+x.m.slice(5, 7) - 1] + " " + x.m.slice(0, 4) + "</span><span>" + x.r.android + " % : " + x.r.iphone + ' % · <b>' + (x.w == "gleich" ? "unentschieden" : x.w == "android" ? "Android" : "iPhone") + "</b></span></div>";
@@ -861,16 +861,21 @@ function goal() {
   return '<section class="card" aria-label="Club-Ziel"><span class="lbl">Gemeinsames Club-Ziel</span><span class="mid">' + esc(st.goal_title) + '</span><div class="bar teal" style="height:12px"><i style="width:' + pct + '%"></i></div><span class="sm mu" data-test="ziel">' +
     (n >= st.goal_target ? "Geschafft! Ziel erreicht. Prost!" : n + " / " + st.goal_target + " Zusagen · jede Anmeldung und jeder Gasttrinker zählt für alle") + "</span></section>";
 }
+// Unsicher: Mitglieder ohne Antwort (weder dabei, virtuell noch abgemeldet); der Organisator ist immer dabei
+function unsicher(e) {
+  return D.profiles.filter(function (p) { return p.id != e.organizer_id && !D.rsvps.some(function (r) { return r.event_id == e.id && r.member_id == p.id }) }).map(function (p) { return p.id });
+}
 function eventCard(e) {
   var me = uid(), s = rsvp(e.id, me), d = new Date(e.starts_at);
   var nIn = D.rsvps.filter(function (r) { return r.event_id == e.id && r.status == "in" }).length;
   var nV = D.rsvps.filter(function (r) { return r.event_id == e.id && r.status == "virtual" }).length;
+  var nU = new Date(e.starts_at).getTime() > now() ? unsicher(e).length : 0;
   var mIds = D.magnums.filter(function (m) { return m.event_id == e.id }).map(function (m) { return m.id });
   var g = D.magnum_guests.filter(function (x) { return mIds.indexOf(x.magnum_id) >= 0 }).length;
   // Tipp irgendwo auf die Karte öffnet die Details; Knöpfe darin behalten ihre eigene Aktion
   return '<article class="card ev" data-ev="' + e.id + '" data-a="ov" data-t="event" data-id="' + e.id + '"><div class="dt"><b>' + d.getDate() + "</b><span>" + MON[d.getMonth()] + '</span></div><div class="col grow">' +
     '<span class="b" style="font-size:16px">' + esc(e.title) + '</span><span class="sm mu">' + esc(fDate(e.starts_at, true)) + (ortText(e) ? " · " + esc(ortText(e)) : "") + "</span>" +
-    '<span class="sm mu" data-test="anzahl">' + nIn + " von " + D.profiles.length + " dabei" + (nV ? " · " + nV + " virtuell" : "") + (g ? " · " + g + " Gasttrinker" : "") + (gaesteVon("event", e.id).length ? " · " + gaesteVon("event", e.id).length + " Gäste" : "") + (s == "in" ? " · du bist dabei" : s == "out" ? " · du bist abgemeldet" : s ? "" : " · noch offen") + "</span>" +
+    '<span class="sm mu" data-test="anzahl">' + nIn + " von " + D.profiles.length + " dabei" + (nV ? " · " + nV + " virtuell" : "") + (nU ? " · " + nU + " unsicher" : "") + (g ? " · " + g + " Gasttrinker" : "") + (gaesteVon("event", e.id).length ? " · " + gaesteVon("event", e.id).length + " Gäste" : "") + (s == "in" ? " · du bist dabei" : s == "out" ? " · du bist abgemeldet" : s ? "" : " · noch offen") + "</span>" +
     (e.organizer_id ? '<span class="sm b">Organisation: ' + esc(nm(e.organizer_id)) + (e.organizer_id == me ? " (du)" : "") + "</span>"
       : '<span class="sm b" style="color:var(--orange)">Organisator gesucht</span><button class="btn dash" style="align-self:flex-start;min-height:40px" data-a="organize" data-id="' + e.id + '">Ich organisiere den Abend · +40</button>') +
     (s == "virtual" ? '<span class="chip v" style="align-self:flex-start">Virtuell dabei · 1 Magnum spendiert</span>' : "") +
@@ -948,12 +953,17 @@ function eventEdit(e) {
     '<button class="btn">Speichern</button></form>';
 }
 // Anwesenheit nachtragen: nur der Admin, nur vergangene Anlässe
+// Je Mitglied ein Status-Badge; Tipp darauf zeigt die vier Möglichkeiten
+var ANW = [["in", "Dabei", "on"], ["virtual", "Virtuell", "v"], ["out", "Abgemeldet", "out"], ["", "Unsicher", "offen"]];
 function anwesenheit(e) {
-  return '<section class="card" aria-label="Anwesenheit nachtragen"><span class="b" style="font-size:15px">Anwesenheit nachtragen</span><div class="lst">' + D.profiles.map(function (p) {
-    var s = rsvp(e.id, p.id);
-    return '<div class="row sb sm"><span>' + esc(nm(p.id)) + '</span><span class="row" style="gap:6px">' + [["in", "Dabei"], ["virtual", "Virtuell"], ["", "–"]].map(function (x) {
-      var on = (s || "") == x[0]; return '<button class="pill sm' + (on ? " on" : "") + '" data-a="anw" data-id="' + e.id + '" data-m="' + p.id + '" data-v="' + x[0] + '" aria-pressed="' + on + '">' + x[1] + "</button>";
-    }).join("") + "</span></div>";
+  var zahl = {}; D.profiles.forEach(function (p) { var s = rsvp(e.id, p.id) || ""; zahl[s] = (zahl[s] || 0) + 1 });
+  return '<section class="card" aria-label="Anwesenheit nachtragen"><div class="col" style="gap:1px"><span class="b" style="font-size:15px">Anwesenheit nachtragen</span><span class="sm mu" data-test="anw-summe">' +
+    ANW.filter(function (x) { return zahl[x[0]] }).map(function (x) { return zahl[x[0]] + " " + x[1].toLowerCase() }).join(" · ") + '</span></div><div class="lst">' + D.profiles.map(function (p) {
+    var s = rsvp(e.id, p.id) || "", x = ANW.filter(function (a) { return a[0] == s })[0] || ANW[3], org = !s && p.id == e.organizer_id;
+    if (UI.anwOffen == p.id) return '<div class="col sm" style="gap:6px" data-test="anw-zeile"><span class="b">' + esc(nm(p.id)) + '</span><div class="chips">' + ANW.map(function (a) {
+      var on = a[0] == s; return '<button class="pill sm' + (on ? " " + a[2] : "") + '" data-a="anw" data-id="' + e.id + '" data-m="' + p.id + '" data-v="' + a[0] + '" aria-pressed="' + on + '">' + a[1] + "</button>";
+    }).join("") + '<button class="pill sm" data-a="ui" data-k="anwOffen" data-v="">Abbrechen</button></div></div>';
+    return '<div class="row sb sm" data-test="anw-zeile"><span>' + esc(nm(p.id)) + '</span><button class="pill sm status ' + (org ? "on" : x[2]) + '" data-test="anw-status" data-a="ui" data-k="anwOffen" data-v="' + p.id + '" aria-label="Status von ' + esc(nm(p.id)) + ": " + (org ? "Organisator" : x[1]) + ', ändern">' + (org ? "Organisator" : x[1]) + "</button></div>";
   }).join("") + "</div></section>";
 }
 function evStandard() { var d = new Date(now() + 7 * 864e5); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0") }
@@ -1000,11 +1010,11 @@ function reisen() {
   var h = "<h2>Club-Reisen</h2>";
   h += L.length ? L.map(function (tr) {
     var n = D.trip_participants.filter(function (x) { return x.trip_id == tr.id }).length, me = D.trip_participants.some(function (x) { return x.trip_id == tr.id && x.member_id == uid() });
-    var past = (tr.ends_on || tr.starts_on) < t;
+    var past = (tr.ends_on || tr.starts_on) < t, ab = !me && D.trip_absagen.some(function (x) { return x.trip_id == tr.id && x.member_id == uid() }), nG = gaesteVon("trip", tr.id).length;
     return '<button type="button" class="trip" data-a="ov" data-t="trip" data-id="' + tr.id + '"><div class="band" style="background:' + esc(tr.color) + '"><b>' + esc(tr.title) + "</b><span>" + esc(fMonYear(tr.starts_on)) + "</span></div>" +
       '<div class="col" style="padding:14px 16px">' + (tr.program ? '<span class="sm mu">' + esc(tr.program) + "</span>" : "") +
       '<span class="xs mu" data-test="aemtli-kurz">' + esc(aemtliKurz(tr.id)) + " · Sacceri: " + esc(tr.sacceri_id ? nm(tr.sacceri_id) : "offen") + "</span>" +
-      '<div class="row sb"><span class="sm b">' + (past ? "Abgeschlossen · " : "") + n + " Mitreisende" + (gaesteVon("trip", tr.id).length ? " · " + gaesteVon("trip", tr.id).length + " Gäste" : "") + '</span><span class="chip' + (me ? " v" : "") + '">' + (me ? (past ? "warst dabei" : "angemeldet") : "Details") + "</span></div></div></button>";
+      '<div class="row sb"><span class="sm b">' + (past ? "Abgeschlossen · " : "") + n + " Mitreisende" + (nG ? " · " + nG + (nG == 1 ? " Gast" : " Gäste") : "") + '</span><span class="chip status' + (me ? " v" : ab ? " nein" : "") + '" data-test="reise-status">' + (me ? (past ? "warst dabei" : "angemeldet") : ab ? (past ? "warst nicht dabei" : "abgemeldet") : "Details") + "</span></div></div></button>";
   }).join("") : '<div class="card empty">Noch keine Reise geplant.</div>';
   h += UI.newTrip ? tripForm() : '<button class="btn dash" data-a="ui" data-k="newTrip" data-v="1">+ Reise erfassen</button>';
   return h;
@@ -1544,8 +1554,9 @@ function eventView(e) {
   if (!past) h += whatsapp(teilenAnlass(e), "In WhatsApp teilen");
   if (darfAendern(e)) h += '<details class="card" data-offen="evEditOpen"' + (UI.evEditOpen ? " open" : "") + '><summary>Anlass anpassen</summary>' + eventEdit(e) + "</details>";
   h += beizTermin(e);
-  var grp = [["in", "Dabei"], ["virtual", "Virtuell dabei"], ["out", "Abgemeldet"]];
+  var grp = [["in", "Dabei"], ["virtual", "Virtuell dabei"], ["out", "Abgemeldet"]], U = past ? [] : unsicher(e);
   h += '<section class="card">' + grp.map(function (g) { var L = R.filter(function (r) { return r.status == g[0] }); return L.length ? '<div class="col"><span class="lbl">' + g[1] + " (" + L.length + ')</span><div class="chips">' + L.map(function (r) { return '<span class="chip' + (g[0] == "virtual" ? " v" : "") + '">' + esc(nm(r.member_id)) + "</span>" }).join("") + "</div></div>" : "" }).join("") +
+    (U.length ? '<div class="col" data-test="unsicher"><span class="lbl">Unsicher (' + U.length + ')</span><div class="chips">' + U.map(function (m) { return '<span class="chip">' + esc(nm(m)) + "</span>" }).join("") + "</div></div>" : "") +
     (R.length ? "" : '<span class="empty">Noch niemand angemeldet.</span>') + "</section>";
   h += gaesteBox("event", e.id) + strafen(e);
   // Magnums des Abends mit Gasttrinkern pro Magnum
@@ -1822,7 +1833,7 @@ var ACT = {
   sichtzu: function () { lsSet("mg_sicht_zu", "1"); render() },
   sicht: function () { ALS_MITGLIED = !ALS_MITGLIED; lsSet("mg_sicht_zu", "0"); lsSet("mg_als_mitglied", ALS_MITGLIED ? "1" : "0"); toast(ALS_MITGLIED ? "Du siehst die App jetzt als Mitglied" : "Admin-Ansicht"); render() },
   ocr: function () { if (UI.rsFile) quittungErkennen(UI.rsFile) },
-  anw: function (d) { after(sb.rpc("admin_set_rsvp", { p_event: d.id, p_member: d.m, p_status: d.v || null }), "Anwesenheit von " + nm(d.m) + " gespeichert") },
+  anw: function (d) { UI.anwOffen = null; after(sb.rpc("admin_set_rsvp", { p_event: d.id, p_member: d.m, p_status: d.v || null }), "Anwesenheit von " + nm(d.m) + " gespeichert") },
   delevent: function (d) { if (!confirm("Anlass wirklich löschen?")) return; OV = null; after(sb.from("events").delete().eq("id", d.id), "Anlass gelöscht") },
   delcard: function (d) { if (!confirm("Karte wirklich löschen?")) return; OV = null; after(sb.from("cards").delete().eq("id", d.id), "Karte gelöscht") },
   vote: function (d) {

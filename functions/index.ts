@@ -21,7 +21,7 @@ import { checkFoto, checkPfad, checkVideo, istVideo, MAX_FOTO, MAX_VIDEO, verwai
 import { checkJoin, checkToken, hashToken, INVITE_DAYS, joinError, newToken } from "./invite.mjs";
 // web-push 4 hat keinen Default-Export mehr, 3.x liefert ihn nur über die CommonJS-Hülle: so klappt beides
 import * as webpushNs from "web-push";
-import { checkAbo, dreiWaehlen, monatsNachricht, stundeZuerich, erinnerungen, karteWaehlen, tagZuerich, wochenStart } from "./push.mjs";
+import { checkAbo, dreiWaehlen, monatsNachricht, stundeZuerich, erinnerungen, unsicherErinnerungen, karteWaehlen, tagZuerich, wochenStart } from "./push.mjs";
 import { safeEqual } from "./sicherheit.mjs";
 const webpush = ((webpushNs as { default?: typeof webpushNs }).default ?? webpushNs) as typeof webpushNs;
 import { buildIssue, DAILY_LIMIT } from "./vorschlag.mjs";
@@ -374,7 +374,7 @@ app.post("/taeglich", async (c) => {
   if (!t.ok) return c.json({ error: t.error }, t.error === "invalid_body" ? 400 : 401);
   await q("select public.magnum_termine()");
   await warteschlange().catch((e) => console.error("Warteschlange", e));
-  const heute = tagZuerich(new Date()), erg = { erinnert: 0, karte: null as string | null, monat: 0 };
+  const heute = tagZuerich(new Date()), erg = { erinnert: 0, unsicher: 0, karte: null as string | null, monat: 0 };
   // Am 3. des Monats: «Nur noch x Tage bis zum nächsten Magnum», persönlich mit «Melde dich an» und «Organisiere»
   if (heute.slice(8, 10) == "03" && (await einmal("monat3", heute.slice(0, 7)))) {
     const [m] = await q(`select id, title, organizer_id, (starts_at at time zone 'Europe/Zurich')::date - $1::date as tage
@@ -390,6 +390,14 @@ app.post("/taeglich", async (c) => {
   const E = await q("select id, title, starts_at from public.events where starts_at between now() + interval '5 days' and now() + interval '9 days'");
   for (const e of erinnerungen(E, heute)) {
     if (await einmal("erinnerung", e.id)) { await senden("In 7 Tagen: " + e.title, "Bist du dabei? Melde dich in der App an."); erg.erinnert++ }
+  }
+  // 4 Tage vorher: persönlich an alle, die noch nicht geantwortet haben (der Organisator ist immer dabei)
+  const U = await q("select id, title, starts_at, organizer_id from public.events where starts_at between now() + interval '2 days' and now() + interval '6 days'");
+  for (const e of unsicherErinnerungen(U, heute)) {
+    if (!(await einmal("unsicher", e.id))) continue;
+    const offen = await q(`select p.id from public.profiles p where p.id is distinct from $2
+        and not exists (select 1 from public.rsvps r where r.event_id = $1 and r.member_id = p.id)`, [e.id, e.organizer_id]);
+    for (const p of offen) erg.unsicher += await senden("In 4 Tagen: " + e.title, "Bist du dabei? Du hast dich noch nicht an- oder abgemeldet.", "./", p.id);
   }
   const woche = wochenStart(heute);
   const [schon] = await q("select card_id from public.karte_der_woche where woche = $1", [woche]);

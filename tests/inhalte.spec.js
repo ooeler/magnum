@@ -340,7 +340,8 @@ test.describe("Anlässe anpassen", () => {
     await expect(toast(page)).toContainText("Anlass erfasst");
     await page.getByRole("button", { name: /Gründungsfeier/ }).click();
     const a = card(page, "Anwesenheit nachtragen");
-    await a.locator(".row", { hasText: "Beat" }).first().getByRole("button", { name: "Dabei" }).click();
+    await a.locator("[data-test=anw-zeile]", { hasText: "Beat" }).locator("[data-test=anw-status]").click();
+    await a.locator("[data-test=anw-zeile]", { hasText: "Beat" }).getByRole("button", { name: "Dabei" }).click();
     await expect(toast(page)).toContainText("Anwesenheit von Beat gespeichert");
     const e = await page.evaluate(() => { const d = window.__mg.db(), x = d.events.find((v) => v.title == "Gründungsfeier"); return d.rsvps.find((r) => r.event_id == x.id && r.member_id == "u-beat").status });
     expect(e).toBe("in");
@@ -588,6 +589,70 @@ test.describe("Vorschläge", () => {
     expect(g.error.message).toContain("nur der Administrator");
     const r = await page.evaluate(() => window.__mg.asId("u-beat", (sb) => sb.from("rides").insert({ event_id: "e-past2", driver_id: "u-beat", direction: "Gossau", seats: 3 })));
     expect(r.error.message).toContain("bis und mit dem Anlasstag");
+  });
+});
+
+test.describe("Unsicher und abgemeldet", () => {
+  test("Anwesenheit nachtragen: Badge zeigt dabei, virtuell, abgemeldet oder unsicher; Tipp darauf ändert den Status", async ({ page }) => {
+    await login(page);
+    await page.evaluate(() => window.__mg.asId("u-ot", (sb) => sb.rpc("admin_set_rsvp", { p_event: "e-past2", p_member: "u-beat", p_status: "out" })));
+    await page.evaluate(() => window.__mg.asId("u-ot", (sb) => sb.rpc("admin_set_rsvp", { p_event: "e-past2", p_member: "u-dani", p_status: null })));
+    await page.reload();
+    await page.locator("summary", { hasText: "Vergangene Anlässe" }).click();
+    await page.locator('[data-a=ov][data-t=event][data-id="e-past2"]').click();
+    const a = card(page, "Anwesenheit nachtragen"), zeile = (n) => a.locator("[data-test=anw-zeile]", { hasText: n });
+    await expect(zeile("Beat").locator("[data-test=anw-status]")).toHaveText("Abgemeldet");
+    await expect(zeile("Dani").locator("[data-test=anw-status]")).toHaveText("Unsicher");
+    await expect(a.locator("[data-test=anw-summe]")).toContainText("1 abgemeldet");
+    await expect(a.locator("[data-test=anw-summe]")).toContainText("unsicher");
+    await zeile("Dani").locator("[data-test=anw-status]").click();
+    await expect(zeile("Dani").getByRole("button")).toHaveCount(5);              // vier Status und Abbrechen
+    await zeile("Dani").getByRole("button", { name: "Virtuell" }).click();
+    await expect(toast(page)).toContainText("Anwesenheit von Dani gespeichert");
+    await expect(zeile("Dani").locator("[data-test=anw-status]")).toHaveText("Virtuell");
+    await zeile("Beat").locator("[data-test=anw-status]").click();
+    await zeile("Beat").getByRole("button", { name: "Unsicher" }).click();
+    await expect(zeile("Beat").locator("[data-test=anw-status]")).toHaveText("Unsicher");
+    expect(await page.evaluate(() => window.__mg.db().rsvps.some((r) => r.event_id == "e-past2" && r.member_id == "u-beat"))).toBe(false);
+  });
+  async function abend(page) {
+    await page.goto("/");
+    await page.evaluate(() => {
+      const d = window.__mg.db(), iso = new Date(Date.now() + 5 * 864e5).toISOString();
+      d.events.push({ id: "e-unsicher", title: "Spätherbst-Stamm", starts_at: iso, location: "Keller", organizer_id: "u-chris", created_by: "u-chris", created_at: iso });
+      d.rsvps.push({ event_id: "e-unsicher", member_id: "u-ot", status: "in", redeemed: false, updated_at: iso }, { event_id: "e-unsicher", member_id: "u-dani", status: "out", redeemed: false, updated_at: iso });
+      localStorage.setItem("__mg_db", JSON.stringify(d));
+    });
+  }
+  test("Karte und Details zeigen, wer noch unsicher ist (ohne Organisator und ohne Antwortende)", async ({ page }) => {
+    await abend(page);
+    await login(page, BEAT);
+    const n = await page.evaluate(() => D.profiles.length);
+    await expect(event(page, "Spätherbst-Stamm").locator("[data-test=anzahl]")).toContainText((n - 3) + " unsicher");
+    await details(page, "Spätherbst-Stamm");
+    const u = page.locator("#ov [data-test=unsicher]");
+    await expect(u).toContainText("Unsicher (" + (n - 3) + ")");
+    await expect(u).toContainText(await page.evaluate(() => nm("u-beat")));
+    for (const id of ["u-ot", "u-dani", "u-chris"]) await expect(u).not.toContainText(await page.evaluate((x) => nm(x), id));
+    // Zusagen: aus «unsicher» raus
+    await page.locator("#ov").getByRole("button", { name: "Bin dabei" }).click();
+    await expect(u).toContainText("Unsicher (" + (n - 4) + ")");
+  });
+  test("vergangene Anlässe zeigen kein «unsicher»", async ({ page }) => {
+    await login(page, BEAT);
+    await page.locator("summary", { hasText: "Vergangene Anlässe" }).click();
+    await page.locator('[data-a=ov][data-t=event][data-id="e-past2"]').click();
+    await expect(page.locator("#ov [data-test=unsicher]")).toHaveCount(0);
+  });
+  test("Reisekarte zeigt «abgemeldet», wer sich von der Reise abgemeldet hat", async ({ page }) => {
+    await login(page, BEAT);
+    await page.evaluate(() => window.__mg.asId("u-beat", (sb) => sb.from("trip_participants").delete().eq("trip_id", "t-wallis").eq("member_id", "u-beat")));
+    await page.evaluate(() => window.__mg.asId("u-beat", (sb) => sb.from("trip_absagen").insert({ trip_id: "t-wallis", member_id: "u-beat" })));
+    await page.reload();
+    await tab(page, "Reisen");
+    const k = page.locator("button.trip", { hasText: "Wallis" }).locator("[data-test=reise-status]");
+    await expect(k).toHaveText("abgemeldet");
+    await expect(k).toHaveClass(/nein/);
   });
 });
 

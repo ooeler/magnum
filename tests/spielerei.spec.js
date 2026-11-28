@@ -256,6 +256,7 @@ test.describe("Push und Karte der Woche", () => {
     const P = await import("../functions/push.mjs");
     const E = [{ id: "a", starts_at: "2026-11-27T18:00:00Z" }, { id: "b", starts_at: "2026-11-26T18:00:00Z" }, { id: "c", starts_at: "2026-11-27T23:30:00Z" }];
     expect(P.erinnerungen(E, "2026-11-20").map((e) => e.id)).toEqual(["a"]);
+    expect(P.unsicherErinnerungen(E, "2026-11-23").map((e) => e.id)).toEqual(["a"]);       // 4 Tage vorher an die Unsicheren
     expect(P.wochenStart("2026-11-04")).toBe("2026-11-02");
     expect(P.wochenStart("2026-11-02")).toBe("2026-11-02");
     expect(P.karteWaehlen(["x", "y", "z"], ["x", "y"], () => 0)).toBe("z");
