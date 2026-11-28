@@ -1,5 +1,6 @@
 // Push-Nachrichten: reine Logik, damit sie getestet werden kann.
 export const ERINNERUNG_TAGE = 7;
+export const UNSICHER_TAGE = 4;
 
 // Kalendertag in der Schweiz als JJJJ-MM-TT
 export function tagZuerich(d) {
@@ -18,6 +19,12 @@ export function wochenStart(tag) {
 // Anlässe, die heute in genau 7 Tagen stattfinden
 export function erinnerungen(events, heute) {
   const ziel = plusTage(heute, ERINNERUNG_TAGE);
+  return events.filter((e) => tagZuerich(e.starts_at) == ziel);
+}
+
+// Anlässe, die heute in genau 4 Tagen stattfinden (Push an alle, die sich noch nicht an- oder abgemeldet haben)
+export function unsicherErinnerungen(events, heute) {
+  const ziel = plusTage(heute, UNSICHER_TAGE);
   return events.filter((e) => tagZuerich(e.starts_at) == ziel);
 }
 

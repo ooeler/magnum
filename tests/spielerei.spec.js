@@ -31,7 +31,9 @@ test.describe("Rekord-Serie", () => {
 
 test.describe("Duell", () => {
   test("Prozent des Monats und Führung (ab dem 11.)", async ({ page }) => {
-    await login(page);                                     // 31.10.
+    await page.goto("/");
+    await page.evaluate(() => { const d = window.__mg.db(); d.events.push({ id: "e-spaeter", title: "Noch geplant", starts_at: "2026-10-31T22:30:00+01:00", location: "Keller", organizer_id: null, created_by: "u-ot", created_at: "2026-10-01T10:00:00Z" }); localStorage.setItem("__mg_db", JSON.stringify(d)) });
+    await login(page);                                     // 31.10., ein Anlass ist noch geplant
     const d = card(page, "Duell des Monats");
     await expect(d.locator("[data-test=duell-android]")).toHaveText("100 %");
     await expect(d.locator("[data-test=duell-iphone]")).toHaveText("75 %");
@@ -59,14 +61,28 @@ test.describe("Duell", () => {
 
   test("Statistik: Bilanz, welches Team am meisten Monate gewonnen hat", async ({ page }) => {
     await fix(page, "2026-12-15T10:00:00+01:00");
+    await page.goto("/");
+    await page.evaluate(() => { const d = window.__mg.db(); d.events.push({ id: "e-spaeter", title: "Noch geplant", starts_at: "2026-12-20T19:00:00+01:00", location: "Keller", organizer_id: null, created_by: "u-ot", created_at: "2026-10-01T10:00:00Z" }); localStorage.setItem("__mg_db", JSON.stringify(d)) });
     await login(page);
     await tab(page, "Statistik");
     const b = card(page, "Duell-Bilanz");
     const a = Number(await b.locator("[data-test=bilanz-android]").textContent()), i = Number(await b.locator("[data-test=bilanz-iphone]").textContent());
     expect(a + i).toBeGreaterThan(0);
     await expect(b.locator("[data-test=bilanz-fuehrt]")).toHaveText(a == i ? "Gleichstand" : (a > i ? "Android" : "iPhone") + " führt");
-    // Der laufende Monat zählt noch nicht
+    // Der laufende Monat zählt noch nicht, solange ein Anlass geplant ist
     await expect(b).not.toContainText("Dezember 2026");
+  });
+
+  test("Kein Anlass mehr geplant: Der laufende Monat ist entschieden und zählt in der Bilanz", async ({ page }) => {
+    await fix(page, "2026-10-31T23:00:00+01:00");
+    await page.goto("/");
+    await page.evaluate(() => { const d = window.__mg.db(); d.events = d.events.filter((e) => !(e.starts_at.slice(0, 7) == "2026-10" && new Date(e.starts_at) > new Date())); localStorage.setItem("__mg_db", JSON.stringify(d)) });
+    await login(page);
+    const d = card(page, "Duell des Monats");
+    await expect(d.locator("[data-test=duell-entschieden]")).toHaveText(/^(iPhone|Android) gewinnt den Oktober\.$|^Unentschieden\.$/);
+    await expect(d).toContainText("zählt schon in der Bilanz");
+    await tab(page, "Statistik");
+    await expect(card(page, "Duell-Bilanz")).toContainText("Oktober 2026");
   });
 
   test("Monat ohne Anlass", async ({ page }) => {
@@ -256,6 +272,7 @@ test.describe("Push und Karte der Woche", () => {
     const P = await import("../functions/push.mjs");
     const E = [{ id: "a", starts_at: "2026-11-27T18:00:00Z" }, { id: "b", starts_at: "2026-11-26T18:00:00Z" }, { id: "c", starts_at: "2026-11-27T23:30:00Z" }];
     expect(P.erinnerungen(E, "2026-11-20").map((e) => e.id)).toEqual(["a"]);
+    expect(P.unsicherErinnerungen(E, "2026-11-23").map((e) => e.id)).toEqual(["a"]);       // 4 Tage vorher an die Unsicheren
     expect(P.wochenStart("2026-11-04")).toBe("2026-11-02");
     expect(P.wochenStart("2026-11-02")).toBe("2026-11-02");
     expect(P.karteWaehlen(["x", "y", "z"], ["x", "y"], () => 0)).toBe("z");
